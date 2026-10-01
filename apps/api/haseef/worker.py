@@ -1,0 +1,48 @@
+"""عمّال Celery والجدولة. التشغيل:
+    celery -A haseef.worker worker -l info
+    celery -A haseef.worker beat   -l info
+"""
+
+from __future__ import annotations
+
+from celery import Celery
+from celery.schedules import crontab
+from sqlalchemy import text
+
+from .config import get_settings
+from .db import platform_tx
+from .messaging import build_senders
+from .services import alerts_service, score_service
+
+s = get_settings()
+celery = Celery("haseef", broker=s.redis_url, backend=s.redis_url)
+celery.conf.update(timezone="Asia/Riyadh", enable_utc=True, task_acks_late=True,
+                   worker_prefetch_multiplier=1)
+
+celery.conf.beat_schedule = {
+    "plan-alerts-nightly":   {"task": "haseef.plan_alerts",      "schedule": crontab(hour=1, minute=0)},
+    "send-due-alerts":       {"task": "haseef.send_due_alerts",  "schedule": crontab(minute="*/5")},
+    "recompute-scores":      {"task": "haseef.recompute_scores", "schedule": crontab(hour=2, minute=0)},
+}
+
+
+@celery.task(name="haseef.plan_alerts")
+def plan_alerts() -> int:
+    with platform_tx() as conn:
+        return alerts_service.plan_alerts(conn, send_hour=s.alert_send_hour)
+
+
+@celery.task(name="haseef.send_due_alerts")
+def send_due_alerts() -> int:
+    return alerts_service.send_due_alerts(platform_tx, build_senders(s))
+
+
+@celery.task(name="haseef.recompute_scores")
+def recompute_scores() -> int:
+    # الحالات المشتقة من التاريخ تتغير يومياً حتى دون أي تعديل من العميل.
+    with platform_tx() as conn:
+        org_ids = conn.execute(text("SELECT id FROM organizations WHERE is_active")).scalars().all()
+    for org_id in org_ids:
+        with platform_tx() as conn:
+            score_service.recompute(conn, org_id)
+    return len(org_ids)
