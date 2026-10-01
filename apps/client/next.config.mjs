@@ -2,6 +2,8 @@
 const nextConfig = {
   transpilePackages: ["@haseef/shared"],
   poweredByHeader: false,
+  // روابط المشاركة المؤقتة (scripts/share.sh) تفتح خادم التطوير من نطاق Cloudflare.
+  allowedDevOrigins: ["*.trycloudflare.com"],
   // الواجهة والخادم من نفس الأصل: /api/* يُمرَّر للخادم. يلغي مشاكل CORS،
   // ويسمح لاحقاً بكوكي httpOnly للجلسة (لا يصل إليها أي سكربت في الصفحة).
   async rewrites() {
