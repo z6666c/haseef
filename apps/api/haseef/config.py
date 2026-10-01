@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +21,10 @@ class Settings(BaseSettings):
     auto_migrate: bool = True                   # يُطفأ في الإنتاج: التحديث خطوة نشر صريحة
 
     redis_url: str = "redis://localhost:6379/0"
+
+    # ملفات المكتبة المرجعية المرفوعة. في الإنتاج: تخزين كائنات داخل المملكة.
+    storage_dir: str = str(Path(__file__).resolve().parents[3] / "storage")
+    max_upload_mb: int = 15
 
     jwt_secret: str = Field(default="change-me-in-production", min_length=16)
     jwt_ttl_minutes: int = 8 * 60

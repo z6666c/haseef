@@ -28,6 +28,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22" }
       - run: npm install --no-audit --no-fund
+      - name: تصدير المحتوى المرجعي لنسخة العرض
+        run: python3 apps/api/scripts/export_demo_content.py > packages/shared/src/demo-content.json
       - name: بناء تطبيق العملاء
         run: npm run build -w @haseef/client
         env: { NEXT_PUBLIC_BASE_PATH: "/${{ github.event.repository.name }}" }

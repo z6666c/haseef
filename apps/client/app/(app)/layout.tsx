@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PLAN_LABEL, type Me } from "@haseef/shared";
-import { BellMessage, BuildingBadge, FileSparkle, FingerprintShield, GavelDocument, Radar } from "@/components/Icons";
+import { BellMessage, BookOpen, BuildingBadge, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { api, getSession, setSession } from "@/lib/session";
 
@@ -12,7 +12,10 @@ import { api, getSession, setSession } from "@/lib/session";
 const NAV = [
   { href: "/", label: "الرادار العام", Icon: Radar },
   { href: "/licenses", label: "الامتثال والتراخيص", Icon: BuildingBadge },
-  { href: null, label: "الحوكمة وقرارات الشركاء", Icon: GavelDocument, soon: "المرحلة 3" },
+  { href: "/obligations", label: "الالتزامات النظامية", Icon: ListCheck },
+  { href: "/governance", label: "الحوكمة وهيكل الشركة", Icon: GavelDocument },
+  { href: "/policies", label: "السياسات الداخلية", Icon: DocSeal },
+  { href: "/library", label: "المكتبة المرجعية", Icon: BookOpen },
   { href: null, label: "حماية البيانات PDPL", Icon: FingerprintShield, soon: "المرحلة 3" },
   { href: null, label: "فاحص العقود بالذكاء الاصطناعي", Icon: FileSparkle, soon: "المرحلة 2" },
   { href: null, label: "التنبيهات والواتساب", Icon: BellMessage, soon: "المرحلة 3" },
@@ -70,7 +73,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <nav aria-label="الأقسام">
           {NAV.map(({ href, label, Icon, soon }) =>
             href ? (
-              <Link key={label} href={href} aria-current={path === href ? "page" : undefined}>
+              <Link key={label} href={href} aria-current={(href === "/" ? path === "/" : path.startsWith(href)) ? "page" : undefined}>
                 <Icon /> <span>{label}</span>
               </Link>
             ) : (

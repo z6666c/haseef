@@ -48,6 +48,9 @@ class ScoreInputs:
     policies: list[PolicyState] = field(default_factory=list)
     ropa: list[RopaState] = field(default_factory=list)
     audit_percentages: list[int] = field(default_factory=list)  # أحدث تدقيق لكل وثيقة، آخر 12 شهراً
+    # آخر فحص لهيكل الحوكمة: درجة المعايير الإلزامية، والمعايير غير المستوفاة (العنوان، الخطورة)
+    structure_score: float | None = None
+    structure_failures: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -107,8 +110,10 @@ def _with_required_policies(policies: list[PolicyState], features: frozenset[str
     return policies
 
 
-def governance_parts(policies: list[PolicyState], ropa: list[RopaState]) -> list[float]:
+def governance_parts(policies: list[PolicyState], ropa: list[RopaState], structure: float | None = None) -> list[float]:
     parts: list[float] = []
+    if structure is not None:
+        parts.append(structure)
     if policies:
         parts.append(100 * sum(1 for p in policies if p.days_left >= 0) / len(policies))
     if ropa:
@@ -116,8 +121,8 @@ def governance_parts(policies: list[PolicyState], ropa: list[RopaState]) -> list
     return parts
 
 
-def governance_pillar(policies: list[PolicyState], ropa: list[RopaState]) -> float | None:
-    parts = governance_parts(policies, ropa)
+def governance_pillar(policies: list[PolicyState], ropa: list[RopaState], structure: float | None = None) -> float | None:
+    parts = governance_parts(policies, ropa, structure)
     return sum(parts) / len(parts) if parts else None
 
 
@@ -144,7 +149,14 @@ def _reasons(inp: ScoreInputs, policies: list[PolicyState], weights: dict[str, f
 
     if "GOVERNANCE_PDPL" in weights:
         w = weights["GOVERNANCE_PDPL"] / 100
-        n_parts = len(governance_parts(policies, inp.ropa))
+        n_parts = len(governance_parts(policies, inp.ropa, inp.structure_score))
+        if inp.structure_score is not None and inp.structure_failures:
+            sev_w = {"critical": 3, "high": 2, "medium": 1}
+            total_loss = (100 - inp.structure_score) / n_parts * w
+            denom = sum(sev_w[sv] for _, sv in inp.structure_failures)
+            for title, sv in inp.structure_failures:
+                out.append(Reason("GOVERNANCE_PDPL", "high" if sv == "critical" else "medium",
+                                  f"معيار حوكمة غير مستوفى: {title}", total_loss * sev_w[sv] / denom))
         for p in policies:
             if p.days_left >= 0:
                 continue
@@ -177,7 +189,7 @@ def compute_score(inp: ScoreInputs) -> ScoreResult:
     policies = _with_required_policies(inp.policies, f) if has_gov else inp.policies
     pillars: dict[str, float | None] = {
         "OPERATIONAL": operational_pillar(inp.items) if "OPERATIONAL" in f else None,
-        "GOVERNANCE_PDPL": governance_pillar(policies, inp.ropa) if has_gov else None,
+        "GOVERNANCE_PDPL": governance_pillar(policies, inp.ropa, inp.structure_score) if has_gov else None,
         "CONTRACTS": contracts_pillar(inp.audit_percentages) if "CONTRACTS" in f else None,
     }
     active = {k: BASE_WEIGHTS[k] for k, v in pillars.items() if v is not None}

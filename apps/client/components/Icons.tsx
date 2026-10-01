@@ -121,3 +121,30 @@ export const WhatsApp = (p: P) => (
 export const External = (p: P) => (
   <Svg {...p}><path d="M14 5h5v5M19 5l-7 7M17 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7H10" /></Svg>
 );
+
+/** المكتبة المرجعية — كتاب مفتوح */
+export const BookOpen = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 6.5C10.2 5 7.6 4.5 4 4.8v13c3.6-.3 6.2.2 8 1.7 1.8-1.5 4.4-2 8-1.7v-13c-3.6-.3-6.2.2-8 1.7Z" />
+    <path d="M12 6.5v13" stroke={A} />
+  </Svg>
+);
+
+/** الالتزامات — قائمة تحقق */
+export const ListCheck = (p: P) => (
+  <Svg {...p}>
+    <path d="M11 6h9M11 12h9M11 18h9" />
+    <path d="m3.5 6 1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11" stroke={A} />
+    <circle cx="5.5" cy="18" r="1.5" />
+  </Svg>
+);
+
+/** السياسات — وثيقة بختم */
+export const DocSeal = (p: P) => (
+  <Svg {...p}>
+    <path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21H11" />
+    <path d="M14 3v4h4M14 3l4 4v4M8 9h4M8 13h3" />
+    <circle cx="16.5" cy="16.5" r="3" stroke={A} />
+    <path d="m15.2 19.2-.7 2.3 2-1 2 1-.7-2.3" stroke={A} />
+  </Svg>
+);

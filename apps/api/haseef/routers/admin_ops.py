@@ -20,6 +20,7 @@ from sqlalchemy import Connection, text
 
 from ..deps import Admin, get_platform_admin, require_admin
 from ..security import hash_password
+from ..services import governance_service as gs
 from ..services.score_service import recompute
 
 router = APIRouter(prefix="/admin", tags=["admin-actions"])
@@ -133,6 +134,9 @@ def create_org(body: OrgCreateIn, a: Admin = Depends(require_admin("SUPPORT"))):
 
     uid, temp_pw = _find_or_create_user(c, body.admin_email, body.admin_full_name, body.admin_phone)
     c.execute(text("INSERT INTO memberships (org_id, user_id, role) VALUES (:o, :u, 'ORG_ADMIN')"), {"o": org_id, "u": uid})
+    # الهيكل الأساسي حسب الكيان + الالتزامات المنطبقة، من أول يوم
+    gs.apply_template(c, org_id)
+    gs.sync_obligations(c, org_id)
     a.audit("ADMIN_CREATE_ORG", "organization", org_id, org_id,
             {"name": body.name, "cr_number": body.cr_number, "plan": body.plan_tier, "admin": body.admin_email})
     return {"id": org_id, "admin_user_id": uid, "temporary_password": temp_pw,

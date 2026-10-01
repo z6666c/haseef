@@ -13,7 +13,9 @@ from sqlalchemy import text
 
 from haseef.db import platform_tx
 from haseef.security import hash_password
-from haseef.services.score_service import recompute
+from haseef.services import governance_service as gs
+from haseef.services.catalog_service import sync_catalog
+from haseef.services.score_service import recompute  # noqa: F401
 
 TODAY = date.today()
 
@@ -89,9 +91,26 @@ def run() -> None:
                                  VALUES (:o, :p, :t, :d)"""),
                          {"o": nukhba, "p": ptype, "t": title, "d": TODAY + timedelta(days=days)})
 
+        # المحتوى المرجعي + هيكل الحوكمة والتزامات المنشأتين التجريبيتين
+        sync_catalog(conn)
+        for org in (nukhba, waha):
+            conn.execute(text("DELETE FROM org_bodies WHERE org_id = :o"), {"o": org})
+            conn.execute(text("DELETE FROM org_obligations WHERE org_id = :o"), {"o": org})
+            gs.apply_template(conn, org)
+        conn.execute(text("""UPDATE org_governance_profiles SET employees_count = 18, vat_registered = true, has_bylaws = true,
+                                 last_fs_filed_on = :fs, beneficial_owners_filed_on = :ubo WHERE org_id = :o"""),
+                     {"o": nukhba, "fs": TODAY - timedelta(days=150), "ubo": TODAY - timedelta(days=400)})
+        conn.execute(text("UPDATE org_governance_profiles SET employees_count = 6, vat_registered = false WHERE org_id = :o"), {"o": waha})
+        manager = conn.execute(text("SELECT id FROM org_bodies WHERE org_id = :o AND body_type = 'MANAGER'"), {"o": nukhba}).scalar_one()
+        conn.execute(text("""INSERT INTO org_body_members (org_id, body_id, full_name, position, is_executive, appointed_on)
+                             VALUES (:o, :b, 'أحمد العتيبي', 'HEAD', true, :d)"""),
+                     {"o": nukhba, "b": manager, "d": TODAY - timedelta(days=700)})
+        for org in (nukhba, waha):
+            gs.sync_obligations(conn, org)
+
     for org in (nukhba, waha):
         with platform_tx() as conn:
-            recompute(conn, org)
+            gs.run_and_save(conn, org, None)        # يعيد احتساب المؤشر أيضاً
 
     print("\nحسابات التطوير (تتغير كلمات المرور مع كل تشغيل):")
     for email, pw in passwords.items():

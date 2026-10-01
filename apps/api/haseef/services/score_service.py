@@ -32,6 +32,9 @@ _AUDITS = text("""
       AND created_at > now() - interval '12 months'
     ORDER BY file_sha256, created_at DESC
 """)
+_STRUCTURE = text("""
+    SELECT structure_score, results FROM gov_check_runs WHERE org_id = :o ORDER BY created_at DESC LIMIT 1
+""")
 _SAVE = text("""
     UPDATE organizations
     SET haseef_score = :score, score_breakdown = CAST(:breakdown AS jsonb), score_computed_at = now()
@@ -42,7 +45,12 @@ _SAVE = text("""
 def load_inputs(conn: Connection, org_id: UUID | str) -> ScoreInputs:
     p = {"o": str(org_id)}
     features = conn.execute(_PLAN, p).scalar_one_or_none() or []
+    run = conn.execute(_STRUCTURE, p).one_or_none()
+    failures = [(r["title"], r["severity"]) for r in (run.results if run else [])
+                if r["level"] == "MANDATORY" and r["status"] == "FAIL"]
     return ScoreInputs(
+        structure_score=float(run.structure_score) if run and run.structure_score is not None else None,
+        structure_failures=failures,
         plan_features=frozenset(features),
         items=[ItemState(r.days_remaining, r.risk_level, r.title) for r in conn.execute(_ITEMS, p)],
         policies=[PolicyState(r.days_remaining, r.title, r.policy_type) for r in conn.execute(_POLICIES, p)],

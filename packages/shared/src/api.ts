@@ -42,6 +42,17 @@ export function createApi(
   const post = <T = unknown>(path: string, body: unknown) =>
     req<T>(path, { method: "POST", org: false, body: JSON.stringify(body) });
 
+  /** تنزيل ملف بالتوكن (الروابط العادية لا تحمل ترويسة الدخول). */
+  async function reqBlob(path: string, org: boolean): Promise<Blob> {
+    const s = getSession();
+    const headers = new Headers();
+    if (s?.token) headers.set("Authorization", `Bearer ${s.token}`);
+    if (org && s?.orgId) headers.set("X-Org-Id", s.orgId);
+    const res = await fetchImpl(`${baseUrl}/v1${path}`, { headers });
+    if (!res.ok) throw new ApiError(res.status, "تعذّر تنزيل الملف");
+    return res.blob();
+  }
+
   return {
     login: (email: string, password: string) =>
       req<{ access_token: string; must_change_password: boolean }>("/auth/login", { method: "POST", org: false, body: JSON.stringify({ email, password }) }),
@@ -58,6 +69,36 @@ export function createApi(
     archiveItem: (id: string) => req<void>(`/compliance-items/${id}`, { method: "DELETE" }),
     remindNow: (id: string) =>
       req<{ queued: number; message: string }>(`/compliance-items/${id}/remind`, { method: "POST" }),
+
+    // ---------- الحوكمة والهيكل
+    governance: () => req<GovernanceStructure>("/governance/structure"),
+    applyTemplate: () => req<{ bodies_added: number }>("/governance/structure/apply-template", { method: "POST" }),
+    updateProfile: (b: GovernanceProfile) => req<GovernanceProfile>("/governance/profile", { method: "PUT", body: JSON.stringify(b) }),
+    addBody: (b: BodyInput) => req<{ id: string }>("/governance/bodies", { method: "POST", body: JSON.stringify(b) }),
+    updateBody: (id: string, b: BodyInput) => req<{ updated: boolean }>(`/governance/bodies/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+    deleteBody: (id: string) => req<void>(`/governance/bodies/${id}`, { method: "DELETE" }),
+    addMember: (bodyId: string, b: MemberInput) =>
+      req<{ id: string }>(`/governance/bodies/${bodyId}/members`, { method: "POST", body: JSON.stringify(b) }),
+    updateMember: (id: string, b: MemberInput) => req<{ updated: boolean }>(`/governance/members/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+    deleteMember: (id: string) => req<void>(`/governance/members/${id}`, { method: "DELETE" }),
+    runCheck: () => req<CheckRun>("/governance/check", { method: "POST" }),
+
+    // ---------- الالتزامات
+    obligations: () => req<Obligation[]>("/obligations"),
+    setObligation: (code: string, status: ObligationStatus, note?: string | null) =>
+      req<{ updated: boolean }>(`/obligations/${code}`, { method: "PATCH", body: JSON.stringify({ status, note: note ?? null }) }),
+
+    // ---------- المكتبة والسياسات
+    library: () => req<LibraryDoc[]>("/library"),
+    libraryDoc: (id: string) => req<LibraryDoc & { body_md: string | null }>(`/library/${id}`),
+    libraryFile: (id: string) => reqBlob(`/library/${id}/file`, true),
+    adopt: (id: string) => req<{ policy_id: string }>(`/library/${id}/adopt`, { method: "POST" }),
+    policies: () => req<Policy[]>("/policies"),
+    policy: (id: string) => req<Policy & { body_md: string | null; source_library_id: string | null }>(`/policies/${id}`),
+    updatePolicy: (id: string, b: { title: string; body_md: string | null; version: string }) =>
+      req<{ updated: boolean }>(`/policies/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+    approvePolicy: (id: string, review_months = 12) =>
+      req<{ status: string }>(`/policies/${id}/approve`, { method: "POST", body: JSON.stringify({ review_months }) }),
 
     admin: {
       overview: () => req<AdminOverview>("/admin/overview", { org: false }),
@@ -90,6 +131,23 @@ export function createApi(
       teamRole: (uid: string, role: PlatformRole | null) =>
         req<{ role: PlatformRole | null }>(`/admin/team/${uid}`, { method: "PATCH", org: false, body: JSON.stringify({ role }) }),
       audit: (orgId?: string) => req<AuditEntry[]>(`/admin/audit${orgId ? `?org_id=${orgId}` : ""}`, { org: false }),
+
+      // المحتوى المرجعي
+      standards: () => req<AdminStandard[]>("/admin/catalog/standards", { org: false }),
+      patchStandard: (code: string, b: Partial<AdminStandard>) =>
+        req<{ updated: boolean }>(`/admin/catalog/standards/${code}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
+      catalogObligations: () => req<AdminObligation[]>("/admin/catalog/obligations", { org: false }),
+      createObligation: (b: Record<string, unknown>) => post<{ code: string }>("/admin/catalog/obligations", b),
+      patchObligation: (code: string, b: Record<string, unknown>) =>
+        req<{ updated: boolean }>(`/admin/catalog/obligations/${code}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
+      libraryAll: () => req<AdminLibraryDoc[]>("/admin/library", { org: false }),
+      libraryDoc: (id: string) => req<AdminLibraryDoc & { body_md: string | null }>(`/admin/library/${id}`, { org: false }),
+      libraryFile: (id: string) => reqBlob(`/admin/library/${id}/file`, false),
+      createDoc: (b: Record<string, unknown>) => post<{ id: string }>("/admin/library", b),
+      patchDoc: (id: string, b: Record<string, unknown>) =>
+        req<{ updated: boolean }>(`/admin/library/${id}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
+      deleteDoc: (id: string) => req<void>(`/admin/library/${id}`, { method: "DELETE", org: false }),
+      orgGovernance: (id: string) => req<AdminOrgGovernance>(`/admin/organizations/${id}/governance`, { org: false }),
     },
   };
 }
@@ -156,4 +214,84 @@ export interface AuditEntry {
   id: number; created_at: string; action: string; entity_type: string; entity_id: string | null;
   changes: Record<string, unknown> | null; ip: string | null; actor: string | null; actor_role: string | null;
   org_name: string | null; org_id: string | null;
+}
+
+// ---------- الحوكمة والهيكل
+export type BodyType =
+  | "OWNER" | "GENERAL_ASSEMBLY" | "PARTNERS_ASSEMBLY" | "BOARD" | "MANAGER" | "EXECUTIVE_MANAGEMENT"
+  | "AUDIT_COMMITTEE" | "NOMINATION_REMUNERATION_COMMITTEE" | "RISK_COMMITTEE" | "EXECUTIVE_COMMITTEE"
+  | "OTHER_COMMITTEE" | "COMPANY_SECRETARY" | "INTERNAL_AUDIT" | "COMPLIANCE_FUNCTION" | "DPO";
+export type MemberPosition = "CHAIR" | "VICE_CHAIR" | "MEMBER" | "SECRETARY" | "HEAD";
+export interface GovernanceProfile {
+  employees_count: number | null; fiscal_year_end_month: number; processes_personal_data: boolean;
+  vat_registered: boolean | null; has_bylaws: boolean; bylaws_updated_on: string | null;
+  auditor_name: string | null; auditor_appointed_on: string | null; beneficial_owners_filed_on: string | null;
+  last_assembly_on: string | null; last_fs_filed_on: string | null;
+  template_applied_at?: string | null; updated_at?: string;
+}
+export interface BodyMember {
+  id: string; full_name: string; position: MemberPosition; is_independent: boolean; is_executive: boolean;
+  appointed_on: string | null; term_ends_on: string | null;
+}
+export type MemberInput = Omit<BodyMember, "id">;
+export interface GovBody {
+  id: string; body_type: BodyType; name: string; mandate: string | null; meetings_per_year: number | null;
+  sort: number; from_template: boolean; members: BodyMember[];
+}
+export type BodyInput = Pick<GovBody, "body_type" | "name" | "mandate" | "meetings_per_year">;
+export interface CheckResult {
+  code: string; status: "PASS" | "FAIL" | "NA"; message: string; level: "MANDATORY" | "RECOMMENDED";
+  severity: "critical" | "high" | "medium"; title: string; domain: string; description: string;
+  legal_reference: string | null; source_url: string | null; review_status: ReviewStatus;
+}
+export interface CheckRun {
+  id: string; created_at: string; passed: number; failed: number; not_applicable: number;
+  structure_score: number | null; results: CheckResult[];
+}
+export interface GovernanceStructure {
+  legal_type: string; size: string | null; profile: GovernanceProfile; bodies: GovBody[]; latest_check: CheckRun | null;
+}
+
+// ---------- الالتزامات
+export type ReviewStatus = "DRAFT" | "APPROVED";
+export type ObligationStatus = "PENDING" | "IN_PLACE" | "NOT_APPLICABLE";
+export interface Obligation {
+  code: string; kind: "LICENSE" | "REGISTRATION" | "FILING" | "POLICY" | "PRACTICE"; domain: string;
+  title: string; description: string; authority: string | null; legal_reference: string | null; source_url: string | null;
+  frequency: string; risk_level: "CRITICAL" | "HIGH" | "MEDIUM"; compliance_category: string | null; policy_type: string | null;
+  review_status: ReviewStatus; status: ObligationStatus; source: "AUTO" | "MANUAL"; note: string | null;
+  needs_confirmation: boolean; tracked: null | { type: "ITEM" | "POLICY"; title?: string; status?: string; expiry_date?: string };
+  effective_status: ObligationStatus | "AT_RISK";
+}
+
+// ---------- المكتبة والسياسات
+export interface LibraryDoc {
+  id: string; kind: "TEMPLATE" | "LAW" | "GUIDE" | "FILE"; category: string; title: string; summary: string | null;
+  url: string | null; file_name: string | null; file_mime: string | null; file_size: number | null;
+  policy_type: string | null; applies_legal_types: string[]; related_codes: string[]; review_status: ReviewStatus;
+  version: string; updated_at: string; adopted?: boolean;
+}
+export interface Policy {
+  id: string; policy_type: string; title: string; version: string; approval_date: string | null;
+  review_due_date: string; status: "DRAFT" | "ACTIVE" | "OBSOLETE"; effective_status: string; days_remaining: number;
+}
+
+// ---------- إدارة المحتوى
+export interface AdminStandard {
+  code: string; domain: string; title: string; description: string; legal_reference: string | null; source_url: string | null;
+  level: "MANDATORY" | "RECOMMENDED"; severity: "critical" | "high" | "medium"; applies_legal_types: string[];
+  rule: Record<string, unknown>; is_visible: boolean; review_status: ReviewStatus; sort: number; updated_at: string;
+}
+export interface AdminObligation {
+  code: string; kind: string; domain: string; title: string; description: string; authority: string | null;
+  legal_reference: string | null; source_url: string | null; frequency: string; risk_level: string;
+  applies: Record<string, unknown>; is_visible: boolean; review_status: ReviewStatus; orgs: number; updated_at: string;
+}
+export interface AdminLibraryDoc extends LibraryDoc {
+  slug: string | null; is_visible: boolean; min_plan: string | null; created_at: string;
+  created_by_name: string | null; updated_by_name: string | null; adoptions: number;
+}
+export interface AdminOrgGovernance {
+  bodies: GovBody[]; latest_check: CheckRun | null;
+  obligations: { total: number; in_place: number; pending: number };
 }

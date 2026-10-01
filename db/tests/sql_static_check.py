@@ -18,6 +18,17 @@ FRAGMENTS = {
                     "effective_status, days_remaining",
     "cond": "target_id IS NULL",
     "sets": "id = id",          # تعديل ديناميكي: الأعمدة من نموذج Pydantic
+    "', '.join(PROFILE_FIELDS)": "employees_count, fiscal_year_end_month, processes_personal_data, vat_registered, "
+                                 "has_bylaws, bylaws_updated_on, auditor_name, auditor_appointed_on, "
+                                 "beneficial_owners_filed_on, last_assembly_on, last_fs_filed_on",
+    "_LIB_COLS": "id, kind, category, title, summary, url, file_name, file_mime, file_size, policy_type, "
+                 "applies_legal_types, related_codes, review_status, version, updated_at",
+    "_LIB_ADMIN_COLS": "d.id, d.slug, d.kind, d.title, cu.full_name AS created_by_name, uu.full_name AS updated_by_name",
+    "_plan_ok(t)": "true",
+    "profile_sets": "employees_count = employees_count",
+    "table": "gov_standards",   # تعديل عام لكتالوجات المحتوى
+    "key_col": "code",
+    "', '.join(cols)": "title = title",
 }
 PSQL = os.environ.get("PSQL", "psql")
 

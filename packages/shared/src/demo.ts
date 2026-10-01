@@ -3,6 +3,7 @@
 // وتختفي بإعادة التحميل.
 
 import type { ComplianceItem, Dashboard, Me, ScoreReason } from "./types.ts";
+import CONTENT from "./demo-content.json" with { type: "json" };
 
 
 /** بيانات الدخول لنسخة العرض فقط. ليست حسابات حقيقية ولا تفتح أي نظام فعلي. */
@@ -43,7 +44,7 @@ const items: StoredItem[] = [
 function view(i: StoredItem): ComplianceItem {
   const d = daysLeft(i.expiry_date);
   const status = d < 0 ? "EXPIRED" : d <= 30 ? "EXPIRING_SOON" : "ACTIVE";
-  return { ...i, days_remaining: d, status, action_required: status !== "ACTIVE" };
+  return { ...i, days_remaining: d, status, action_required: d <= 15 };
 }
 const itemViews = () => items.map(view).sort((a, b) => a.days_remaining - b.days_remaining);
 
@@ -207,6 +208,20 @@ function dispatches() {
   };
 }
 
+// ---------- السياسات (نسخة العرض) ----------
+type DemoPolicy = { id: string; source: string | null; policy_type: string; title: string; version: string;
+  approval_date: string | null; review_due_date: string; status: string; body_md: string | null };
+const policies: DemoPolicy[] = [
+  { id: uid(), source: null, policy_type: "CONFLICT_OF_INTEREST", title: "سياسة تعارض المصالح", version: "1.0",
+    approval_date: inDays(-200), review_due_date: inDays(165), status: "ACTIVE", body_md: null },
+];
+function policyView(x: DemoPolicy) {
+  const d = daysLeft(x.review_due_date);
+  const eff = x.status !== "ACTIVE" ? x.status : d < 0 ? "OVERDUE_REVIEW" : d <= 30 ? "NEEDS_REVIEW" : "ACTIVE";
+  return { id: x.id, policy_type: x.policy_type, title: x.title, version: x.version, approval_date: x.approval_date,
+           review_due_date: x.review_due_date, status: x.status, effective_status: eff, days_remaining: d };
+}
+
 // ---------- الموجّه ----------
 class DemoError extends Error {
   status: number;
@@ -315,6 +330,19 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       if (body.role) t.platform_role = String(body.role); else team.splice(team.indexOf(t), 1);
       return { role: body.role ?? null };
     }
+    if (p === "/admin/catalog/standards") return CONTENT.admin_standards;
+    if (p === "/admin/catalog/obligations") return CONTENT.admin_obligations;
+    if (p === "/admin/library" && method === "GET") return CONTENT.library.map((d) => ({ ...d, slug: d.id, is_visible: true, min_plan: null,
+      created_at: d.updated_at, created_by_name: "حصيف", updated_by_name: null, adoptions: d.kind === "TEMPLATE" ? 1 : 0 }));
+    if ((m = p.match(/^\/admin\/library\/([^/]+)$/)) && method === "GET") return CONTENT.library.find((d) => d.id === m![1]);
+    if (p.startsWith("/admin/catalog/") || p.startsWith("/admin/library")) {
+      throw new DemoError(403, "تعديل المحتوى المرجعي غير متاح في نسخة العرض");
+    }
+    if ((m = p.match(/^\/admin\/organizations\/([^/]+)\/governance$/))) {
+      return { bodies: CONTENT.structure.bodies, latest_check: CONTENT.structure.latest_check,
+               obligations: { total: CONTENT.obligations.length, in_place: CONTENT.obligations.filter((o) => o.effective_status === "IN_PLACE").length,
+                              pending: CONTENT.obligations.filter((o) => o.effective_status !== "IN_PLACE").length } };
+    }
     if (p === "/admin/audit") { const id = q.get("org_id"); return id ? audit.filter((a) => a.org_id === id) : audit; }
     if (p === "/admin/dispatches") return dispatches();
     if (p === "/admin/ai-usage") return orgs.map((o) => ({ org_id: o.id, name: o.name, plan_tier: o.sub?.plan_tier ?? null,
@@ -322,7 +350,37 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     throw new DemoError(404, "غير متاح في نسخة العرض");
   }
 
-  // واجهة العميل
+  // واجهة العميل — الحوكمة والالتزامات والمكتبة (بيانات ثابتة من demo-content.json)
+  if (p.startsWith("/governance")) {
+    if (method === "GET" || p === "/governance/check") return p === "/governance/check" ? CONTENT.structure.latest_check : CONTENT.structure;
+    throw new DemoError(403, "تعديل الهيكل غير متاح في نسخة العرض — في النسخة الفعلية يُحفظ ويُعاد الفحص فوراً");
+  }
+  if (p === "/obligations") return CONTENT.obligations;
+  if (p.startsWith("/obligations/")) throw new DemoError(403, "تغيير الحالة غير متاح في نسخة العرض");
+  if (p === "/library") return CONTENT.library.map((d) => ({ ...d, adopted: policies.some((x) => x.source === d.id) }));
+  if ((m = p.match(/^\/library\/([^/]+)\/adopt$/))) {
+    const d = CONTENT.library.find((x) => x.id === m![1]);
+    if (!d || !d.policy_type) throw new DemoError(404, "النموذج غير متاح للتبني");
+    const id = uid();
+    policies.push({ id, source: d.id, policy_type: d.policy_type, title: d.title.replace(/^نموذج /, ""), version: "1.0",
+      approval_date: null, review_due_date: inDays(365), status: "DRAFT",
+      body_md: (d.body_md ?? "").replaceAll("«اسم المنشأة»", "مؤسسة النخبة للمقاولات").replaceAll("«اسم الشركة»", "مؤسسة النخبة للمقاولات") });
+    return { policy_id: id };
+  }
+  if ((m = p.match(/^\/library\/([^/]+)$/))) {
+    const d = CONTENT.library.find((x) => x.id === m![1]); if (!d) throw new DemoError(404, "المستند غير موجود"); return d;
+  }
+  if (p === "/policies" && method === "GET") return policies.map(policyView);
+  if ((m = p.match(/^\/policies\/([^/]+)\/approve$/))) {
+    const x = policies.find((y) => y.id === m![1]); if (!x) throw new DemoError(404, "السياسة غير موجودة");
+    Object.assign(x, { status: "ACTIVE", approval_date: inDays(0), review_due_date: inDays(365) }); return { status: "ACTIVE" };
+  }
+  if ((m = p.match(/^\/policies\/([^/]+)$/))) {
+    const x = policies.find((y) => y.id === m![1]); if (!x) throw new DemoError(404, "السياسة غير موجودة");
+    if (method === "PATCH") { Object.assign(x, { title: body.title, body_md: body.body_md, version: body.version }); return { updated: true }; }
+    return { ...policyView(x), body_md: x.body_md, source_library_id: x.source };
+  }
+
   if (p === "/dashboard") return dashboard();
   if (p === "/compliance-items" && method === "GET") return itemViews();
   if (p === "/compliance-items" && method === "POST") {

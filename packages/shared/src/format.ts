@@ -159,3 +159,59 @@ export function auditSummary(action: string, changes: Record<string, unknown> | 
   }
   return parts.slice(0, 5).join("، ");
 }
+
+// ---------- الحوكمة والالتزامات والمكتبة
+export const BODY_TYPE_LABEL: Record<string, string> = {
+  OWNER: "المالك", GENERAL_ASSEMBLY: "الجمعية العامة", PARTNERS_ASSEMBLY: "جمعية الشركاء", BOARD: "مجلس الإدارة",
+  MANAGER: "المدير / المديرون", EXECUTIVE_MANAGEMENT: "الإدارة التنفيذية", AUDIT_COMMITTEE: "لجنة المراجعة",
+  NOMINATION_REMUNERATION_COMMITTEE: "لجنة الترشيحات والمكافآت", RISK_COMMITTEE: "لجنة المخاطر",
+  EXECUTIVE_COMMITTEE: "اللجنة التنفيذية", OTHER_COMMITTEE: "لجنة أخرى", COMPANY_SECRETARY: "أمين السر",
+  INTERNAL_AUDIT: "المراجعة الداخلية", COMPLIANCE_FUNCTION: "إدارة الالتزام", DPO: "مسؤول حماية البيانات",
+};
+export const POSITION_LABEL: Record<string, string> = {
+  CHAIR: "رئيس", VICE_CHAIR: "نائب الرئيس", MEMBER: "عضو", SECRETARY: "أمين السر", HEAD: "المسؤول",
+};
+export const GOV_DOMAIN_LABEL: Record<string, string> = {
+  STRUCTURE: "الهيكل", BOARD: "مجلس الإدارة", ASSEMBLY: "الجمعيات", AUDIT: "اللجان والمراجعة",
+  DISCLOSURE: "الإفصاح", POLICIES: "السياسات", PDPL: "حماية البيانات",
+};
+export const OBLIGATION_DOMAIN_LABEL: Record<string, string> = {
+  COMMERCIAL: "تجاري", MUNICIPAL: "بلدي", LABOR: "العمل والموارد البشرية", TAX: "الزكاة والضريبة",
+  SAFETY: "السلامة", PDPL: "حماية البيانات الشخصية", GOVERNANCE: "الحوكمة", AML: "مكافحة غسل الأموال",
+  INSURANCE: "التأمين",
+};
+export const OBLIGATION_KIND_LABEL: Record<string, string> = {
+  LICENSE: "ترخيص", REGISTRATION: "تسجيل", FILING: "إيداع / إقرار", POLICY: "سياسة", PRACTICE: "إجراء",
+};
+export const FREQUENCY_LABEL: Record<string, string> = {
+  ONCE: "مرة واحدة", ANNUAL: "سنوي", RENEWAL: "يُجدَّد", EVENT: "عند حدوث تغيير", CONTINUOUS: "مستمر",
+};
+export const OBLIGATION_STATUS_LABEL: Record<string, string> = {
+  PENDING: "لم يُستوفَ بعد", IN_PLACE: "مستوفى", NOT_APPLICABLE: "لا ينطبق", AT_RISK: "منتهٍ — يحتاج تجديد",
+};
+export const LIBRARY_KIND_LABEL: Record<string, string> = {
+  TEMPLATE: "نموذج", LAW: "نظام / مصدر رسمي", GUIDE: "دليل", FILE: "ملف",
+};
+export const LIBRARY_CATEGORY_LABEL: Record<string, string> = {
+  GOVERNANCE: "الحوكمة", POLICIES: "السياسات", PDPL: "حماية البيانات", LABOR: "العمل", TAX: "الزكاة والضريبة",
+  COMMERCIAL: "تجاري", SAFETY: "السلامة", AML: "مكافحة غسل الأموال",
+};
+export const POLICY_TYPE_LABEL: Record<string, string> = {
+  PRIVACY_POLICY: "سياسة الخصوصية", CONFLICT_OF_INTEREST: "تعارض المصالح", WHISTLEBLOWING: "الإبلاغ عن المخالفات",
+  CODE_OF_CONDUCT: "ميثاق السلوك", DATA_RETENTION: "الاحتفاظ بالبيانات", INFOSEC: "أمن المعلومات",
+  BREACH_RESPONSE: "الاستجابة للتسرب", RELATED_PARTIES: "الأطراف ذات العلاقة", BOARD_CHARTER: "لائحة المجلس",
+  AUDIT_COMMITTEE_CHARTER: "لائحة لجنة المراجعة", DISCLOSURE: "الإفصاح", DOA: "مصفوفة الصلاحيات",
+  RISK_MANAGEMENT: "إدارة المخاطر", AML: "مكافحة غسل الأموال", WORK_REGULATION: "لائحة تنظيم العمل",
+  HEALTH_SAFETY: "السلامة والصحة المهنية", OTHER: "أخرى",
+};
+export const POLICY_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "مسودة", ACTIVE: "معتمدة", OBSOLETE: "ملغاة", NEEDS_REVIEW: "تقترب المراجعة", OVERDUE_REVIEW: "فات موعد المراجعة",
+};
+export const LEVEL_LABEL: Record<string, string> = { MANDATORY: "إلزامي", RECOMMENDED: "ممارسة فضلى" };
+export const REVIEW_BADGE = "مسودة — قيد المراجعة";
+
+export function fileSize(bytes: number | null | undefined): string {
+  if (!bytes) return "";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} ك.ب`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} م.ب`;
+}
