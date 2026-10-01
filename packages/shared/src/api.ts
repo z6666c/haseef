@@ -16,7 +16,7 @@ export function createApi(
   baseUrl: string,
   getSession: () => Session | null,
   onUnauthorized?: () => void,
-  fetchImpl: typeof fetch = (...a) => fetch(...a),
+  fetchImpl: (url: string, init?: RequestInit) => Promise<Response> = (url, init) => fetch(url, init),
 ) {
   async function req<T>(path: string, init: RequestInit & { org?: boolean } = {}): Promise<T> {
     const s = getSession();
