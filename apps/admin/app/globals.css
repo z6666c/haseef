@@ -141,3 +141,6 @@
 .dialog-actions { display: flex; gap: 10px; }
 .temp-pw { display: flex; gap: 10px; align-items: center; padding: 12px; border-radius: var(--r-sm); background: var(--paper); border: 1px dashed var(--line); }
 .temp-pw code { font-size: var(--t-lg); font-weight: 700; letter-spacing: 0.04em; flex: 1; }
+
+/* شريط نسخة العرض (GitHub Pages فقط) */
+.demo-ribbon { background: #B45309; color: #fff; text-align: center; font-size: 13px; padding: 6px 12px; line-height: 1.5; }

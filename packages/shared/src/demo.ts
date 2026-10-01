@@ -1,0 +1,362 @@
+// نسخة العرض: خادم وهمي داخل المتصفح ببيانات تجريبية، تُستخدم في رابط GitHub Pages فقط.
+// يُفعّلها التطبيق بتمرير demoFetch إلى createApi عند NEXT_PUBLIC_DEMO=1 وقت البناء. لا شيء هنا يصل لقاعدة بيانات؛ التغييرات تبقى في الصفحة
+// وتختفي بإعادة التحميل.
+
+import type { ComplianceItem, Dashboard, Me, ScoreReason } from "./types.ts";
+
+
+/** بيانات الدخول لنسخة العرض فقط. ليست حسابات حقيقية ولا تفتح أي نظام فعلي. */
+const DEMO_USERS: Record<string, { password: string; token: string }> = {
+  "demo@haseef.sa": { password: "Haseef@2026", token: "demo-client" },
+  "admin@haseef.sa": { password: "Haseef@2026", token: "demo-admin" },
+};
+
+const ORG_A = "0a1f5c1e-0000-4000-8000-000000000001";
+const ORG_B = "0a1f5c1e-0000-4000-8000-000000000002";
+const ORG_C = "0a1f5c1e-0000-4000-8000-000000000003";
+export const DEMO_ORG_IDS = [ORG_A, ORG_B, ORG_C];
+
+// ---------- أدوات التاريخ (توقيت الرياض) ----------
+const DAY = 86_400_000;
+function riyadhToday(): Date {
+  const s = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date());
+  return new Date(`${s}T00:00:00Z`);
+}
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+const inDays = (n: number) => iso(new Date(riyadhToday().getTime() + n * DAY));
+const ago = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString();
+const daysLeft = (date: string) => Math.round((new Date(`${date}T00:00:00Z`).getTime() - riyadhToday().getTime()) / DAY);
+let seq = 100;
+const uid = () => `0a1f5c1e-0000-4000-9000-${String(++seq).padStart(12, "0")}`;
+
+// ---------- بيانات المنشأة (واجهة العميل) ----------
+type StoredItem = Omit<ComplianceItem, "status" | "days_remaining" | "action_required">;
+const items: StoredItem[] = [
+  { id: uid(), category: "BALADY", title: "رخصة بلدي — الفرع الرئيسي", reference_number: "BL-4471", issue_date: null, expiry_date: inDays(0), risk_level: "CRITICAL", renewal_url: "https://balady.gov.sa" },
+  { id: uid(), category: "CHI_INSURANCE", title: "التأمين الطبي للموظفين", reference_number: null, issue_date: null, expiry_date: inDays(5), risk_level: "HIGH", renewal_url: null },
+  { id: uid(), category: "CIVIL_DEFENSE", title: "شهادة الدفاع المدني", reference_number: null, issue_date: null, expiry_date: inDays(34), risk_level: "HIGH", renewal_url: "https://salamah.998.gov.sa" },
+  { id: uid(), category: "QIWA_NITAQAT", title: "شهادة السعودة", reference_number: null, issue_date: null, expiry_date: inDays(75), risk_level: "HIGH", renewal_url: "https://qiwa.sa" },
+  { id: uid(), category: "COMMERCIAL_REG", title: "السجل التجاري", reference_number: "1010123456", issue_date: null, expiry_date: inDays(140), risk_level: "CRITICAL", renewal_url: "https://mc.gov.sa" },
+  { id: uid(), category: "ZATCA", title: "شهادة الزكاة", reference_number: null, issue_date: null, expiry_date: inDays(210), risk_level: "HIGH", renewal_url: "https://zatca.gov.sa" },
+];
+
+function view(i: StoredItem): ComplianceItem {
+  const d = daysLeft(i.expiry_date);
+  const status = d < 0 ? "EXPIRED" : d <= 30 ? "EXPIRING_SOON" : "ACTIVE";
+  return { ...i, days_remaining: d, status, action_required: status !== "ACTIVE" };
+}
+const itemViews = () => items.map(view).sort((a, b) => a.days_remaining - b.days_remaining);
+
+function dashboard(): Dashboard {
+  const all = itemViews();
+  const reasons: ScoreReason[] = [
+    { pillar: "GOVERNANCE_PDPL", severity: "medium", text: "فات موعد مراجعة سياسة الخصوصية", points: 25, points_label: "25 نقطة" },
+  ];
+  let operational = 100;
+  for (const i of all) {
+    if (i.status === "EXPIRED") {
+      const p = i.risk_level === "CRITICAL" ? 20 : 12;
+      operational -= p;
+      reasons.push({ pillar: "OPERATIONAL", severity: "critical", text: `انتهت صلاحية ${i.title}`, points: p, points_label: `${p} نقطة` });
+    } else if (i.status === "EXPIRING_SOON") {
+      const p = i.days_remaining <= 7 ? 5 : 2;
+      operational -= p;
+      const when = i.days_remaining === 0 ? "اليوم" : `خلال ${i.days_remaining} أيام`;
+      reasons.push({ pillar: "OPERATIONAL", severity: "medium", text: `تنتهي صلاحية ${i.title} ${when}`, points: p, points_label: p <= 10 && p >= 3 ? `${p} نقاط` : `${p} نقطة` });
+    }
+  }
+  operational = Math.max(0, operational);
+  const score = Math.round((operational + 50) / 2);
+  return {
+    org_name: "مؤسسة النخبة للمقاولات", cr_number: "1010123456", greeting_name: "أحمد العتيبي",
+    plan_tier: "PROFESSIONAL_GRC", automation_active: true,
+    score: {
+      score, pillars: { OPERATIONAL: operational, GOVERNANCE_PDPL: 50, CONTRACTS: null },
+      weights_used: { OPERATIONAL: 50, GOVERNANCE_PDPL: 50 }, capped_by_critical_expiry: false,
+      reasons: reasons.sort((a, b) => b.points - a.points), computed_at: ago(5),
+    },
+    action_required: all.filter((i) => i.action_required),
+    counts: {
+      active: all.filter((i) => i.status === "ACTIVE").length,
+      expiring_soon: all.filter((i) => i.status === "EXPIRING_SOON").length,
+      expired: all.filter((i) => i.status === "EXPIRED").length,
+      policies_due: 1,
+    },
+    governance: { available: true, last_meeting_title: null, last_meeting_date: null, last_meeting_status: null, doa_rules: 0, doa_last_updated: null },
+    pdpl: { available: true, records: 0, complete_records: 0, completeness_pct: null, cross_border: 0 },
+  };
+}
+
+const CLIENT_ME: Me = {
+  id: "0a1f5c1e-0000-4000-8000-0000000000a1", email: "demo@haseef.sa", full_name: "أحمد العتيبي", is_platform_admin: false,
+  memberships: [{ org_id: ORG_A, org_name: "مؤسسة النخبة للمقاولات", cr_number: "1010123456", role: "ORG_ADMIN" }],
+};
+const ADMIN_ME: Me = { id: "0a1f5c1e-0000-4000-8000-0000000000b1", email: "admin@haseef.sa", full_name: "فريق عمليات حصيف", is_platform_admin: true, memberships: [] };
+
+// ---------- بيانات لوحة التحكم ----------
+const PRICES: Record<string, [number, number]> = { ESSENTIAL: [149, 1490], PROFESSIONAL_GRC: [499, 4990], ENTERPRISE: [1490, 14900] };
+type Org = {
+  id: string; name: string; cr: string; legal: string; industry: string; size: string; score: number | null;
+  suspended_at: string | null; reason: string | null; created_at: string;
+  sub: { id: string; plan_tier: string; billing_cycle: string; billing_status: string; starts_at: string; ends_at: string } | null;
+  members: { membership_id: string; role: string; user_id: string; full_name: string; email: string; phone: string | null; active: boolean; last: string | null }[];
+  billing: { event_type: string; plan_tier: string | null; amount_sar: number | null; period_months: number | null; reference: string | null; note: string | null; created_at: string; actor: string | null }[];
+  counts: { items: number; expired: number; policies: number };
+};
+const ts = (n: number) => new Date(riyadhToday().getTime() + n * DAY).toISOString();
+const orgs: Org[] = [
+  {
+    id: ORG_A, name: "مؤسسة النخبة للمقاولات", cr: "1010123456", legal: "SOLE_PROPRIETORSHIP", industry: "المقاولات", size: "SMALL",
+    score: 66, suspended_at: null, reason: null, created_at: ts(-40),
+    sub: { id: uid(), plan_tier: "PROFESSIONAL_GRC", billing_cycle: "MONTHLY", billing_status: "ACTIVE", starts_at: ts(-10), ends_at: ts(20) },
+    members: [
+      { membership_id: uid(), role: "ORG_ADMIN", user_id: CLIENT_ME.id, full_name: "أحمد العتيبي", email: "demo@haseef.sa", phone: "+966500000001", active: true, last: ago(30) },
+      { membership_id: uid(), role: "EXTERNAL_ADVISOR", user_id: uid(), full_name: "مكتب المستشار القانوني", email: "advisor@example.sa", phone: null, active: true, last: ago(60 * 26) },
+    ],
+    billing: [
+      { event_type: "PAYMENT", plan_tier: "PROFESSIONAL_GRC", amount_sar: 499, period_months: 1, reference: "INV-2026-0007", note: null, created_at: ts(-10), actor: "فريق عمليات حصيف" },
+      { event_type: "TRIAL_STARTED", plan_tier: "PROFESSIONAL_GRC", amount_sar: null, period_months: null, reference: null, note: "14 يوماً", created_at: ts(-40), actor: "فريق عمليات حصيف" },
+    ],
+    counts: { items: 6, expired: 0, policies: 3 },
+  },
+  {
+    id: ORG_B, name: "شركة واحة التقنية", cr: "2050654321", legal: "LLC", industry: "تقنية المعلومات", size: "MEDIUM",
+    score: 85, suspended_at: null, reason: null, created_at: ts(-75),
+    sub: { id: uid(), plan_tier: "ESSENTIAL", billing_cycle: "YEARLY", billing_status: "ACTIVE", starts_at: ts(-60), ends_at: ts(305) },
+    members: [
+      { membership_id: uid(), role: "ORG_ADMIN", user_id: uid(), full_name: "سارة القحطاني", email: "sara@waha.example", phone: "+966500000002", active: true, last: ago(60 * 5) },
+      { membership_id: uid(), role: "DPO", user_id: uid(), full_name: "فهد الشمري", email: "fahad@waha.example", phone: null, active: true, last: null },
+    ],
+    billing: [{ event_type: "PAYMENT", plan_tier: "ESSENTIAL", amount_sar: 1490, period_months: 12, reference: "INV-2026-0003", note: null, created_at: ts(-60), actor: "المحاسبة" }],
+    counts: { items: 5, expired: 0, policies: 4 },
+  },
+  {
+    id: ORG_C, name: "شركة الأفق للتجارة", cr: "4030111222", legal: "LLC", industry: "التجارة", size: "SMALL",
+    score: null, suspended_at: null, reason: null, created_at: ts(-3),
+    sub: { id: uid(), plan_tier: "PROFESSIONAL_GRC", billing_cycle: "MONTHLY", billing_status: "TRIAL", starts_at: ts(-3), ends_at: ts(11) },
+    members: [{ membership_id: uid(), role: "ORG_ADMIN", user_id: uid(), full_name: "خالد الزهراني", email: "khalid@ofoq.example", phone: null, active: true, last: null }],
+    billing: [{ event_type: "TRIAL_STARTED", plan_tier: "PROFESSIONAL_GRC", amount_sar: null, period_months: null, reference: null, note: "14 يوماً", created_at: ts(-3), actor: "الدعم الفني" }],
+    counts: { items: 0, expired: 0, policies: 0 },
+  },
+];
+const team: { id: string; full_name: string; email: string; platform_role: string; is_active: boolean; last_login_at: string | null; must_change_password: boolean }[] = [
+  { id: ADMIN_ME.id, full_name: "فريق عمليات حصيف", email: "admin@haseef.sa", platform_role: "SUPER_ADMIN", is_active: true, last_login_at: ago(1), must_change_password: false },
+  { id: uid(), full_name: "الدعم الفني", email: "support@haseef.sa", platform_role: "SUPPORT", is_active: true, last_login_at: ago(60 * 3), must_change_password: false },
+  { id: uid(), full_name: "المحاسبة", email: "billing@haseef.sa", platform_role: "BILLING", is_active: true, last_login_at: ago(60 * 30), must_change_password: false },
+];
+let auditSeq = 50;
+const audit: { id: number; created_at: string; action: string; entity_type: string; entity_id: string | null; changes: Record<string, unknown> | null; ip: string | null; actor: string | null; actor_role: string | null; org_name: string | null; org_id: string | null }[] = [
+  { id: 3, created_at: ts(-3), action: "ADMIN_CREATE_ORG", entity_type: "organization", entity_id: ORG_C, changes: { name: "شركة الأفق للتجارة", cr_number: "4030111222", plan: "PROFESSIONAL_GRC" }, ip: "10.0.0.4", actor: "الدعم الفني", actor_role: "SUPPORT", org_name: "شركة الأفق للتجارة", org_id: ORG_C },
+  { id: 2, created_at: ts(-10), action: "ADMIN_RECORD_PAYMENT", entity_type: "subscription", entity_id: null, changes: { amount_sar: 499, cycle: "MONTHLY", reference: "INV-2026-0007" }, ip: "10.0.0.4", actor: "فريق عمليات حصيف", actor_role: "SUPER_ADMIN", org_name: "مؤسسة النخبة للمقاولات", org_id: ORG_A },
+  { id: 1, created_at: ts(-60), action: "ADMIN_RECORD_PAYMENT", entity_type: "subscription", entity_id: null, changes: { amount_sar: 1490, cycle: "YEARLY", reference: "INV-2026-0003" }, ip: "10.0.0.7", actor: "المحاسبة", actor_role: "BILLING", org_name: "شركة واحة التقنية", org_id: ORG_B },
+];
+function log(action: string, org: Org | null, changes: Record<string, unknown> | null) {
+  audit.unshift({ id: ++auditSeq, created_at: new Date().toISOString(), action, entity_type: org ? "organization" : "user", entity_id: org?.id ?? null,
+    changes, ip: "—", actor: "فريق عمليات حصيف", actor_role: "SUPER_ADMIN", org_name: org?.name ?? null, org_id: org?.id ?? null });
+}
+
+const orgRow = (o: Org) => ({
+  id: o.id, name: o.name, cr_number: o.cr, industry_type: o.industry, haseef_score: o.score, created_at: o.created_at,
+  suspended_at: o.suspended_at, plan_tier: o.sub?.plan_tier ?? null, billing_status: o.sub?.billing_status ?? null,
+  ends_at: o.sub?.ends_at ?? null, members: o.members.length,
+});
+const orgDetail = (o: Org) => ({
+  organization: { id: o.id, name: o.name, cr_number: o.cr, entity_legal_type: o.legal, industry_type: o.industry, commercial_size: o.size,
+    haseef_score: o.score, is_active: true, suspended_at: o.suspended_at, suspension_reason: o.reason, created_at: o.created_at },
+  subscription: o.sub && { ...o.sub, monthly_price_sar: PRICES[o.sub.plan_tier][0], yearly_price_sar: PRICES[o.sub.plan_tier][1] },
+  members: o.members.map((m) => ({ membership_id: m.membership_id, role: m.role, membership_active: m.active, receives_alerts: true,
+    user_id: m.user_id, full_name: m.full_name, email: m.email, phone_number: m.phone, user_active: m.active,
+    last_login_at: m.last, must_change_password: false, is_team_member: false })),
+  billing: o.billing, counts: o.counts,
+});
+function overview() {
+  const live = orgs.filter((o) => o.sub && !o.suspended_at && o.sub.billing_status !== "CANCELED");
+  const mrr = live.filter((o) => o.sub!.billing_status === "ACTIVE")
+    .reduce((s, o) => s + (o.sub!.billing_cycle === "YEARLY" ? PRICES[o.sub!.plan_tier][1] / 12 : PRICES[o.sub!.plan_tier][0]), 0);
+  const scored = orgs.filter((o) => o.score !== null);
+  const count = (f: (o: Org) => string) => Object.entries(live.reduce<Record<string, number>>((a, o) => ({ ...a, [f(o)]: (a[f(o)] ?? 0) + 1 }), {}));
+  return {
+    kpis: { active_orgs: live.length, trials: live.filter((o) => o.sub!.billing_status === "TRIAL").length, mrr_sar: mrr,
+      avg_score: scored.length ? Math.round(scored.reduce((s, o) => s + o.score!, 0) / scored.length) : null },
+    by_plan: count((o) => o.sub!.plan_tier).map(([plan_tier, n]) => ({ plan_tier, n })),
+    by_industry: count((o) => o.industry).map(([industry, n]) => ({ industry, n })),
+  };
+}
+function dispatches() {
+  const mk = (org: string, target: string, ch: "WHATSAPP" | "EMAIL", to: string, status: string, th: number, due: number, kind: "AUTO" | "MANUAL" = "AUTO") => ({
+    id: uid(), org_name: org, target_type: target, channel: ch, recipient_address: to, status, threshold_days: th, due_date: inDays(due),
+    scheduled_for: ts(status === "QUEUED" ? 0.375 : -1), sent_at: status === "QUEUED" ? null : ago(60 * 20),
+    delivered_at: status === "DELIVERED" ? ago(60 * 19) : null, provider: status === "QUEUED" ? null : "WHATSAPP", attempts: status === "QUEUED" ? 0 : 1,
+    last_error: null, skip_reason: null, kind,
+  });
+  const items = [
+    mk("مؤسسة النخبة للمقاولات", "COMPLIANCE_ITEM", "WHATSAPP", "+966500000001", "QUEUED", 0, 0),
+    mk("مؤسسة النخبة للمقاولات", "COMPLIANCE_ITEM", "EMAIL", "demo@haseef.sa", "QUEUED", 0, 0),
+    mk("مؤسسة النخبة للمقاولات", "COMPLIANCE_ITEM", "WHATSAPP", "+966500000001", "QUEUED", 7, 5),
+    mk("مؤسسة النخبة للمقاولات", "POLICY", "EMAIL", "advisor@example.sa", "QUEUED", 0, -10),
+    mk("شركة واحة التقنية", "COMPLIANCE_ITEM", "WHATSAPP", "+966500000002", "DELIVERED", 30, 25),
+    mk("شركة واحة التقنية", "COMPLIANCE_ITEM", "EMAIL", "sara@waha.example", "SENT", 30, 25),
+    mk("مؤسسة النخبة للمقاولات", "COMPLIANCE_ITEM", "WHATSAPP", "+966500000001", "DELIVERED", -2, -2, "MANUAL"),
+  ];
+  return {
+    last_7_days: [
+      { status: "QUEUED", channel: "WHATSAPP", n: 2 }, { status: "QUEUED", channel: "EMAIL", n: 2 },
+      { status: "DELIVERED", channel: "WHATSAPP", n: 2 }, { status: "SENT", channel: "EMAIL", n: 1 },
+    ],
+    items,
+  };
+}
+
+// ---------- الموجّه ----------
+class DemoError extends Error {
+  status: number;
+  constructor(status: number, msg: string) { super(msg); this.status = status; }
+}
+const findOrg = (id: string) => { const o = orgs.find((x) => x.id === id); if (!o) throw new DemoError(404, "المنشأة غير موجودة"); return o; };
+const TEMP_PW = "Demo-Temp-2026";
+
+function route(method: string, path: string, body: Record<string, unknown>, token: string | null): unknown {
+  const p = path.split("?")[0];
+  const q = new URLSearchParams(path.split("?")[1] ?? "");
+  let m: RegExpMatchArray | null;
+
+  if (method === "POST" && p === "/auth/login") {
+    const u = DEMO_USERS[String(body.email ?? "").trim().toLowerCase()];
+    if (!u || u.password !== body.password) throw new DemoError(401, "البريد أو كلمة المرور غير صحيحة");
+    return { access_token: u.token, token_type: "bearer", must_change_password: false };
+  }
+  if (!token) throw new DemoError(401, "سجّل الدخول أولاً");
+  const isAdmin = token === "demo-admin";
+  if (p === "/auth/me") return isAdmin ? ADMIN_ME : CLIENT_ME;
+  if (p === "/auth/change-password") return undefined;
+
+  if (p.startsWith("/admin")) {
+    if (!isAdmin) throw new DemoError(403, "هذه الواجهة لفريق حصيف فقط");
+    if (p === "/admin/me") return { user_id: ADMIN_ME.id, role: "SUPER_ADMIN" };
+    if (p === "/admin/overview") return overview();
+    if (p === "/admin/organizations" && method === "GET") return orgs.map(orgRow);
+    if (p === "/admin/organizations" && method === "POST") {
+      const o: Org = { id: uid(), name: String(body.name), cr: String(body.cr_number), legal: String(body.entity_legal_type), industry: String(body.industry_type ?? "—"),
+        size: String(body.commercial_size ?? "SMALL"), score: null, suspended_at: null, reason: null, created_at: new Date().toISOString(),
+        sub: { id: uid(), plan_tier: String(body.plan_tier), billing_cycle: "MONTHLY", billing_status: "TRIAL", starts_at: new Date().toISOString(), ends_at: ts(Number(body.trial_days) || 14) },
+        members: [{ membership_id: uid(), role: "ORG_ADMIN", user_id: uid(), full_name: String(body.admin_full_name), email: String(body.admin_email), phone: null, active: true, last: null }],
+        billing: [], counts: { items: 0, expired: 0, policies: 0 } };
+      orgs.unshift(o); log("ADMIN_CREATE_ORG", o, { name: o.name, cr_number: o.cr });
+      // نسخة العرض صفحات ثابتة: تُفتح صفحة منشأة موجودة بدل صفحة جديدة لا ملف لها.
+      return { id: ORG_C, temporary_password: TEMP_PW, admin_existing_user: false };
+    }
+    if ((m = p.match(/^\/admin\/organizations\/([^/]+)$/))) {
+      const o = findOrg(m[1]);
+      if (method === "GET") return orgDetail(o);
+      Object.assign(o, { name: body.name ?? o.name, industry: body.industry_type ?? o.industry });
+      log("ADMIN_UPDATE_ORG", o, body); return { updated: true };
+    }
+    if ((m = p.match(/^\/admin\/organizations\/([^/]+)\/(suspend|reactivate)$/))) {
+      const o = findOrg(m[1]);
+      if (m[2] === "suspend") { o.suspended_at = new Date().toISOString(); o.reason = String(body.reason); log("ADMIN_SUSPEND_ORG", o, { reason: body.reason }); return { suspended: true, canceled_alerts: 0 }; }
+      o.suspended_at = null; o.reason = null; log("ADMIN_REACTIVATE_ORG", o, { reason: body.reason }); return { suspended: false };
+    }
+    if ((m = p.match(/^\/admin\/organizations\/([^/]+)\/subscription\/([a-z-]+)$/))) {
+      const o = findOrg(m[1]); const s = o.sub; if (!s) throw new DemoError(404, "لا يوجد اشتراك");
+      const now = new Date().toISOString();
+      if (m[2] === "change-plan") {
+        if (body.plan_tier === s.plan_tier) throw new DemoError(409, "المنشأة على هذه الباقة أصلاً");
+        log("ADMIN_CHANGE_PLAN", o, { from: s.plan_tier, to: body.plan_tier }); s.plan_tier = String(body.plan_tier);
+        o.billing.unshift({ event_type: "PLAN_CHANGED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: (body.note as string) ?? null, created_at: now, actor: "فريق عمليات حصيف" });
+        return { plan_tier: s.plan_tier };
+      }
+      if (m[2] === "extend-trial") {
+        if (s.billing_status !== "TRIAL") throw new DemoError(409, "المنشأة ليست في فترة تجريبية");
+        s.ends_at = new Date(new Date(s.ends_at).getTime() + Number(body.days) * DAY).toISOString();
+        o.billing.unshift({ event_type: "TRIAL_EXTENDED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: `${body.days} يوماً`, created_at: now, actor: "فريق عمليات حصيف" });
+        log("ADMIN_EXTEND_TRIAL", o, { days: body.days }); return { ends_at: s.ends_at };
+      }
+      if (m[2] === "payment") {
+        const months = body.billing_cycle === "YEARLY" ? 12 : 1;
+        const base = s.billing_status === "TRIAL" ? Date.now() : Math.max(Date.now(), new Date(s.ends_at).getTime());
+        const end = new Date(base); end.setMonth(end.getMonth() + months);
+        Object.assign(s, { billing_status: "ACTIVE", billing_cycle: body.billing_cycle, plan_tier: body.plan_tier ?? s.plan_tier, ends_at: end.toISOString() });
+        o.billing.unshift({ event_type: "PAYMENT", plan_tier: s.plan_tier, amount_sar: Number(body.amount_sar), period_months: months, reference: (body.reference as string) ?? null, note: (body.note as string) ?? null, created_at: now, actor: "فريق عمليات حصيف" });
+        log("ADMIN_RECORD_PAYMENT", o, { amount_sar: body.amount_sar, cycle: body.billing_cycle, reference: body.reference }); return { status: "ACTIVE" };
+      }
+      if (m[2] === "cancel") {
+        s.billing_status = "CANCELED";
+        o.billing.unshift({ event_type: "CANCELED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: String(body.reason), created_at: now, actor: "فريق عمليات حصيف" });
+        log("ADMIN_CANCEL_SUBSCRIPTION", o, { reason: body.reason }); return { status: "CANCELED" };
+      }
+    }
+    if ((m = p.match(/^\/admin\/organizations\/([^/]+)\/members$/))) {
+      const o = findOrg(m[1]);
+      o.members.push({ membership_id: uid(), role: String(body.role), user_id: uid(), full_name: String(body.full_name), email: String(body.email), phone: (body.phone_number as string) ?? null, active: true, last: null });
+      log("ADMIN_INVITE_MEMBER", o, { email: body.email, role: body.role }); return { temporary_password: TEMP_PW, existing_user: false };
+    }
+    if ((m = p.match(/^\/admin\/memberships\/([^/]+)$/))) {
+      for (const o of orgs) for (const mem of o.members) if (mem.membership_id === m[1]) {
+        if (body.role) mem.role = String(body.role);
+        if (typeof body.is_active === "boolean") mem.active = body.is_active;
+        log("ADMIN_UPDATE_MEMBERSHIP", o, body);
+      }
+      return { updated: true };
+    }
+    if ((m = p.match(/^\/admin\/users\/([^/]+)\/(reset-password|disable|enable)$/))) {
+      for (const o of orgs) for (const mem of o.members) if (mem.user_id === m[1] && m[2] !== "reset-password") mem.active = m[2] === "enable";
+      log(m[2] === "reset-password" ? "ADMIN_RESET_PASSWORD" : m[2] === "disable" ? "ADMIN_DISABLE_USER" : "ADMIN_ENABLE_USER", null, body.reason ? { reason: body.reason } : null);
+      return m[2] === "reset-password" ? { temporary_password: TEMP_PW } : { is_active: m[2] === "enable" };
+    }
+    if (p === "/admin/team" && method === "GET") return team.filter((t) => t.platform_role);
+    if (p === "/admin/team" && method === "POST") {
+      team.push({ id: uid(), full_name: String(body.full_name), email: String(body.email), platform_role: String(body.role), is_active: true, last_login_at: null, must_change_password: true });
+      log("ADMIN_TEAM_ADD", null, { email: body.email, role: body.role }); return { temporary_password: TEMP_PW };
+    }
+    if ((m = p.match(/^\/admin\/team\/([^/]+)$/))) {
+      if (m[1] === ADMIN_ME.id) throw new DemoError(409, "لا يمكنك تغيير دورك بنفسك");
+      const t = team.find((x) => x.id === m![1]); if (!t) throw new DemoError(404, "العضو غير موجود");
+      log("ADMIN_TEAM_ROLE", null, { from: t.platform_role, to: body.role });
+      if (body.role) t.platform_role = String(body.role); else team.splice(team.indexOf(t), 1);
+      return { role: body.role ?? null };
+    }
+    if (p === "/admin/audit") { const id = q.get("org_id"); return id ? audit.filter((a) => a.org_id === id) : audit; }
+    if (p === "/admin/dispatches") return dispatches();
+    if (p === "/admin/ai-usage") return orgs.map((o) => ({ org_id: o.id, name: o.name, plan_tier: o.sub?.plan_tier ?? null,
+      quota: o.sub?.plan_tier === "ESSENTIAL" ? 3 : 15, audits_this_month: o.id === ORG_A ? 4 : 0, tokens: o.id === ORG_A ? 48_200 : 0, cost_sar: o.id === ORG_A ? 3.6 : 0 }));
+    throw new DemoError(404, "غير متاح في نسخة العرض");
+  }
+
+  // واجهة العميل
+  if (p === "/dashboard") return dashboard();
+  if (p === "/compliance-items" && method === "GET") return itemViews();
+  if (p === "/compliance-items" && method === "POST") {
+    const i: StoredItem = { id: uid(), category: body.category as StoredItem["category"], title: String(body.title), reference_number: (body.reference_number as string) ?? null,
+      issue_date: (body.issue_date as string) ?? null, expiry_date: String(body.expiry_date), risk_level: body.risk_level as StoredItem["risk_level"], renewal_url: (body.renewal_url as string) ?? null };
+    items.push(i); return view(i);
+  }
+  if ((m = p.match(/^\/compliance-items\/([^/]+)\/renew$/))) {
+    const i = items.find((x) => x.id === m![1]); if (!i) throw new DemoError(404, "الترخيص غير موجود");
+    i.expiry_date = String(body.new_expiry_date); return view(i);
+  }
+  if ((m = p.match(/^\/compliance-items\/([^/]+)\/remind$/))) {
+    return { queued: 2, message: "أُرسل التذكير الآن إلى واتساب مدير المنشأة وبريده (نسخة عرض: لم يُرسل فعلياً)" };
+  }
+  if ((m = p.match(/^\/compliance-items\/([^/]+)$/)) && method === "DELETE") {
+    const k = items.findIndex((x) => x.id === m![1]); if (k >= 0) items.splice(k, 1); return undefined;
+  }
+  throw new DemoError(404, "غير متاح في نسخة العرض");
+}
+
+/** بديل fetch في نسخة العرض: يرجع Response كما لو جاء من الخادم. */
+export async function demoFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  await new Promise((r) => setTimeout(r, 120)); // إحساس بطلب حقيقي
+  const path = url.replace(/^.*?\/v1/, "");
+  const method = (init.method ?? "GET").toUpperCase();
+  const auth = new Headers(init.headers).get("Authorization");
+  const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
+  let body: Record<string, unknown> = {};
+  try { body = init.body ? JSON.parse(String(init.body)) : {}; } catch { /* ليس JSON */ }
+  try {
+    const out = route(method, path, body, token);
+    return out === undefined ? new Response(null, { status: 204 }) : new Response(JSON.stringify(out), { status: 200, headers: { "Content-Type": "application/json" } });
+  } catch (e) {
+    const status = e instanceof DemoError ? e.status : 500;
+    return new Response(JSON.stringify({ detail: e instanceof Error ? e.message : "خطأ" }), { status, headers: { "Content-Type": "application/json" } });
+  }
+}

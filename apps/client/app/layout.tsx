@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { default: "حَصيف", template: "%s | حَصيف" },
   description: "متابعة تراخيص المنشأة وحوكمتها وامتثالها لنظام حماية البيانات الشخصية",
-  icons: { icon: "/icon.svg" },
+  icons: { icon: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/icon.svg` },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -18,7 +18,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {process.env.NEXT_PUBLIC_DEMO === "1" && (
+          <div className="demo-ribbon" role="note">نسخة عرض تجريبية — البيانات وهمية، والتغييرات لا تُحفظ ولا تُرسل أي تنبيهات.</div>
+        )}
+        {children}
+      </body>
     </html>
   );
 }

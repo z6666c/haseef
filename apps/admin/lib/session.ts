@@ -1,6 +1,6 @@
 "use client";
 
-import { createApi, type Session } from "@haseef/shared";
+import { createApi, demoFetch, type Session } from "@haseef/shared";
 
 const KEY = "haseef.admin.session";
 
@@ -28,8 +28,10 @@ export const api = createApi(
   getSession,
   () => {
     setSession(null);
-    if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-      window.location.href = "/login";
+    if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+      window.location.href = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/login/`;
     }
   },
+  // نسخة العرض (GitHub Pages): بيانات وهمية داخل المتصفح بدل الخادم.
+  process.env.NEXT_PUBLIC_DEMO === "1" ? demoFetch : undefined,
 );

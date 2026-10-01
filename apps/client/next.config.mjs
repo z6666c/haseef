@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
+// نسخة العرض الثابتة (GitHub Pages): DEMO_EXPORT=1 مع NEXT_PUBLIC_DEMO=1 و NEXT_PUBLIC_BASE_PATH.
+const demoExport = process.env.DEMO_EXPORT === "1";
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || undefined;
+
 const nextConfig = {
   transpilePackages: ["@haseef/shared"],
   poweredByHeader: false,
@@ -21,4 +25,9 @@ const nextConfig = {
     }];
   },
 };
+if (demoExport) {
+  Object.assign(nextConfig, { output: "export", basePath, trailingSlash: true, images: { unoptimized: true } });
+  delete nextConfig.rewrites; // لا خادم في الصفحات الثابتة؛ الطلبات تُخدم من demo.ts
+  delete nextConfig.headers;
+}
 export default nextConfig;

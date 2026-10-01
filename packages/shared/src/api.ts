@@ -12,7 +12,12 @@ export interface Session {
 }
 
 /** عميل الواجهة الخلفية. كل طلب لمنشأة يحمل X-Org-Id، والخادم يتحقق من العضوية داخل معاملة RLS. */
-export function createApi(baseUrl: string, getSession: () => Session | null, onUnauthorized?: () => void) {
+export function createApi(
+  baseUrl: string,
+  getSession: () => Session | null,
+  onUnauthorized?: () => void,
+  fetchImpl: typeof fetch = (...a) => fetch(...a),
+) {
   async function req<T>(path: string, init: RequestInit & { org?: boolean } = {}): Promise<T> {
     const s = getSession();
     const headers = new Headers(init.headers);
@@ -20,7 +25,7 @@ export function createApi(baseUrl: string, getSession: () => Session | null, onU
     if (s?.token) headers.set("Authorization", `Bearer ${s.token}`);
     if (init.org !== false && s?.orgId) headers.set("X-Org-Id", s.orgId);
 
-    const res = await fetch(`${baseUrl}/v1${path}`, { ...init, headers });
+    const res = await fetchImpl(`${baseUrl}/v1${path}`, { ...init, headers });
     if (res.status === 401) onUnauthorized?.();
     if (!res.ok) {
       let detail = `تعذّر إكمال الطلب (${res.status})`;

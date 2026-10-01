@@ -1,0 +1,48 @@
+name: نسخة العرض (GitHub Pages)
+
+# يبني نسخة عرض ثابتة من التطبيق ولوحة التحكم ببيانات وهمية داخل المتصفح،
+# وينشرها على فرع gh-pages:
+#   تطبيق العملاء: https://<owner>.github.io/haseef/
+#   لوحة التحكم:   https://<owner>.github.io/haseef/admin/
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_DEMO: "1"
+      DEMO_EXPORT: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm install --no-audit --no-fund
+      - name: بناء تطبيق العملاء
+        run: npm run build -w @haseef/client
+        env: { NEXT_PUBLIC_BASE_PATH: "/${{ github.event.repository.name }}" }
+      - name: بناء لوحة التحكم
+        run: npm run build -w @haseef/admin
+        env: { NEXT_PUBLIC_BASE_PATH: "/${{ github.event.repository.name }}/admin" }
+      - name: تجميع الموقع
+        run: |
+          mkdir -p site
+          cp -r apps/client/out/. site/
+          mkdir -p site/admin && cp -r apps/admin/out/. site/admin/
+          touch site/.nojekyll
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+          publish_branch: gh-pages
+          force_orphan: true
