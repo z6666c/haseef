@@ -24,7 +24,7 @@ export function setSession(s: Session | null): void {
 }
 
 export const api = createApi(
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000",
+  process.env.NEXT_PUBLIC_API_URL ?? "/api",
   getSession,
   () => {
     setSession(null);
