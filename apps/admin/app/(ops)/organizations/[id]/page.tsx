@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
+  auditSummary,
   AUDIT_ACTION_LABEL, BILLING_EVENT_LABEL, BILLING_STATUS_LABEL, LEGAL_TYPE_LABEL, ORG_ROLE_LABEL, PLAN_LABEL,
   SIZE_LABEL, countDays, formatDate, type AdminMember, type AdminOrgDetail, type AuditEntry,
 } from "@haseef/shared";
@@ -172,7 +173,7 @@ export default function OrgDetail() {
               <li key={a.id}>
                 <span className="audit-when">{fmtDateTime(a.created_at)}</span>
                 <span><strong>{AUDIT_ACTION_LABEL[a.action] ?? a.action}</strong> — {a.actor ?? "النظام"}</span>
-                {a.changes && "reason" in a.changes && <span className="muted">السبب: {String(a.changes.reason)}</span>}
+                {a.changes && <span className="muted">{auditSummary(a.action, a.changes)}</span>}
               </li>
             ))}
           </ol>

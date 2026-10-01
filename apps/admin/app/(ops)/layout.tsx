@@ -47,7 +47,7 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
               <Link key={n.href} href={n.href} aria-current={active(n.href) ? "page" : undefined}>{n.label}</Link>
             ))}
           </nav>
-          <span className="ops-user">{name} <span className="ops-role">{PLATFORM_ROLE_LABEL[role]}</span></span>
+          <span className="ops-user"><span className="ops-user-name">{name}</span> <span className="ops-role">{PLATFORM_ROLE_LABEL[role]}</span></span>
           <button className="ops-logout" type="button" onClick={() => { setSession(null); router.replace("/login"); }}>خروج</button>
         </header>
         <main className="ops-main">{children}</main>

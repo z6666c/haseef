@@ -22,8 +22,10 @@ export default function Team() {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const [meId, setMeId] = useState<string | null>(null);
   const load = useCallback(() => { api.admin.team().then(setRows).catch((e: Error) => setError(e.message)); }, []);
   useEffect(load, [load]);
+  useEffect(() => { api.admin.me().then((m) => setMeId(m.user_id)).catch(() => {}); }, []);
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
@@ -72,17 +74,18 @@ export default function Team() {
             <tr key={m.id}>
               <td>{m.full_name}<div className="muted small"><bdi dir="ltr">{m.email}</bdi></div></td>
               <td>
-                {isSuper ? (
+                {isSuper && m.id !== meId ? (
                   <select aria-label={`دور ${m.full_name}`} value={m.platform_role}
                           onChange={(e) => changeRole(m, e.target.value as PlatformRole)}>
                     {(Object.keys(ROLE_HELP) as PlatformRole[]).map((r) => <option key={r} value={r}>{PLATFORM_ROLE_LABEL[r]}</option>)}
                   </select>
                 ) : PLATFORM_ROLE_LABEL[m.platform_role]}
                 {m.must_change_password && <span className="pill">بانتظار أول دخول</span>}
+                {m.id === meId && <span className="pill">أنت</span>}
               </td>
               <td>{fmtDateTime(m.last_login_at)}</td>
               <td className="row-actions-cell">
-                {isSuper && <button className="link-btn danger" type="button" onClick={() => changeRole(m, null)}>إزالة من الفريق</button>}
+                {isSuper && m.id !== meId && <button className="link-btn danger" type="button" onClick={() => changeRole(m, null)}>إزالة من الفريق</button>}
               </td>
             </tr>
           ))}

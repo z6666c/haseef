@@ -114,3 +114,48 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   ADMIN_RESET_PASSWORD: "إعادة تعيين كلمة المرور", ADMIN_DISABLE_USER: "تعطيل مستخدم", ADMIN_ENABLE_USER: "تفعيل مستخدم",
   ADMIN_TEAM_ADD: "إضافة عضو للفريق", ADMIN_TEAM_ROLE: "تغيير دور في الفريق",
 };
+
+const AUDIT_KEY_LABEL: Record<string, string> = {
+  reason: "السبب", canceled_alerts: "تنبيهات أُلغيت", days: "الأيام", ends_at: "تنتهي في",
+  amount_sar: "المبلغ", cycle: "الدورة", reference: "المرجع", email: "البريد", admin: "المدير",
+  role: "الدور", is_active: "الحالة", name: "الاسم", cr_number: "السجل التجاري", plan: "الباقة",
+  entity_legal_type: "الكيان", industry_type: "القطاع", commercial_size: "الحجم", recipients: "المستلمون",
+  title: "العنوان", expiry_date: "الانتهاء", renewed_from: "تجديد لـ",
+};
+const CYCLE_LABEL: Record<string, string> = { MONTHLY: "شهرية", YEARLY: "سنوية" };
+
+function auditValue(action: string, key: string, v: unknown): string {
+  if (typeof v === "boolean") return key === "is_active" ? (v ? "فعّال" : "معطّل") : v ? "نعم" : "لا";
+  const s = String(v);
+  if (key === "role" || key === "from" || key === "to") {
+    if (action === "ADMIN_CHANGE_PLAN") return PLAN_LABEL[s] ?? s;
+    return PLATFORM_ROLE_LABEL[s] ?? ORG_ROLE_LABEL[s] ?? s;
+  }
+  if (key === "plan") return PLAN_LABEL[s] ?? s;
+  if (key === "cycle") return CYCLE_LABEL[s] ?? s;
+  if (key === "entity_legal_type") return LEGAL_TYPE_LABEL[s] ?? s;
+  if (key === "commercial_size") return SIZE_LABEL[s] ?? s;
+  if (key === "amount_sar") return `${Number(s).toLocaleString("en-US")} ريال`;
+  if (key === "ends_at" || key === "expiry_date") return s.slice(0, 10);
+  if (key === "days") return countDays(Number(s));
+  return s;
+}
+
+/** وصف عربي مقروء لتفاصيل حدث في سجل التدقيق. */
+export function auditSummary(action: string, changes: Record<string, unknown> | null): string {
+  if (!changes) return "";
+  const c = { ...changes };
+  const parts: string[] = [];
+  if ("from" in c || "to" in c) {
+    const from = c.from ? auditValue(action, "from", c.from) : null;
+    const to = c.to ? auditValue(action, "to", c.to) : null;
+    if (action === "ADMIN_TEAM_ROLE" && !to) parts.push(`أُزيل من الفريق${from ? ` (كان: ${from})` : ""}`);
+    else parts.push(from ? `من ${from} إلى ${to ?? "—"}` : `إلى ${to}`);
+    delete c.from; delete c.to;
+  }
+  for (const [k, v] of Object.entries(c)) {
+    if (v === null || v === undefined || v === "" || typeof v === "object") continue;
+    parts.push(`${AUDIT_KEY_LABEL[k] ?? k}: ${auditValue(action, k, v)}`);
+  }
+  return parts.slice(0, 5).join("، ");
+}
