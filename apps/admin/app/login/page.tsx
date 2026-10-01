@@ -11,26 +11,82 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mustChange, setMustChange] = useState(false);
+  const [newPw, setNewPw] = useState("");
+  const [newPw2, setNewPw2] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      const { access_token } = await api.login(email, password);
+      const { access_token, must_change_password } = await api.login(email, password);
       setSession({ token: access_token });
-      const me = await api.me();
-      if (!me.is_platform_admin) {
-        setSession(null);
-        setError("هذه البوابة لفريق حصيف. عملاء المنصة يدخلون من app.haseef.sa");
+      if (must_change_password) {
+        setMustChange(true);
         return;
       }
-      router.replace("/");
+      await afterLogin(access_token);
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذّر تسجيل الدخول");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function afterLogin(_token: string) {
+    const me = await api.me();
+    if (!me.is_platform_admin) {
+      setSession(null);
+      setError("هذه البوابة لفريق حصيف. عملاء المنصة يدخلون من app.haseef.sa");
+      return;
+    }
+    router.replace("/");
+  }
+
+  async function changeAndContinue(e: React.FormEvent) {
+    e.preventDefault();
+    if (newPw !== newPw2) { setError("كلمتا المرور غير متطابقتين"); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.changePassword(password, newPw);
+      setPassword(newPw);
+      setMustChange(false);
+      // دخول جديد بكلمة المرور الجديدة للحصول على جلسة كاملة الصلاحية
+      const { access_token } = await api.login(email, newPw);
+      setSession({ token: access_token });
+      await afterLogin(access_token);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذّر تغيير كلمة المرور");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (mustChange) {
+    return (
+      <main className="login">
+        <form className="login-form" onSubmit={changeAndContinue}>
+          <h1>عيّن كلمة مرورك</h1>
+          <p className="muted">دخلت بكلمة مرور مؤقتة. اختر كلمة مرور جديدة من 10 أحرف على الأقل.</p>
+          <div className="field">
+            <label htmlFor="np">كلمة المرور الجديدة</label>
+            <input id="np" type="password" dir="ltr" autoComplete="new-password" required minLength={10}
+                   value={newPw} onChange={(e) => setNewPw(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="np2">أعد كتابتها</label>
+            <input id="np2" type="password" dir="ltr" autoComplete="new-password" required minLength={10}
+                   value={newPw2} onChange={(e) => setNewPw2(e.target.value)} />
+          </div>
+          {error && <p className="error" role="alert">{error}</p>}
+          <button className="btn" type="submit" disabled={busy || newPw.length < 10 || newPw2.length < 10}>
+            {busy ? "جارٍ الحفظ…" : "احفظ وادخل"}
+          </button>
+        </form>
+      </main>
+    );
   }
 
   return (

@@ -77,3 +77,40 @@ export const PLAN_LABEL: Record<string, string> = {
   PROFESSIONAL_GRC: "باقة الحوكمة والنمو",
   ENTERPRISE: "باقة كبار العملاء",
 };
+
+export const PLATFORM_ROLE_LABEL: Record<string, string> = {
+  SUPER_ADMIN: "المدير العام", SUPPORT: "الدعم الفني", BILLING: "المحاسبة",
+};
+
+export const ORG_ROLE_LABEL: Record<string, string> = {
+  ORG_ADMIN: "مدير المنشأة", COMPLIANCE_OFFICER: "مسؤول الامتثال", DPO: "مسؤول حماية البيانات",
+  VIEWER: "اطلاع فقط", EXTERNAL_ADVISOR: "مستشار خارجي",
+};
+
+export const LEGAL_TYPE_LABEL: Record<string, string> = {
+  LLC: "شركة ذات مسؤولية محدودة", SOLE_PROPRIETORSHIP: "مؤسسة فردية", CLOSED_JOINT_STOCK: "مساهمة مقفلة",
+  SIMPLIFIED_JOINT_STOCK: "مساهمة مبسطة", PUBLIC_JOINT_STOCK: "مساهمة عامة", BRANCH_OF_FOREIGN: "فرع شركة أجنبية",
+};
+
+export const SIZE_LABEL: Record<string, string> = { MICRO: "متناهية الصغر", SMALL: "صغيرة", MEDIUM: "متوسطة" };
+
+export const BILLING_STATUS_LABEL: Record<string, string> = {
+  TRIAL: "تجريبي", ACTIVE: "فعّال", PAST_DUE: "متأخر السداد", CANCELED: "ملغى", EXPIRED: "منتهٍ",
+};
+
+export const BILLING_EVENT_LABEL: Record<string, string> = {
+  TRIAL_STARTED: "بدء التجربة", TRIAL_EXTENDED: "تمديد التجربة", PAYMENT: "دفعة",
+  PLAN_CHANGED: "تغيير الباقة", CANCELED: "إلغاء", REACTIVATED: "إعادة تفعيل",
+};
+
+export const AUDIT_ACTION_LABEL: Record<string, string> = {
+  LOGIN: "تسجيل دخول", CHANGE_PASSWORD: "تغيير كلمة المرور",
+  CREATE: "إنشاء", UPDATE: "تعديل", ARCHIVE: "أرشفة", RENEW: "تجديد", REMIND: "تذكير يدوي", UPSERT: "ضبط قاعدة",
+  ADMIN_CREATE_ORG: "إنشاء منشأة", ADMIN_UPDATE_ORG: "تعديل منشأة",
+  ADMIN_SUSPEND_ORG: "تعليق منشأة", ADMIN_REACTIVATE_ORG: "إعادة تفعيل منشأة",
+  ADMIN_CHANGE_PLAN: "تغيير الباقة", ADMIN_EXTEND_TRIAL: "تمديد التجربة",
+  ADMIN_RECORD_PAYMENT: "تسجيل دفعة", ADMIN_CANCEL_SUBSCRIPTION: "إلغاء اشتراك",
+  ADMIN_INVITE_MEMBER: "دعوة عضو", ADMIN_UPDATE_MEMBERSHIP: "تعديل عضوية",
+  ADMIN_RESET_PASSWORD: "إعادة تعيين كلمة المرور", ADMIN_DISABLE_USER: "تعطيل مستخدم", ADMIN_ENABLE_USER: "تفعيل مستخدم",
+  ADMIN_TEAM_ADD: "إضافة عضو للفريق", ADMIN_TEAM_ROLE: "تغيير دور في الفريق",
+};
