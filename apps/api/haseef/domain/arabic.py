@@ -36,6 +36,29 @@ def count_days(n: int) -> str:
     return f"{n} يوماً"
 
 
+def count_points(n: int) -> str:
+    """تمييز "نقطة": نقطة واحدة، نقطتان، 3–10 نقاط، 11+ نقطة."""
+    if n < 0:
+        raise ValueError("count_points expects a non-negative number")
+    if n == 1:
+        return "نقطة واحدة"
+    if n == 2:
+        return "نقطتان"
+    tail = n % 100
+    if 3 <= tail <= 10:
+        return f"{n} نقاط"
+    return f"{n} نقطة"
+
+
+def count_members(n: int) -> str:
+    """عضو واحد، عضوين، 3–10 أعضاء، 11+ عضواً."""
+    if n == 1:
+        return "عضو واحد"
+    if n == 2:
+        return "عضوين"
+    return f"{n} أعضاء" if 3 <= n % 100 <= 10 else f"{n} عضواً"
+
+
 def due_phrase(days_left: int) -> str:
     """العبارة التي تحل محل {{4}} في القالب.
 

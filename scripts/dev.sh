@@ -9,6 +9,8 @@ need docker  "ثبّت Docker Desktop من docker.com وشغّله."
 need python3 "ثبّت Python من python.org (الإصدار 3.12 أو أحدث)."
 need node    "ثبّت Node.js من nodejs.org (الإصدار 20 أو أحدث)."
 
+mkdir -p logs
+exec > >(tee logs/setup.log) 2>&1
 echo "① تشغيل قاعدة البيانات و Redis…"
 docker compose up -d --wait
 
@@ -33,9 +35,11 @@ echo "   توثيق الواجهة:  http://localhost:8000/docs"
 echo "   (للإيقاف: Ctrl+C)"
 echo
 
+# السجلات تُكتب أيضاً في مجلد logs/ ليقرأها Claude عند التشخيص
+mkdir -p logs
 trap 'kill 0' EXIT
-(cd apps/api && .venv/bin/uvicorn haseef.main:app --reload --port 8000) &
-(cd apps/api && .venv/bin/celery -A haseef.worker worker -B -l warning) &
-npm run dev:client &
-npm run dev:admin &
+(cd apps/api && .venv/bin/uvicorn haseef.main:app --reload --port 8000 2>&1 | tee ../../logs/api.log) &
+(cd apps/api && .venv/bin/celery -A haseef.worker worker -B -l info 2>&1 | tee ../../logs/worker.log) &
+npm run dev:client 2>&1 | tee logs/client.log &
+npm run dev:admin 2>&1 | tee logs/admin.log &
 wait

@@ -60,6 +60,18 @@ export const PILLAR_LABEL: Record<Pillar, string> = {
   CONTRACTS: "العقود واللوائح",
 };
 
+/** دليل الهوية: 85% فما فوق زمردي (منشأة محصنة)، دون ذلك تنبيه، ودون 50% خطر. */
+export function scoreTone(score: number | null): "good" | "warn" | "bad" | "none" {
+  if (score === null) return "none";
+  if (score >= 85) return "good";
+  if (score >= 50) return "warn";
+  return "bad";
+}
+
+export const RESOLUTION_STATUS_LABEL: Record<string, string> = {
+  DRAFTED: "مسودة", CIRCULATED: "قيد التوقيع", SIGNED: "موقّع", ARCHIVED: "مؤرشف",
+};
+
 export const PLAN_LABEL: Record<string, string> = {
   ESSENTIAL: "باقة الأساس",
   PROFESSIONAL_GRC: "باقة الحوكمة والنمو",

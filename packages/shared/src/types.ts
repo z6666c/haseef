@@ -25,23 +25,54 @@ export type ComplianceItemInput = Pick<ComplianceItem, "category" | "title" | "e
 
 export type Pillar = "OPERATIONAL" | "GOVERNANCE_PDPL" | "CONTRACTS";
 
+export interface ScoreReason {
+  pillar: Pillar;
+  severity: "critical" | "high" | "medium";
+  text: string;
+  points: number;
+  points_label: string | null;
+}
+
 export interface Score {
   score: number | null;
   pillars: Partial<Record<Pillar, number | null>>;
   weights_used: Partial<Record<Pillar, number>>;
   capped_by_critical_expiry: boolean;
+  reasons: ScoreReason[];
   computed_at: string | null;
+}
+
+export interface GovernanceSummary {
+  available: boolean;
+  last_meeting_title: string | null;
+  last_meeting_date: string | null;
+  last_meeting_status: string | null;
+  doa_rules: number;
+  doa_last_updated: string | null;
+}
+
+export interface PdplSummary {
+  available: boolean;
+  records: number;
+  complete_records: number;
+  completeness_pct: number | null;
+  cross_border: number;
 }
 
 export interface Dashboard {
   org_name: string;
+  cr_number: string;
+  greeting_name: string;
   plan_tier: string | null;
+  automation_active: boolean;
   score: Score;
   action_required: ComplianceItem[];
   counts: { active: number; expiring_soon: number; expired: number; policies_due: number };
+  governance: GovernanceSummary;
+  pdpl: PdplSummary;
 }
 
-export interface Membership { org_id: string; org_name: string; role: string }
+export interface Membership { org_id: string; org_name: string; cr_number: string; role: string }
 export interface Me {
   id: string;
   email: string;

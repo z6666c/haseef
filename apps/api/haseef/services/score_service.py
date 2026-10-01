@@ -16,8 +16,8 @@ _PLAN = text("""
     SELECT pl.features FROM subscriptions s JOIN plans pl ON pl.tier = s.plan_tier
     WHERE s.org_id = :o AND s.billing_status IN ('TRIAL','ACTIVE','PAST_DUE')
 """)
-_ITEMS = text("SELECT days_remaining, risk_level FROM v_compliance_items WHERE org_id = :o")
-_POLICIES = text("SELECT days_remaining FROM v_internal_policies WHERE org_id = :o AND status = 'ACTIVE'")
+_ITEMS = text("SELECT days_remaining, risk_level, title FROM v_compliance_items WHERE org_id = :o")
+_POLICIES = text("SELECT days_remaining, title, policy_type FROM v_internal_policies WHERE org_id = :o AND status = 'ACTIVE'")
 _ROPA = text("""
     SELECT (length(trim(purpose)) > 0)            AS has_purpose,
            (owner_membership_id IS NOT NULL)      AS has_owner,
@@ -44,8 +44,8 @@ def load_inputs(conn: Connection, org_id: UUID | str) -> ScoreInputs:
     features = conn.execute(_PLAN, p).scalar_one_or_none() or []
     return ScoreInputs(
         plan_features=frozenset(features),
-        items=[ItemState(r.days_remaining, r.risk_level) for r in conn.execute(_ITEMS, p)],
-        policies=[PolicyState(r.days_remaining) for r in conn.execute(_POLICIES, p)],
+        items=[ItemState(r.days_remaining, r.risk_level, r.title) for r in conn.execute(_ITEMS, p)],
+        policies=[PolicyState(r.days_remaining, r.title, r.policy_type) for r in conn.execute(_POLICIES, p)],
         ropa=[RopaState(r.has_purpose, r.has_owner, r.cross_border_documented) for r in conn.execute(_ROPA, p)],
         audit_percentages=[r.compliance_percentage for r in conn.execute(_AUDITS, p)],
     )

@@ -46,6 +46,8 @@ export function createApi(baseUrl: string, getSession: () => Session | null, onU
     renewItem: (id: string, new_expiry_date: string) =>
       req<ComplianceItem>(`/compliance-items/${id}/renew`, { method: "POST", body: JSON.stringify({ new_expiry_date }) }),
     archiveItem: (id: string) => req<void>(`/compliance-items/${id}`, { method: "DELETE" }),
+    remindNow: (id: string) =>
+      req<{ queued: number; message: string }>(`/compliance-items/${id}/remind`, { method: "POST" }),
 
     admin: {
       overview: () => req<AdminOverview>("/admin/overview", { org: false }),

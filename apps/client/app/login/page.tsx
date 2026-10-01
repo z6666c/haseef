@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Mark } from "@/components/Mark";
+import { Logo } from "@/components/Logo";
 import { api, setSession } from "@/lib/session";
 
 export default function LoginPage() {
@@ -37,11 +37,8 @@ export default function LoginPage() {
   return (
     <main className="login">
       <div className="login-brand">
-        <Mark size={56} />
-        <div>
-          <p className="login-name">حَصيف</p>
-          <p className="muted">شريكك الحكيم لإدارة الحوكمة والالتزام</p>
-        </div>
+        <Logo variant="full" tone="light" />
+        <p className="login-tagline">شريكك الحكيم لإدارة الحوكمة والالتزام وحماية المنشأة</p>
       </div>
       <form className="login-form" onSubmit={submit} noValidate>
         <h1>الدخول إلى منشأتك</h1>

@@ -25,6 +25,13 @@ export default function LicensesPage() {
     api.listItems().then(setItems).catch((e: Error) => setError(e.message));
   }, []);
   useEffect(load, [load]);
+  // زر "إضافة ترخيص" في الرادار يفتح النموذج مباشرة (?new=1)
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("new") === "1") {
+      setForm({ ...EMPTY, title: CATEGORY_LABEL.COMMERCIAL_REG });
+      setAdding(true);
+    }
+  }, []);
 
   function pickCategory(category: ComplianceCategory) {
     setForm((f) => ({
@@ -62,7 +69,7 @@ export default function LicensesPage() {
           <h1>التراخيص والالتزامات</h1>
           <p className="muted">مرتبة حسب أقرب تاريخ انتهاء. تصلك التنبيهات قبل 60 و30 و14 و7 و3 أيام ويوم واحد.</p>
         </div>
-        {!adding && <button className="btn" type="button" onClick={() => { setForm({ ...EMPTY, title: CATEGORY_LABEL.COMMERCIAL_REG }); setAdding(true); }}>أضف ترخيصاً</button>}
+        {!adding && <button className="btn btn-action" type="button" onClick={() => { setForm({ ...EMPTY, title: CATEGORY_LABEL.COMMERCIAL_REG }); setAdding(true); }}>إضافة ترخيص</button>}
       </header>
 
       {adding && (

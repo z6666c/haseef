@@ -14,6 +14,7 @@ services:
       - pgdata:/var/lib/postgresql/data
       - ./db/migrations/0001_init.sql:/docker-entrypoint-initdb.d/0001_init.sql:ro
       - ./db/migrations/0002_alert_views.sql:/docker-entrypoint-initdb.d/0002_alert_views.sql:ro
+      - ./db/migrations/0003_manual_reminders.sql:/docker-entrypoint-initdb.d/0003_manual_reminders.sql:ro
       - ./infra/dev-roles.sql:/docker-entrypoint-initdb.d/9999_dev_roles.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U haseef_owner -d haseef"]

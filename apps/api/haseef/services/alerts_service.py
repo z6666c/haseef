@@ -51,7 +51,7 @@ def _load(conn: Connection) -> tuple[list[AlertTarget], dict, dict, set[Dispatch
         DispatchKey(r.target_type, str(r.target_id), r.due_date, r.threshold_days, r.channel, r.recipient_address)
         for r in conn.execute(text("""
             SELECT target_type, target_id, due_date, threshold_days, channel, recipient_address
-            FROM alert_dispatches WHERE due_date > current_date - 365
+            FROM alert_dispatches WHERE kind = 'AUTO' AND due_date > current_date - 365
         """))
     }
     return targets, recipients, org_ctx, already
@@ -63,7 +63,7 @@ _INSERT = text("""
          recipient_user_id, recipient_address, status, skip_reason, scheduled_for, payload)
     VALUES (:org_id, :target_type, :target_id, :due_date, :threshold_days, :channel,
             :recipient_user_id, :recipient_address, :status, :skip_reason, :scheduled_for, CAST(:payload AS jsonb))
-    ON CONFLICT (target_type, target_id, due_date, threshold_days, channel, recipient_address) DO NOTHING
+    ON CONFLICT (target_type, target_id, due_date, threshold_days, channel, recipient_address) WHERE kind = 'AUTO' DO NOTHING
 """)
 
 

@@ -26,7 +26,7 @@ class ScoreTests(unittest.TestCase):
         r = compute_score(ScoreInputs(
             plan_features=PRO,
             items=[ItemState(90)],                                         # 100
-            policies=[PolicyState(10), PolicyState(-1)],                   # 50
+            policies=[PolicyState(10, policy_type="PRIVACY_POLICY"), PolicyState(-1)],  # 50
             ropa=[RopaState(True, True, True)],                            # 100 → ركن الحوكمة 75
             audit_percentages=[80],                                        # 80
         ))
@@ -79,3 +79,48 @@ class PiiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReasonTests(unittest.TestCase):
+    def test_reasons_carry_real_point_loss(self):
+        # بلدي حرج منتهٍ (وزن 3، يخسر كله) + سجل ساري (وزن 3): الركن 50% بوزن 100% ← خسارة 50 نقطة
+        r = compute_score(ScoreInputs(plan_features=frozenset({"OPERATIONAL"}), items=[
+            ItemState(-2, "CRITICAL", "رخصة بلدي"), ItemState(200, "CRITICAL", "السجل التجاري")]))
+        self.assertEqual(r.score, 50)
+        top = r.as_dict()["reasons"][0]
+        self.assertEqual(top["text"], "انتهت صلاحية رخصة بلدي منذ يومين")
+        self.assertEqual(top["points"], 50)
+        self.assertEqual(top["severity"], "critical")
+
+    def test_reasons_sum_matches_score(self):
+        inp = ScoreInputs(plan_features=PRO,
+                          items=[ItemState(5, "HIGH", "التأمين الطبي"), ItemState(90, "HIGH", "السجل")],
+                          policies=[PolicyState(10, "تعارض المصالح", "CONFLICT_OF_INTEREST"),
+                                    PolicyState(20, "سياسة الخصوصية", "PRIVACY_POLICY")],
+                          audit_percentages=[80])
+        r = compute_score(inp)
+        lost = sum(x["points"] for x in r.as_dict()["reasons"])
+        self.assertAlmostEqual(100 - r.score, lost, delta=1)   # التقريب فقط
+
+    def test_missing_privacy_policy_is_flagged(self):
+        r = compute_score(ScoreInputs(plan_features=PRO, items=[ItemState(90)],
+                                      policies=[PolicyState(30, "تعارض المصالح", "CONFLICT_OF_INTEREST")]))
+        texts = [x["text"] for x in r.as_dict()["reasons"]]
+        self.assertIn("لم تُعتمد سياسة الخصوصية بعد", texts)
+        self.assertLess(r.score, 100)
+
+    def test_privacy_not_required_without_pdpl_feature(self):
+        r = compute_score(ScoreInputs(plan_features=frozenset({"OPERATIONAL", "GOVERNANCE"}),
+                                      policies=[PolicyState(30, "تعارض المصالح", "CONFLICT_OF_INTEREST")]))
+        self.assertEqual(r.score, 100)
+
+    def test_cap_reason_first(self):
+        r = compute_score(ScoreInputs(plan_features=ESSENTIAL,
+                                      items=[ItemState(200, "MEDIUM", "x")] * 20 + [ItemState(-1, "CRITICAL", "السجل التجاري")],
+                                      audit_percentages=[100]))
+        self.assertIn("محدود عند 50%", r.as_dict()["reasons"][0]["text"])
+
+    def test_points_agreement(self):
+        from haseef.domain.arabic import count_points
+        self.assertEqual([count_points(n) for n in (1, 2, 3, 10, 11, 50)],
+                         ["نقطة واحدة", "نقطتان", "3 نقاط", "10 نقاط", "11 نقطة", "50 نقطة"])

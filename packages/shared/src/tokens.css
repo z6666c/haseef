@@ -43,7 +43,11 @@
   --line: #E2E8F0;
   --muted: var(--haseef-navy-subtle);
 
-  --font: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  /* دليل الهوية: IBM Plex Sans Arabic للعربية، Plus Jakarta Sans للإنجليزية والأرقام.
+     Jakarta أولاً لأنها بلا حروف عربية، فيأخذ المتصفح منها اللاتيني والأرقام فقط
+     ويكمل العربية من Plex تلقائياً. */
+  --font: "Plus Jakarta Sans", "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  --font-arabic: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
 
   /* سُلّم طباعي بنسبة 1.25 */
   --t-xs: 0.8rem;
@@ -89,9 +93,13 @@ button, input, select { font: inherit; color: inherit; }
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 16px; border-radius: var(--r-sm);
   border: 1px solid var(--ink); background: var(--ink); color: var(--paper);
-  font-weight: 600; cursor: pointer;
+  font-weight: 600; cursor: pointer; text-decoration: none; white-space: nowrap;
 }
 .btn:hover { background: var(--ink-2); }
+.btn svg { flex: none; }
+/* زر الإجراء الزمردي (دليل الهوية): النص كحلي لأن الأبيض على #10B981 تباينه 2.5 فقط */
+.btn-action { background: var(--emerald); border-color: var(--emerald); color: var(--ink); }
+.btn-action:hover { background: #0EA371; border-color: #0EA371; }
 .btn[disabled] { opacity: 0.55; cursor: not-allowed; }
 .btn-quiet { background: transparent; color: var(--ink); border-color: var(--line); }
 .btn-quiet:hover { background: var(--surface); }
@@ -115,6 +123,18 @@ button, input, select { font: inherit; color: inherit; }
 .status[data-s="ACTIVE"] { color: var(--emerald-deep); }
 .status[data-s="EXPIRING_SOON"] { color: var(--amber); }
 .status[data-s="EXPIRED"] { color: var(--crimson); }
+
+/* النمط الزجاجي المعتمد (دليل الهوية §2ب) — لبطاقات المؤشرات الرئيسية فقط */
+.haseef-card-glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(30, 62, 98, 0.08);
+  box-shadow: 0 10px 30px -10px rgba(11, 25, 44, 0.05);
+  border-radius: 16px;
+}
+
+.btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

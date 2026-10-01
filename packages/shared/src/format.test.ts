@@ -24,3 +24,12 @@ test("expiryLine", () => {
 });
 
 test("formatDate", () => assert.equal(formatDate("2026-10-02"), "02/10/2026"));
+
+import { scoreTone } from "./format.ts";
+test("scoreTone follows brand thresholds", () => {
+  assert.equal(scoreTone(85), "good");
+  assert.equal(scoreTone(84), "warn");
+  assert.equal(scoreTone(50), "warn");
+  assert.equal(scoreTone(49), "bad");
+  assert.equal(scoreTone(null), "none");
+});

@@ -1,0 +1,123 @@
+/**
+ * منظومة أيقونات حصيف (دليل الهوية §4): Duo-tone / Micro-stroke،
+ * سُمك الخط 1.75px، حواف مستديرة، ولمسة زمردية واحدة في كل أيقونة.
+ * الخطوط الأساسية بلون النص الحالي (currentColor) لتعمل على الخلفيات الفاتحة والداكنة.
+ */
+
+type P = { size?: number; title?: string };
+
+function Svg({ size = 20, title, children }: P & { children?: React.ReactNode }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75}
+         strokeLinecap="round" strokeLinejoin="round" role={title ? "img" : undefined}
+         aria-hidden={title ? undefined : true} aria-label={title}>
+      {children}
+    </svg>
+  );
+}
+
+const A = "var(--emerald)"; // اللمسة الزمردية
+
+/** مؤشر حصافة — Shield-Check */
+export const ShieldCheck = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 3 4.5 5.6V11c0 4.6 3.2 8.4 7.5 9.9 4.3-1.5 7.5-5.3 7.5-9.9V5.6Z" />
+    <path d="m8.8 12 2.3 2.3 4.4-4.6" stroke={A} />
+  </Svg>
+);
+
+/** الرادار العام — رادار دائري */
+export const Radar = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8.5" />
+    <circle cx="12" cy="12" r="4.5" opacity={0.55} />
+    <path d="M12 12 18 6" stroke={A} />
+    <circle cx="15.6" cy="8.4" r="1.1" fill={A} stroke="none" />
+  </Svg>
+);
+
+/** التراخيص والبلدية — Building-Badge */
+export const BuildingBadge = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 20.5V6.5L11 3.5v17" />
+    <path d="M11 9.5h5.5v4" />
+    <path d="M7 8.5h1M7 12h1M7 15.5h1" />
+    <path d="M3 20.5h9" />
+    <circle cx="17.5" cy="17.5" r="3.2" stroke={A} />
+    <path d="m16.2 17.5 1 1 1.6-1.7" stroke={A} />
+  </Svg>
+);
+
+/** عقود العمل وقوى — Users-Contract */
+export const UsersContract = (p: P) => (
+  <Svg {...p}>
+    <circle cx="6.5" cy="7" r="2.3" />
+    <circle cx="17.5" cy="7" r="2.3" />
+    <path d="M2.8 16c.5-2.4 2-3.8 3.7-3.8M21.2 16c-.5-2.4-2-3.8-3.7-3.8" />
+    <rect x="8.5" y="11" width="7" height="9" rx="1.2" />
+    <path d="M10.5 14h3M10.5 16.5h1.5" />
+    <circle cx="14" cy="18" r=".9" fill={A} stroke="none" />
+  </Svg>
+);
+
+/** مجلس الشركاء والحوكمة — Gavel-Document */
+export const GavelDocument = (p: P) => (
+  <Svg {...p}>
+    <path d="M14 21H6.5A1.5 1.5 0 0 1 5 19.5v-14A1.5 1.5 0 0 1 6.5 4H13l4 4v3" />
+    <path d="M8 9h4M8 12h5M8 15h3" />
+    <path d="m15 15.5 3-3M16.8 11.7l2.5 2.5M14.2 14.3l2.5 2.5M17.8 15.6l3.2 3.2" stroke={A} />
+  </Svg>
+);
+
+/** نظام PDPL — Fingerprint-Shield */
+export const FingerprintShield = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 3 4.5 5.6V11c0 4.6 3.2 8.4 7.5 9.9 4.3-1.5 7.5-5.3 7.5-9.9V5.6Z" />
+    <path d="M9.2 14.5c-.3-.7-.4-1.4-.4-2.2a3.2 3.2 0 0 1 6.4 0c0 1.5-.2 2.6-.7 3.6" stroke={A} />
+    <path d="M12 12.2c0 1.6-.2 2.8-.8 3.9" stroke={A} />
+  </Svg>
+);
+
+/** فاحص الذكاء الاصطناعي — File-Sparkle */
+export const FileSparkle = (p: P) => (
+  <Svg {...p}>
+    <path d="M13 3.5H6.5A1.5 1.5 0 0 0 5 5v14a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 19v-8" />
+    <path d="M8 12h6M8 15h7M8 18h4" />
+    <path d="M18 2.5 18.8 4.7 21 5.5 18.8 6.3 18 8.5 17.2 6.3 15 5.5 17.2 4.7Z" stroke={A} fill={A} />
+  </Svg>
+);
+
+/** تنبيهات الواتساب — Bell-Message */
+export const BellMessage = (p: P) => (
+  <Svg {...p}>
+    <path d="M6 15.5V10a5 5 0 0 1 10 0v5.5l1.5 1.5h-13Z" />
+    <path d="M9.5 19.5a1.6 1.6 0 0 0 3 0" />
+    <path d="M17 3.5h4a1 1 0 0 1 1 1V7a1 1 0 0 1-1 1h-1.5L18 9.3V8h-1a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" stroke={A} />
+  </Svg>
+);
+
+/** مصفوفة الصلاحيات — Key-Hierarchy */
+export const KeyHierarchy = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="5" r="2.2" stroke={A} />
+    <path d="M12 7.2v3.3M6 13.5v-3h12v3" />
+    <circle cx="6" cy="16" r="2.2" />
+    <circle cx="18" cy="16" r="2.2" />
+    <path d="M6 18.2V21M18 18.2V21M5 20h1M17 20h1" />
+  </Svg>
+);
+
+export const Plus = (p: P) => (
+  <Svg {...p}><path d="M12 5v14M5 12h14" /></Svg>
+);
+
+export const WhatsApp = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 20l1.2-3.6A8 8 0 1 1 8 19Z" />
+    <path d="M9.2 9.2c.2 2 1.6 3.9 3.6 4.9l1.1-1.1 1.8.8c-.1 1-1 1.7-2 1.6-3-.4-5.7-3.1-6-6.1-.1-1 .6-1.9 1.6-2l.8 1.8Z" stroke={A} strokeWidth={1.4} />
+  </Svg>
+);
+
+export const External = (p: P) => (
+  <Svg {...p}><path d="M14 5h5v5M19 5l-7 7M17 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 4 18.5v-10A1.5 1.5 0 0 1 5.5 7H10" /></Svg>
+);

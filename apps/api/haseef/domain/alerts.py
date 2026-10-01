@@ -93,7 +93,7 @@ def send_time_for(today: date, now: datetime, send_at: time = DEFAULT_SEND_TIME)
     return max(planned, now.astimezone(RIYADH)).astimezone(timezone.utc)
 
 
-def _template_and_vars(t: AlertTarget, r: Recipient, days_left: int) -> tuple[str, list[str]]:
+def render_template(t: AlertTarget, r: Recipient, days_left: int) -> tuple[str, list[str]]:
     if t.target_type == "POLICY":
         template = TEMPLATE_POLICY_REVIEW
     elif days_left < 0:
@@ -149,7 +149,7 @@ def plan_dispatches(
                 key = DispatchKey(t.target_type, t.target_id, t.due_date, threshold, channel, address)
                 if key in already_dispatched:
                     continue
-                template, variables = _template_and_vars(t, r, days_left)
+                template, variables = render_template(t, r, days_left)
                 item = PlannedDispatch(
                     key=key,
                     org_id=t.org_id,

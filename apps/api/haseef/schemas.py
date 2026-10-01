@@ -31,6 +31,7 @@ class TokenOut(BaseModel):
 class MembershipOut(BaseModel):
     org_id: UUID
     org_name: str
+    cr_number: str
     role: str
 
 
@@ -108,17 +109,48 @@ class AlertRuleIn(BaseModel):
 
 
 # ---------- لوحة المنشأة ----------
+class ScoreReason(BaseModel):
+    pillar: str
+    severity: Literal["critical", "high", "medium"]
+    text: str
+    points: int
+    points_label: str | None
+
+
 class ScoreOut(BaseModel):
     score: int | None
     pillars: dict[str, float | None]
     weights_used: dict[str, float]
     capped_by_critical_expiry: bool
+    reasons: list[ScoreReason] = []
     computed_at: datetime | None
+
+
+class GovernanceSummary(BaseModel):
+    available: bool                         # الميزة ضمن الباقة
+    last_meeting_title: str | None = None
+    last_meeting_date: date | None = None
+    last_meeting_status: str | None = None
+    doa_rules: int = 0
+    doa_last_updated: date | None = None
+
+
+class PdplSummary(BaseModel):
+    available: bool
+    records: int = 0
+    complete_records: int = 0
+    completeness_pct: int | None = None      # None = لا سجلات بعد
+    cross_border: int = 0
 
 
 class DashboardOut(BaseModel):
     org_name: str
+    cr_number: str
+    greeting_name: str
     plan_tier: str | None
+    automation_active: bool                 # اشتراك فعّال = التنبيهات التلقائية تعمل
     score: ScoreOut
     action_required: list[ComplianceItemOut]
     counts: dict[str, int]
+    governance: GovernanceSummary
+    pdpl: PdplSummary

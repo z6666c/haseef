@@ -46,4 +46,9 @@ DO $$ BEGIN
   END;
 END $$;
 
+-- التذكير اليدوي مسموح بتكراره لنفس المفتاح
+INSERT INTO alert_dispatches (org_id, target_type, target_id, due_date, threshold_days, channel, recipient_address, scheduled_for, kind)
+VALUES ('00000000-0000-0000-0000-0000000000c0', 'COMPLIANCE_ITEM', '00000000-0000-0000-0000-0000000000c1', current_date + 20, 30, 'WHATSAPP', '+966500000009', now(), 'MANUAL'),
+       ('00000000-0000-0000-0000-0000000000c0', 'COMPLIANCE_ITEM', '00000000-0000-0000-0000-0000000000c1', current_date + 20, 30, 'WHATSAPP', '+966500000009', now(), 'MANUAL');
+
 SELECT 'Alert view tests passed' AS result;

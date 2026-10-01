@@ -43,7 +43,7 @@ def me(p: Principal = Depends(get_principal)) -> MeOut:
         if u is None:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "الحساب غير فعّال")
         rows = conn.execute(text("""
-            SELECT m.org_id, o.name AS org_name, m.role FROM memberships m
+            SELECT m.org_id, o.name AS org_name, o.cr_number, m.role FROM memberships m
             JOIN organizations o ON o.id = m.org_id
             WHERE m.user_id = :id AND m.is_active AND o.is_active ORDER BY o.name"""), {"id": p.user_id}).mappings()
         return MeOut(id=u["id"], email=u["email"], full_name=u["full_name"],
