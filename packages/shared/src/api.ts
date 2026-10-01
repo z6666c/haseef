@@ -74,6 +74,7 @@ export interface AdminDispatch {
   id: string; org_name: string; target_type: string; channel: "WHATSAPP" | "EMAIL"; recipient_address: string;
   status: string; threshold_days: number; due_date: string; scheduled_for: string; sent_at: string | null;
   delivered_at: string | null; provider: string | null; attempts: number; last_error: string | null; skip_reason: string | null;
+  kind: "AUTO" | "MANUAL";
 }
 export interface AdminDispatches {
   last_7_days: { status: string; channel: string; n: number }[];

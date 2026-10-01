@@ -50,7 +50,7 @@ def dispatches(conn: Connection = Depends(get_platform_admin), status: str | Non
     rows = conn.execute(text("""
         SELECT d.id, o.name AS org_name, d.target_type, d.channel, d.recipient_address, d.status,
                d.threshold_days, d.due_date, d.scheduled_for, d.sent_at, d.delivered_at,
-               d.provider, d.attempts, d.last_error, d.skip_reason
+               d.provider, d.attempts, d.last_error, d.skip_reason, d.kind
         FROM alert_dispatches d JOIN organizations o ON o.id = d.org_id
         WHERE (CAST(:st AS text) IS NULL OR d.status = :st)
         ORDER BY d.created_at DESC LIMIT :l"""), {"st": status, "l": min(limit, 1000)}).mappings().all()

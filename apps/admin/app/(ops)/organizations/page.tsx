@@ -33,7 +33,7 @@ export default function Organizations() {
           {shown.map((r) => (
             <tr key={r.id}>
               <td>{r.name}<div className="muted small">{r.industry_type ?? ""}</div></td>
-              <td dir="ltr" className="mono-num">{r.cr_number}</td>
+              <td><bdi dir="ltr">{r.cr_number}</bdi></td>
               <td>{r.plan_tier ? PLAN_LABEL[r.plan_tier] ?? r.plan_tier : <span className="muted">بلا اشتراك</span>}</td>
               <td>{r.billing_status ? BILLING[r.billing_status] ?? r.billing_status : "—"}{r.ends_at && <div className="muted small">حتى {formatDate(r.ends_at)}</div>}</td>
               <td className="num">{r.members}</td>

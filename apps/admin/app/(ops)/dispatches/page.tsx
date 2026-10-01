@@ -50,8 +50,8 @@ export default function Dispatches() {
               <tr key={r.id}>
                 <td>{r.org_name}<div className="muted small">{r.target_type === "POLICY" ? "سياسة" : "ترخيص"}</div></td>
                 <td>{r.channel === "WHATSAPP" ? "واتساب" : "بريد"}</td>
-                <td dir="ltr" className="mono-num">{r.recipient_address}</td>
-                <td className="num">{r.threshold_days === 0 ? "يوم الانتهاء" : `${r.threshold_days} يوم`}</td>
+                <td><bdi dir="ltr">{r.recipient_address}</bdi></td>
+                <td>{r.kind === "MANUAL" ? "تذكير يدوي" : r.threshold_days === 0 ? "يوم الانتهاء" : `قبل ${r.threshold_days} يوم`}</td>
                 <td>{formatDate(r.due_date)}</td>
                 <td>
                   <span className="pill" data-tone={TONE[r.status] ?? "none"}>{STATUS[r.status] ?? r.status}</span>
