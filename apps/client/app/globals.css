@@ -57,7 +57,7 @@
 
 .page-head { margin-bottom: 28px; }
 .page-head p { margin: 4px 0 0; }
-.page-head-row { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+.page-head-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
 
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 20px; }
 
@@ -131,12 +131,18 @@
 .risk { font-size: var(--t-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--paper); white-space: nowrap; }
 .risk[data-r="CRITICAL"] { background: var(--crimson-wash); color: var(--crimson); }
 .risk[data-r="HIGH"] { background: var(--amber-wash); color: var(--amber); }
-.dl-actions { text-align: end; white-space: nowrap; }
+.deadlines td:nth-child(2) { min-width: 200px; }
+.dl-actions { text-align: end; white-space: nowrap; width: 1%; }
+.dl-actions .btn { display: inline-flex; }
 .dl-actions .btn { padding: 7px 12px; font-size: var(--t-sm); margin-inline-start: 6px; }
 .dl-renew { display: inline-flex; gap: 6px; align-items: center; }
 .dl-renew input { padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); }
-.dl-ok { color: var(--emerald-deep); margin: 6px 0 0; white-space: normal; }
-.dl-actions .error { margin: 6px 0 0; white-space: normal; }
+.dl-ok, .dl-actions .error { margin: 6px 0 0; white-space: normal; max-width: 30ch; margin-inline-start: auto; font-size: var(--t-xs); }
+.dl-ok { color: var(--emerald-deep); }
+/* عرض متوسط: الأزرار تحت بعضها حتى لا تضغط عمود الالتزام */
+@media (max-width: 1180px) {
+  .dl-actions .btn { display: flex; width: 100%; justify-content: center; margin: 0 0 6px; }
+}
 
 /* ---------- صفوف التراخيص ---------- */
 .ledger-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -161,7 +167,7 @@
 .row-actions { display: flex; gap: 14px; align-items: center; }
 .link { font-size: var(--t-sm); color: var(--muted); text-underline-offset: 3px; }
 .link:hover { color: var(--ink); }
-.row-renew { grid-column: 2 / -1; display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.row-renew { grid-column: 2 / -1; display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
 
 .tally { margin: 32px 0 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); }
 .tally strong { color: var(--ink); }
