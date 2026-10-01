@@ -22,7 +22,7 @@ export function ScoreSeal({ score }: { score: Score }) {
 
   return (
     <section className="seal" aria-labelledby="seal-title">
-      <div className="seal-figure" data-tone={t} data-over={level >= 58}>
+      <div className="seal-figure" data-tone={t}>
         <svg viewBox="0 0 64 72" aria-hidden="true">
           <defs>
             <clipPath id="seal-clip"><path d={SHIELD} /></clipPath>

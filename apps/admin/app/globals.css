@@ -48,14 +48,14 @@
 .table th.num { text-align: end; }
 .table td { padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .table tr:last-child td { border-bottom: 0; }
-.table tbody tr:hover { background: #FAFCFB; }
+.table tbody tr:hover { background: var(--paper); }
 
 .filters { display: flex; gap: 6px; flex-wrap: wrap; }
 .filters button { padding: 5px 12px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; cursor: pointer; font-size: var(--t-sm); }
 .filters button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
 
 .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: var(--t-xs); font-weight: 600; background: var(--paper); }
-.pill[data-tone="good"] { background: #E7F7F0; color: var(--emerald-deep); }
+.pill[data-tone="good"] { background: var(--emerald-wash); color: var(--emerald-deep); }
 .pill[data-tone="warn"] { background: var(--amber-wash); color: var(--amber); }
 .pill[data-tone="bad"] { background: var(--crimson-wash); color: var(--crimson); }
 

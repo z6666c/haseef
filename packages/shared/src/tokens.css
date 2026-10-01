@@ -1,20 +1,47 @@
 /* رموز التصميم المشتركة — حَصيف
-   الكحلي والزمردي من هوية الشعار. الكهرماني والقرمزي لحالتي "قارب" و"منتهٍ" فقط،
-   فلا يُستخدم أي لون حالة للزينة: اللون في هذه الواجهة معلومة. */
+   لوحة الهوية المعتمدة من صاحب المشروع (--haseef-*) كما هي.
+   ألوان الحالة لا تُستخدم للزينة: اللون في هذه الواجهة معلومة.
+
+   قاعدة التباين: الزمردي والكهرماني والأحمر بدرجاتها المعتمدة للتعبئة والشارات
+   والنقاط فقط. النص الصغير بلون حالة يستخدم الدرجة "-text" الأغمق من نفس اللون،
+   لأن #F59E0B و #10B981 على الأبيض لا تبلغ تباين 4.5:1 المطلوب للقراءة. */
 
 :root {
-  --ink: #0B192C;          /* النص والهوية */
-  --ink-2: #1B2B42;        /* سطوح داكنة ثانوية */
-  --emerald: #10B981;      /* الهوية + ساري/ممتثل */
-  --emerald-deep: #047857; /* نص زمردي على خلفية فاتحة (تباين كافٍ) */
-  --amber: #B7791F;        /* قارب على الانتهاء */
-  --amber-wash: #FBF3E4;
-  --crimson: #B42318;      /* منتهٍ / حرج */
-  --crimson-wash: #FCECEA;
-  --paper: #F4F7F6;        /* خلفية باردة لا كريمية */
-  --surface: #FFFFFF;
-  --line: #DCE3E1;
-  --muted: #55657A;
+  /* ===== لوحة الهوية المعتمدة ===== */
+  --haseef-navy-deep:     #0B192C;
+  --haseef-navy-surface:  #1E3E62;
+  --haseef-navy-subtle:   #2E5077;
+  --haseef-emerald:       #10B981;
+  --haseef-emerald-light: #D1FAE5;
+  --haseef-emerald-glow:  rgba(16, 185, 129, 0.25);
+  --haseef-danger:        #EF4444;
+  --haseef-warning:       #F59E0B;
+  --haseef-bg-canvas:     #F8FAFC;
+  --haseef-bg-card:       #FFFFFF;
+
+  /* درجات نص مشتقة من اللوحة (للتباين فقط) */
+  --haseef-emerald-text:  #047857;
+  --haseef-warning-text:  #B45309;
+  --haseef-danger-text:   #B91C1C;
+  --haseef-warning-light: #FEF3C7;
+  --haseef-danger-light:  #FEE2E2;
+
+  /* ===== الأسماء الدلالية المستخدمة في الواجهتين ===== */
+  --ink: var(--haseef-navy-deep);
+  --ink-2: var(--haseef-navy-surface);
+  --emerald: var(--haseef-emerald);
+  --emerald-deep: var(--haseef-emerald-text);
+  --emerald-wash: var(--haseef-emerald-light);
+  --amber-fill: var(--haseef-warning);
+  --amber: var(--haseef-warning-text);
+  --amber-wash: var(--haseef-warning-light);
+  --crimson-fill: var(--haseef-danger);
+  --crimson: var(--haseef-danger-text);
+  --crimson-wash: var(--haseef-danger-light);
+  --paper: var(--haseef-bg-canvas);
+  --surface: var(--haseef-bg-card);
+  --line: #E2E8F0;
+  --muted: var(--haseef-navy-subtle);
 
   --font: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
 
@@ -74,7 +101,7 @@ button, input, select { font: inherit; color: inherit; }
 .field input, .field select {
   padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface);
 }
-.field input:focus, .field select:focus { border-color: var(--ink); outline: none; box-shadow: 0 0 0 3px rgb(16 185 129 / 0.25); }
+.field input:focus, .field select:focus { border-color: var(--ink); outline: none; box-shadow: 0 0 0 3px var(--haseef-emerald-glow); }
 
 .error { color: var(--crimson); font-size: var(--t-sm); }
 .muted { color: var(--muted); }
@@ -82,6 +109,9 @@ button, input, select { font: inherit; color: inherit; }
 /* شارات الحالة: النقطة تحمل اللون، والنص يبقى مقروءاً */
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); white-space: nowrap; }
 .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.status[data-s="ACTIVE"]::before { background: var(--emerald); }
+.status[data-s="EXPIRING_SOON"]::before { background: var(--amber-fill); }
+.status[data-s="EXPIRED"]::before { background: var(--crimson-fill); }
 .status[data-s="ACTIVE"] { color: var(--emerald-deep); }
 .status[data-s="EXPIRING_SOON"] { color: var(--amber); }
 .status[data-s="EXPIRED"] { color: var(--crimson); }

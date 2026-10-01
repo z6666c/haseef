@@ -1,0 +1,28 @@
+# بيئة التطوير المحلية: قاعدة البيانات (PostgreSQL 16 + pgvector) و Redis.
+# الـ migrations تُطبَّق تلقائياً عند أول تشغيل فقط (مجلد البيانات فارغ).
+# لإعادة البناء من الصفر:  docker compose down -v && docker compose up -d
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: haseef
+      POSTGRES_USER: haseef_owner
+      POSTGRES_PASSWORD: dev
+      TZ: Asia/Riyadh
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/migrations/0001_init.sql:/docker-entrypoint-initdb.d/0001_init.sql:ro
+      - ./db/migrations/0002_alert_views.sql:/docker-entrypoint-initdb.d/0002_alert_views.sql:ro
+      - ./infra/dev-roles.sql:/docker-entrypoint-initdb.d/9999_dev_roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haseef_owner -d haseef"]
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+volumes:
+  pgdata:
