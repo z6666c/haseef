@@ -39,7 +39,7 @@ echo
 mkdir -p logs
 trap 'kill 0' EXIT
 (cd apps/api && .venv/bin/uvicorn haseef.main:app --reload --port 8000 2>&1 | tee ../../logs/api.log) &
-(cd apps/api && .venv/bin/celery -A haseef.worker worker -B -l info 2>&1 | tee ../../logs/worker.log) &
+(cd apps/api && .venv/bin/celery -A haseef.worker worker -B -P threads -c 4 -l info 2>&1 | tee ../../logs/worker.log) &
 npm run dev:client 2>&1 | tee logs/client.log &
 npm run dev:admin 2>&1 | tee logs/admin.log &
 wait
