@@ -34,7 +34,7 @@ def overview(conn: Connection = Depends(get_platform_admin)):
 @router.get("/organizations")
 def organizations(conn: Connection = Depends(get_platform_admin)):
     return [dict(r) for r in conn.execute(text("""
-        SELECT o.id, o.name, o.cr_number, o.industry_type, o.haseef_score, o.created_at,
+        SELECT o.id, o.name, o.cr_number, o.industry_type, o.haseef_score, o.created_at, o.suspended_at,
                s.plan_tier, s.billing_status, s.ends_at,
                (SELECT count(*) FROM memberships m WHERE m.org_id = o.id AND m.is_active) AS members
         FROM organizations o

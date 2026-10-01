@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     database_url_app: str = "postgresql+psycopg://haseef_app:dev@localhost:5432/haseef"
     database_url_platform: str = "postgresql+psycopg://haseef_platform:dev@localhost:5432/haseef"
 
+    # مالك المخطط: للتحديثات فقط، لا يُستخدم في الطلبات.
+    database_url_migrate: str = "postgresql+psycopg://haseef_owner:dev@localhost:5432/haseef"
+    auto_migrate: bool = True                   # يُطفأ في الإنتاج: التحديث خطوة نشر صريحة
+
     redis_url: str = "redis://localhost:6379/0"
 
     jwt_secret: str = Field(default="change-me-in-production", min_length=16)

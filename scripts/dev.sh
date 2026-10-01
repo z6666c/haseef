@@ -20,6 +20,7 @@ cd apps/api
 .venv/bin/pip install -q -e ".[dev]"
 [ -f .env ] || cp .env.example .env
 .venv/bin/python -m pytest -q
+.venv/bin/python -c "from haseef.migrate import migrate; migrate()"
 .venv/bin/python -m scripts.seed
 cd ../..
 

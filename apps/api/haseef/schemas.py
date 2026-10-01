@@ -26,6 +26,12 @@ class LoginIn(BaseModel):
 class TokenOut(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    must_change_password: bool = False
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str = Field(min_length=8, max_length=256)
+    new_password: str = Field(min_length=10, max_length=256)
 
 
 class MembershipOut(BaseModel):

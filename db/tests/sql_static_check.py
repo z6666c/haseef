@@ -17,6 +17,7 @@ FRAGMENTS = {
     "_POLICY_COLS": "id, policy_type, title, version, approval_date, review_due_date, status, "
                     "effective_status, days_remaining",
     "cond": "target_id IS NULL",
+    "sets": "id = id",          # تعديل ديناميكي: الأعمدة من نموذج Pydantic
 }
 PSQL = os.environ.get("PSQL", "psql")
 

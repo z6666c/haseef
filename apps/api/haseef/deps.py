@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import Connection, text
 
@@ -44,13 +44,25 @@ class Tenant:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "صلاحيتك في هذه المنشأة لا تسمح بهذا الإجراء")
 
 
-def get_principal(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> Principal:
+def _claims(creds: HTTPAuthorizationCredentials | None) -> dict:
     if creds is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "يلزم تسجيل الدخول")
     try:
-        claims = decode_token(creds.credentials)
+        return decode_token(creds.credentials)
     except jwt.PyJWTError:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "جلسة غير صالحة أو منتهية")
+
+
+def get_principal(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> Principal:
+    claims = _claims(creds)
+    if claims.get("pwc"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "يجب تغيير كلمة المرور المؤقتة أولاً")
+    return Principal(user_id=UUID(claims["sub"]), is_platform_admin=bool(claims.get("adm")))
+
+
+def get_principal_allow_temp(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> Principal:
+    """لنقطة تغيير كلمة المرور فقط: تقبل التوكن المؤقت."""
+    claims = _claims(creds)
     return Principal(user_id=UUID(claims["sub"]), is_platform_admin=bool(claims.get("adm")))
 
 
@@ -66,21 +78,64 @@ def get_tenant(
         if role is None:
             # لا نفرّق بين "منشأة غير موجودة" و"لست عضواً" حتى لا نكشف وجود المنشآت.
             raise HTTPException(status.HTTP_404_NOT_FOUND, "المنشأة غير موجودة")
+        suspended = conn.execute(text("SELECT suspended_at IS NOT NULL OR NOT is_active FROM organizations")).scalar_one()
+        if suspended:
+            raise HTTPException(status.HTTP_423_LOCKED, "حساب المنشأة معلّق. تواصل مع فريق حصيف.")
         yield Tenant(principal=principal, org_id=x_org_id, role=role, conn=conn)
 
 
 def get_platform_admin(principal: Principal = Depends(get_principal)) -> Iterator[Connection]:
+    """أي عضو في فريق حصيف — للقراءة. الإجراءات تستخدم require_admin بدور محدد."""
     if not principal.is_platform_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "هذه الواجهة لفريق حصيف فقط")
     with platform_tx() as conn:
         # التوكن قد يكون صدر قبل سحب الصلاحية؛ نتحقق من قاعدة البيانات في كل طلب.
         still_admin = conn.execute(
-            text("SELECT is_platform_admin AND is_active FROM users WHERE id = :u"),
+            text("SELECT platform_role IS NOT NULL AND is_active FROM users WHERE id = :u"),
             {"u": principal.user_id},
         ).scalar_one_or_none()
         if not still_admin:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "هذه الواجهة لفريق حصيف فقط")
         yield conn
+
+
+PLATFORM_ROLES = ("SUPER_ADMIN", "SUPPORT", "BILLING")
+ROLE_LABEL_AR = {"SUPER_ADMIN": "المدير العام", "SUPPORT": "الدعم الفني", "BILLING": "المحاسبة"}
+
+
+@dataclass(frozen=True)
+class Admin:
+    user_id: UUID
+    role: str
+    conn: Connection
+    ip: str | None
+
+    def audit(self, action: str, entity_type: str, entity_id=None, org_id=None, changes: dict | None = None) -> None:
+        import json
+        self.conn.execute(text("""
+            INSERT INTO audit_log (org_id, actor_user_id, action, entity_type, entity_id, changes, ip_address)
+            VALUES (:o, :u, :a, :t, :id, CAST(:c AS jsonb), CAST(:ip AS inet))"""),
+            {"o": org_id, "u": self.user_id, "a": action, "t": entity_type, "id": entity_id,
+             "c": json.dumps(changes, default=str, ensure_ascii=False) if changes else None, "ip": self.ip})
+
+
+def require_admin(*roles: str):
+    """اعتمادية لإجراء إداري: المدير العام مسموح دائماً، وغيره حسب القائمة."""
+    allowed = set(roles) | {"SUPER_ADMIN"}
+
+    def dep(request: Request, principal: Principal = Depends(get_principal)) -> Iterator[Admin]:
+        with platform_tx() as conn:
+            row = conn.execute(text("SELECT platform_role, is_active FROM users WHERE id = :u"),
+                               {"u": principal.user_id}).mappings().one_or_none()
+            if not row or not row["is_active"] or row["platform_role"] is None:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "هذه الواجهة لفريق حصيف فقط")
+            if row["platform_role"] not in allowed:
+                names = "، ".join(ROLE_LABEL_AR[r] for r in PLATFORM_ROLES if r in allowed)
+                raise HTTPException(status.HTTP_403_FORBIDDEN, f"هذا الإجراء متاح لـ: {names}")
+            yield Admin(principal.user_id, row["platform_role"], conn,
+                        request.client.host if request.client else None)
+
+    return dep
 
 
 WRITERS = ("ORG_ADMIN", "COMPLIANCE_OFFICER", "DPO")

@@ -26,12 +26,13 @@ def needs_rehash(password_hash: str) -> bool:
     return _hasher.check_needs_rehash(password_hash)
 
 
-def issue_token(user_id: str, *, is_platform_admin: bool) -> str:
+def issue_token(user_id: str, *, is_platform_admin: bool, must_change_password: bool = False) -> str:
     s = get_settings()
     now = datetime.now(timezone.utc)
     payload = {
         "sub": user_id,
         "adm": is_platform_admin,
+        "pwc": must_change_password,      # كلمة مرور مؤقتة: لا يُسمح إلا بتغييرها
         "iat": now,
         "exp": now + timedelta(minutes=s.jwt_ttl_minutes),
         "iss": "haseef",

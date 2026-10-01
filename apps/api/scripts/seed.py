@@ -21,14 +21,16 @@ TODAY = date.today()
 def run() -> None:
     passwords: dict[str, str] = {}
 
-    def user(conn, email: str, name: str, phone: str | None = None, admin: bool = False) -> str:
+    def user(conn, email: str, name: str, phone: str | None = None, role: str | None = None) -> str:
         pw = secrets.token_urlsafe(9)
         passwords[email] = pw
         return conn.execute(text("""
-            INSERT INTO users (email, full_name, phone_number, password_hash, is_platform_admin)
-            VALUES (:e, :n, :p, :h, :a)
-            ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
-            RETURNING id"""), {"e": email, "n": name, "p": phone, "h": hash_password(pw), "a": admin}).scalar_one()
+            INSERT INTO users (email, full_name, phone_number, password_hash, is_platform_admin, platform_role)
+            VALUES (:e, :n, :p, :h, :a, :r)
+            ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash, must_change_password = false,
+                is_active = true
+            RETURNING id"""), {"e": email, "n": name, "p": phone, "h": hash_password(pw),
+                               "a": role is not None, "r": role}).scalar_one()
 
     with platform_tx() as conn:
         orgs = {}
@@ -42,6 +44,7 @@ def run() -> None:
                 ON CONFLICT (cr_number) DO UPDATE SET name = EXCLUDED.name RETURNING id"""),
                 {"cr": cr, "n": name, "i": industry}).scalar_one()
             orgs[name] = org_id
+            conn.execute(text("UPDATE organizations SET is_active = true, suspended_at = NULL, suspension_reason = NULL WHERE id = :o"), {"o": org_id})
             conn.execute(text("DELETE FROM subscriptions WHERE org_id = :o"), {"o": org_id})
             conn.execute(text("""
                 INSERT INTO subscriptions (org_id, plan_tier, billing_cycle, starts_at, ends_at)
@@ -53,7 +56,9 @@ def run() -> None:
         ahmad = user(conn, "ahmad@nukhba.example", "أحمد العتيبي", "+966500000001")
         sara = user(conn, "sara@waha.example", "سارة القحطاني", "+966500000002")
         advisor = user(conn, "advisor@example.sa", "مكتب الامتثال الاستشاري")
-        user(conn, "ops@haseef.sa", "فريق عمليات حصيف", admin=True)
+        user(conn, "ops@haseef.sa", "فريق عمليات حصيف", role="SUPER_ADMIN")
+        user(conn, "support@haseef.sa", "الدعم الفني", role="SUPPORT")
+        user(conn, "billing@haseef.sa", "المحاسبة", role="BILLING")
 
         for org, uid, role in [(nukhba, ahmad, "ORG_ADMIN"), (waha, sara, "ORG_ADMIN"),
                                (nukhba, advisor, "EXTERNAL_ADVISOR"), (waha, advisor, "EXTERNAL_ADVISOR")]:
