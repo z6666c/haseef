@@ -1,0 +1,91 @@
+/* رموز التصميم المشتركة — حَصيف
+   الكحلي والزمردي من هوية الشعار. الكهرماني والقرمزي لحالتي "قارب" و"منتهٍ" فقط،
+   فلا يُستخدم أي لون حالة للزينة: اللون في هذه الواجهة معلومة. */
+
+:root {
+  --ink: #0B192C;          /* النص والهوية */
+  --ink-2: #1B2B42;        /* سطوح داكنة ثانوية */
+  --emerald: #10B981;      /* الهوية + ساري/ممتثل */
+  --emerald-deep: #047857; /* نص زمردي على خلفية فاتحة (تباين كافٍ) */
+  --amber: #B7791F;        /* قارب على الانتهاء */
+  --amber-wash: #FBF3E4;
+  --crimson: #B42318;      /* منتهٍ / حرج */
+  --crimson-wash: #FCECEA;
+  --paper: #F4F7F6;        /* خلفية باردة لا كريمية */
+  --surface: #FFFFFF;
+  --line: #DCE3E1;
+  --muted: #55657A;
+
+  --font: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+
+  /* سُلّم طباعي بنسبة 1.25 */
+  --t-xs: 0.8rem;
+  --t-sm: 0.9rem;
+  --t-md: 1rem;
+  --t-lg: 1.25rem;
+  --t-xl: 1.563rem;
+  --t-2xl: 1.953rem;
+  --t-display: 3.815rem;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --space: 8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { direction: rtl; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--t-md);
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--paper);
+  font-feature-settings: "tnum" 1; /* أرقام بعرض ثابت لمحاذاة الجداول والعدّادات */
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { line-height: 1.25; margin: 0; }
+h1 { font-size: var(--t-2xl); font-weight: 700; }
+h2 { font-size: var(--t-lg); font-weight: 700; }
+h3 { font-size: var(--t-md); font-weight: 600; }
+
+a { color: inherit; }
+
+:focus-visible { outline: 3px solid var(--emerald); outline-offset: 2px; border-radius: 4px; }
+
+button, input, select { font: inherit; color: inherit; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 16px; border-radius: var(--r-sm);
+  border: 1px solid var(--ink); background: var(--ink); color: var(--paper);
+  font-weight: 600; cursor: pointer;
+}
+.btn:hover { background: var(--ink-2); }
+.btn[disabled] { opacity: 0.55; cursor: not-allowed; }
+.btn-quiet { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn-quiet:hover { background: var(--surface); }
+
+.field { display: grid; gap: 4px; }
+.field label { font-size: var(--t-sm); font-weight: 600; }
+.field input, .field select {
+  padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface);
+}
+.field input:focus, .field select:focus { border-color: var(--ink); outline: none; box-shadow: 0 0 0 3px rgb(16 185 129 / 0.25); }
+
+.error { color: var(--crimson); font-size: var(--t-sm); }
+.muted { color: var(--muted); }
+
+/* شارات الحالة: النقطة تحمل اللون، والنص يبقى مقروءاً */
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); white-space: nowrap; }
+.status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.status[data-s="ACTIVE"] { color: var(--emerald-deep); }
+.status[data-s="EXPIRING_SOON"] { color: var(--amber); }
+.status[data-s="EXPIRED"] { color: var(--crimson); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

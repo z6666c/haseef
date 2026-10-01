@@ -1,0 +1,12 @@
+{
+  "name": "haseef",
+  "private": true,
+  "workspaces": ["apps/client", "apps/admin", "packages/*"],
+  "scripts": {
+    "dev:client": "npm run dev -w @haseef/client",
+    "dev:admin": "npm run dev -w @haseef/admin",
+    "build": "npm run build -w @haseef/client && npm run build -w @haseef/admin",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": { "node": ">=20" }
+}
