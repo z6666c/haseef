@@ -70,12 +70,16 @@ export default function OrgDetail() {
 
       {notice && <p className="notice" role="status">{notice}</p>}
 
-      <dl className="kpis compact">
-        <div><dt>مؤشر حصيف</dt><dd>{o.haseef_score ?? "—"}{o.haseef_score !== null && <small>%</small>}</dd></div>
-        <div><dt>التراخيص المتابَعة</dt><dd>{d.counts.items}</dd></div>
-        <div><dt>منتهية</dt><dd>{d.counts.expired}</dd></div>
-        <div><dt>السياسات</dt><dd>{d.counts.policies}</dd></div>
-      </dl>
+      {d.counts ? (
+        <dl className="kpis compact">
+          <div><dt>مؤشر حصيف</dt><dd>{o.haseef_score ?? "—"}{o.haseef_score !== null && o.haseef_score !== undefined && <small>%</small>}</dd></div>
+          <div><dt>التراخيص المتابَعة</dt><dd>{d.counts.items}</dd></div>
+          <div><dt>منتهية</dt><dd>{d.counts.expired}</dd></div>
+          <div><dt>السياسات</dt><dd>{d.counts.policies}</dd></div>
+        </dl>
+      ) : (
+        <p className="hint">تعرض صلاحية المحاسبة بيانات الاشتراك والفوترة فقط. بيانات الامتثال والمستخدمين متاحة للدعم الفني والمدير العام.</p>
+      )}
 
       {/* ---------------- الاشتراك ---------------- */}
       <section className="block">
@@ -119,6 +123,16 @@ export default function OrgDetail() {
       </section>
 
       {/* ---------------- المستخدمون ---------------- */}
+      {d.restricted ? (
+        <section className="block">
+          <h2>جهة الفوترة</h2>
+          {d.members.length === 0 ? <p className="muted">لا يوجد مدير فعّال للمنشأة.</p> : (
+            <ul className="audit-list">
+              {d.members.map((m) => <li key={m.membership_id}><strong>{m.full_name}</strong><bdi dir="ltr" className="muted">{m.email}</bdi></li>)}
+            </ul>
+          )}
+        </section>
+      ) : (
       <section className="block">
         <div className="block-head">
           <h2>المستخدمون <span className="muted">({d.members.length})</span></h2>
@@ -165,6 +179,8 @@ export default function OrgDetail() {
           </tbody>
         </table>
       </section>
+
+      )}
 
       {/* ---------------- الحوكمة وحماية البيانات ---------------- */}
       {gov && (

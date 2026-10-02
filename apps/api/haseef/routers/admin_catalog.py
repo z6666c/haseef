@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import Connection, text
 
 from ..config import get_settings
-from ..deps import Admin, get_platform_admin, require_admin
+from ..deps import Admin, require_admin
 from ..services import governance_service as gs
 from .governance import file_response
 
@@ -85,7 +85,8 @@ class StandardPatch(BaseModel):
 
 
 @router.get("/catalog/standards")
-def standards(c: Connection = Depends(get_platform_admin)):
+def standards(a: Admin = Depends(require_admin("SUPPORT"))):
+    c = a.conn
     return [dict(r) for r in c.execute(text("""
         SELECT code, domain, title, description, legal_reference, source_url, level, severity, applies_legal_types,
                rule, is_visible, review_status, sort, updated_at FROM gov_standards ORDER BY sort, code""")).mappings()]
@@ -140,7 +141,8 @@ class ObligationCreate(BaseModel):
 
 
 @router.get("/catalog/obligations")
-def obligations(c: Connection = Depends(get_platform_admin)):
+def obligations(a: Admin = Depends(require_admin("SUPPORT"))):
+    c = a.conn
     rows = c.execute(text("""
         SELECT c.code, c.kind, c.domain, c.title, c.description, c.authority, c.legal_reference, c.source_url, c.frequency,
                c.risk_level, c.compliance_category, c.policy_type, c.applies, c.is_visible, c.review_status, c.sort,
@@ -237,7 +239,8 @@ def _safe_name(name: str) -> str:
 
 
 @router.get("/library")
-def library(c: Connection = Depends(get_platform_admin)):
+def library(a: Admin = Depends(require_admin("SUPPORT"))):
+    c = a.conn
     rows = c.execute(text(f"""SELECT {_LIB_ADMIN_COLS} FROM library_documents d
                               LEFT JOIN users cu ON cu.id = d.created_by LEFT JOIN users uu ON uu.id = d.updated_by
                               ORDER BY d.category, d.sort, d.title""")).mappings()
@@ -245,7 +248,8 @@ def library(c: Connection = Depends(get_platform_admin)):
 
 
 @router.get("/library/{doc_id}")
-def library_doc(doc_id: UUID, c: Connection = Depends(get_platform_admin)):
+def library_doc(doc_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
+    c = a.conn
     r = c.execute(text(f"""SELECT {_LIB_ADMIN_COLS}, d.body_md FROM library_documents d
                            LEFT JOIN users cu ON cu.id = d.created_by LEFT JOIN users uu ON uu.id = d.updated_by
                            WHERE d.id = :id"""), {"id": doc_id}).mappings().one_or_none()
@@ -255,7 +259,8 @@ def library_doc(doc_id: UUID, c: Connection = Depends(get_platform_admin)):
 
 
 @router.get("/library/{doc_id}/file")
-def library_file(doc_id: UUID, c: Connection = Depends(get_platform_admin)):
+def library_file(doc_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
+    c = a.conn
     r = c.execute(text("SELECT file_key, file_name, file_mime FROM library_documents WHERE id = :id"), {"id": doc_id}).mappings().one_or_none()
     if not r or not r["file_key"]:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "الملف غير موجود")
@@ -308,7 +313,8 @@ def delete_doc(doc_id: UUID, a: Admin = Depends(require_admin())):
 
 # ------------------------------------------------------------------ نظرة على حوكمة منشأة
 @router.get("/organizations/{org_id}/governance")
-def org_governance(org_id: UUID, c: Connection = Depends(get_platform_admin)):
+def org_governance(org_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
+    c = a.conn
     if not c.execute(text("SELECT 1 FROM organizations WHERE id = :o"), {"o": org_id}).scalar_one_or_none():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "لم يُعثر على المنشأة")
     obligations = gs.list_obligations(c, org_id)

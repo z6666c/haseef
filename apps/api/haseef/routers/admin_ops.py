@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import Connection, text
 
-from ..deps import Admin, get_platform_admin, require_admin
+from ..deps import Admin, require_admin
 from ..security import hash_password
 from ..services import governance_service as gs
 from ..services.score_service import recompute
@@ -144,7 +144,8 @@ def create_org(body: OrgCreateIn, a: Admin = Depends(require_admin("SUPPORT"))):
 
 
 @router.get("/organizations/{org_id}")
-def org_detail(org_id: UUID, c: Connection = Depends(get_platform_admin)):
+def org_detail(org_id: UUID, a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
+    c = a.conn
     org = c.execute(text("""
         SELECT id, name, cr_number, entity_legal_type, industry_type, commercial_size, haseef_score,
                score_breakdown, is_active, suspended_at, suspension_reason, created_at
@@ -167,8 +168,16 @@ def org_detail(org_id: UUID, c: Connection = Depends(get_platform_admin)):
         SELECT (SELECT count(*) FROM v_compliance_items WHERE org_id = :o) AS items,
                (SELECT count(*) FROM v_compliance_items WHERE org_id = :o AND status = 'EXPIRED') AS expired,
                (SELECT count(*) FROM internal_policies WHERE org_id = :o) AS policies"""), {"o": org_id}).mappings().one()
+    if a.role == "BILLING":
+        # المحاسبة ترى ما يخص الفوترة فقط: بيانات المنشأة الأساسية، الاشتراك، الدفعات، وجهة الفوترة (مدير المنشأة).
+        org_d = {k: v for k, v in dict(org).items() if k not in ("haseef_score", "score_breakdown", "suspension_reason")}
+        billing_contact = [{"membership_id": m["membership_id"], "role": m["role"], "full_name": m["full_name"], "email": m["email"],
+                            "membership_active": m["membership_active"], "user_active": m["user_active"]}
+                           for m in members if m["role"] == "ORG_ADMIN" and m["membership_active"]]
+        return {"organization": org_d, "subscription": sub, "members": billing_contact,
+                "billing": [dict(b) for b in billing], "counts": None, "restricted": True}
     return {"organization": dict(org), "subscription": sub, "members": [dict(m) for m in members],
-            "billing": [dict(b) for b in billing], "counts": dict(counts)}
+            "billing": [dict(b) for b in billing], "counts": dict(counts), "restricted": False}
 
 
 @router.patch("/organizations/{org_id}")
@@ -400,7 +409,7 @@ class TeamRoleIn(BaseModel):
 
 
 @router.get("/team")
-def team(a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
+def team(a: Admin = Depends(require_admin("SUPPORT"))):
     return [dict(r) for r in a.conn.execute(text("""
         SELECT id, full_name, email::text AS email, platform_role, is_active, last_login_at, must_change_password
         FROM users WHERE platform_role IS NOT NULL ORDER BY created_at""")).mappings()]
@@ -443,8 +452,15 @@ def team_role(user_id: UUID, body: TeamRoleIn, a: Admin = Depends(require_admin(
 # =====================================================================
 # سجل التدقيق
 # =====================================================================
+BILLING_AUDIT_ACTIONS = ("ADMIN_RECORD_PAYMENT", "ADMIN_CHANGE_PLAN", "ADMIN_EXTEND_TRIAL", "ADMIN_CANCEL_SUBSCRIPTION",
+                         "ADMIN_CREATE_ORG", "ADMIN_SUSPEND_ORG", "ADMIN_REACTIVATE_ORG")
+
+
 @router.get("/audit")
-def audit(org_id: UUID | None = None, limit: int = 100, c: Connection = Depends(get_platform_admin)):
+def audit(org_id: UUID | None = None, limit: int = 100, a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
+    """المحاسبة ترى أحداث الاشتراكات والفوترة فقط؛ لا دخول المستخدمين ولا تعديلات الحوكمة والبيانات."""
+    c = a.conn
+    only = list(BILLING_AUDIT_ACTIONS) if a.role == "BILLING" else None
     rows = c.execute(text("""
         SELECT l.id, l.created_at, l.action, l.entity_type, l.entity_id, l.changes, host(l.ip_address) AS ip,
                u.full_name AS actor, u.platform_role AS actor_role, o.name AS org_name, l.org_id
@@ -452,5 +468,6 @@ def audit(org_id: UUID | None = None, limit: int = 100, c: Connection = Depends(
         LEFT JOIN users u ON u.id = l.actor_user_id
         LEFT JOIN organizations o ON o.id = l.org_id
         WHERE (CAST(:o AS uuid) IS NULL OR l.org_id = :o)
-        ORDER BY l.created_at DESC LIMIT :l"""), {"o": org_id, "l": min(limit, 500)}).mappings()
+          AND (CAST(:only AS text[]) IS NULL OR l.action = ANY(CAST(:only AS text[])))
+        ORDER BY l.created_at DESC LIMIT :l"""), {"o": org_id, "l": min(limit, 500), "only": only}).mappings()
     return [dict(r) for r in rows]

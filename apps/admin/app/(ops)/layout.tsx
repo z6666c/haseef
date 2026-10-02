@@ -11,10 +11,10 @@ import { api, getSession, setSession } from "@/lib/session";
 const NAV: { href: string; label: string; roles?: PlatformRole[] }[] = [
   { href: "/", label: "نظرة عامة" },
   { href: "/organizations", label: "المنشآت" },
-  { href: "/dispatches", label: "التنبيهات" },
-  { href: "/content", label: "المحتوى المرجعي" },
+  { href: "/dispatches", label: "التنبيهات", roles: ["SUPPORT"] },
+  { href: "/content", label: "المحتوى المرجعي", roles: ["SUPPORT"] },
   { href: "/usage", label: "استهلاك الذكاء الاصطناعي" },
-  { href: "/team", label: "الفريق" },
+  { href: "/team", label: "الفريق", roles: ["SUPPORT"] },
   { href: "/audit", label: "سجل التدقيق" },
 ];
 
@@ -44,7 +44,7 @@ export default function OpsLayout({ children }: { children: React.ReactNode }) {
         <header className="ops-bar">
           <Link href="/" className="ops-brand"><Mark size={24} /><span>غرفة العمليات</span></Link>
           <nav aria-label="الأقسام">
-            {NAV.map((n) => (
+            {NAV.filter((n) => !n.roles || role === "SUPER_ADMIN" || n.roles.includes(role)).map((n) => (
               <Link key={n.href} href={n.href} aria-current={active(n.href) ? "page" : undefined}>{n.label}</Link>
             ))}
           </nav>

@@ -5,13 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy import Connection, text
 
-from ..deps import get_platform_admin
+from ..deps import Admin, require_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.get("/overview")
-def overview(conn: Connection = Depends(get_platform_admin)):
+def overview(a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
+    conn = a.conn
     kpis = conn.execute(text("""
         SELECT
           (SELECT count(*) FROM organizations WHERE is_active)                               AS active_orgs,
@@ -32,7 +33,8 @@ def overview(conn: Connection = Depends(get_platform_admin)):
 
 
 @router.get("/organizations")
-def organizations(conn: Connection = Depends(get_platform_admin)):
+def organizations(a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
+    conn = a.conn
     return [dict(r) for r in conn.execute(text("""
         SELECT o.id, o.name, o.cr_number, o.industry_type, o.haseef_score, o.created_at, o.suspended_at,
                s.plan_tier, s.billing_status, s.ends_at,
@@ -43,7 +45,9 @@ def organizations(conn: Connection = Depends(get_platform_admin)):
 
 
 @router.get("/dispatches")
-def dispatches(conn: Connection = Depends(get_platform_admin), status: str | None = None, limit: int = 200):
+def dispatches(a: Admin = Depends(require_admin("SUPPORT")), status: str | None = None, limit: int = 200):
+    """تحتوي أرقام جوال وبريد العملاء: للدعم الفني والمدير العام فقط."""
+    conn = a.conn
     summary = conn.execute(text("""
         SELECT status, channel, count(*) AS n FROM alert_dispatches
         WHERE created_at > now() - interval '7 days' GROUP BY status, channel""")).mappings().all()
@@ -58,7 +62,8 @@ def dispatches(conn: Connection = Depends(get_platform_admin), status: str | Non
 
 
 @router.get("/ai-usage")
-def ai_usage(conn: Connection = Depends(get_platform_admin)):
+def ai_usage(a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
+    conn = a.conn
     return [dict(r) for r in conn.execute(text("""
         SELECT o.id AS org_id, o.name, s.plan_tier, p.monthly_ai_audits AS quota,
                count(DISTINCT l.audit_id)                    AS audits_this_month,

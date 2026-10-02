@@ -218,7 +218,9 @@ export interface AdminOrgDetail {
   members: AdminMember[];
   billing: { event_type: string; plan_tier: string | null; amount_sar: number | null; period_months: number | null;
              reference: string | null; note: string | null; created_at: string; actor: string | null }[];
-  counts: { items: number; expired: number; policies: number };
+  counts: { items: number; expired: number; policies: number } | null;
+  /** true لدور المحاسبة: بيانات الفوترة فقط */
+  restricted?: boolean;
 }
 export interface CreateOrgInput {
   name: string; cr_number: string; entity_legal_type: string; industry_type?: string; commercial_size?: string;

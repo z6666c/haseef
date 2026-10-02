@@ -368,7 +368,13 @@ const TEAM_ME: Record<string, { id: string; email: string; full_name: string }> 
 };
 const ROLE_NAME = { SUPER_ADMIN: "المدير العام", SUPPORT: "الدعم الفني", BILLING: "المحاسبة" } as const;
 function requireRole(role: keyof typeof ROLE_NAME, method: string, p: string, body: Record<string, unknown>) {
-  if (method === "GET" || role === "SUPER_ADMIN") return;
+  if (role === "SUPER_ADMIN") return;
+  if (method === "GET") {
+    // المحاسبة: الفوترة فقط — لا تنبيهات (بيانات تواصل العملاء)، لا فريق، لا محتوى، لا حوكمة المنشآت
+    if (role === "BILLING" && (/^\/admin\/(dispatches|team|catalog|library)/.test(p) || /\/governance$/.test(p)))
+      throw new DemoError(403, "هذا القسم غير متاح لصلاحية المحاسبة");
+    return;
+  }
   const deny = (allowed: (keyof typeof ROLE_NAME)[]) => {
     if (!allowed.includes(role)) throw new DemoError(403, `هذا الإجراء متاح لـ: ${["المدير العام", ...allowed.map((r) => ROLE_NAME[r])].join("، ")}`);
   };
@@ -421,7 +427,15 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     }
     if ((m = p.match(/^\/admin\/organizations\/([^/]+)$/))) {
       const o = findOrg(m[1]);
-      if (method === "GET") return orgDetail(o);
+      if (method === "GET") {
+        const full = orgDetail(o);
+        if (role !== "BILLING") return { ...full, restricted: false };
+        const { haseef_score: _s, suspension_reason: _r, ...org } = full.organization;
+        return { ...full, organization: org, counts: null, restricted: true,
+                 members: full.members.filter((x) => x.role === "ORG_ADMIN" && x.membership_active)
+                   .map((x) => ({ membership_id: x.membership_id, role: x.role, full_name: x.full_name, email: x.email,
+                                  membership_active: x.membership_active, user_active: x.user_active })) };
+      }
       Object.assign(o, { name: body.name ?? o.name, industry: body.industry_type ?? o.industry });
       log("ADMIN_UPDATE_ORG", o, body); return { updated: true };
     }
@@ -534,7 +548,12 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
                obligations: { total: obl.length, in_place: obl.filter((o) => o.effective_status === "IN_PLACE").length,
                               pending: obl.filter((o) => o.effective_status === "PENDING" || o.effective_status === "AT_RISK").length } };
     }
-    if (p === "/admin/audit") { const id = q.get("org_id"); return id ? audit.filter((a) => a.org_id === id) : audit; }
+    if (p === "/admin/audit") {
+      const id = q.get("org_id");
+      const billingOnly = ["ADMIN_RECORD_PAYMENT", "ADMIN_CHANGE_PLAN", "ADMIN_EXTEND_TRIAL", "ADMIN_CANCEL_SUBSCRIPTION",
+                           "ADMIN_CREATE_ORG", "ADMIN_SUSPEND_ORG", "ADMIN_REACTIVATE_ORG"];
+      return audit.filter((a) => (!id || a.org_id === id) && (role !== "BILLING" || billingOnly.includes(a.action)));
+    }
     if (p === "/admin/dispatches") return dispatches();
     if (p === "/admin/ai-usage") return orgs.map((o) => ({ org_id: o.id, name: o.name, plan_tier: o.sub?.plan_tier ?? null,
       quota: o.sub?.plan_tier === "ESSENTIAL" ? 3 : 15, audits_this_month: o.id === ORG_A ? 4 : 0, tokens: o.id === ORG_A ? 48_200 : 0, cost_sar: o.id === ORG_A ? 3.6 : 0 }));
