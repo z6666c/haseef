@@ -63,8 +63,8 @@ def run() -> None:
         ahmad = user(conn, "ahmad@nukhba.example", "أحمد العتيبي", "+966500000001")
         sara = user(conn, "sara@waha.example", "سارة القحطاني", "+966500000002")
         advisor = user(conn, "advisor@example.sa", "مكتب الامتثال الاستشاري")
-        user(conn, "ops@haseef.sa", "فريق عمليات حصيف", role="SUPER_ADMIN")
-        # كلمتا مرور ثابتتان لبيئة التطوير فقط (طلب المالك): البريد + @ — لا تُستخدم في الإنتاج
+        user(conn, "ops@haseef.sa", "فريق عمليات حصيف", role="SUPER_ADMIN", password="ops@haseef.sa@")
+        # كلمات مرور فريق حصيف ثابتة لبيئة التطوير فقط (طلب المالك): البريد + @ — لا تُستخدم في الإنتاج
         user(conn, "support@haseef.sa", "الدعم الفني", role="SUPPORT", password="support@haseef.sa@")
         user(conn, "billing@haseef.sa", "المحاسبة", role="BILLING", password="billing@haseef.sa@")
 

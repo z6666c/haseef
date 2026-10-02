@@ -10,7 +10,7 @@ import { runCheck, type CkStandard } from "./governanceCheck.ts";
 /** بيانات الدخول لنسخة العرض فقط. ليست حسابات حقيقية ولا تفتح أي نظام فعلي. */
 const DEMO_USERS: Record<string, { password: string; token: string }> = {
   "demo@haseef.sa": { password: "Haseef@2026", token: "demo-client" },
-  "admin@haseef.sa": { password: "Haseef@2026", token: "demo-admin" },
+  "admin@haseef.sa": { password: "admin@haseef.sa@", token: "demo-admin" },
   "support@haseef.sa": { password: "support@haseef.sa@", token: "demo-support" },
   "billing@haseef.sa": { password: "billing@haseef.sa@", token: "demo-billing" },
 };
