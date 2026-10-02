@@ -15,6 +15,7 @@ from datetime import datetime
 from sqlalchemy import Connection, text
 
 from ..content.obligations import applies_to
+from ..content.examples import EXAMPLES
 from ..content.standards import STRUCTURE_TEMPLATES
 from ..domain.governance_check import Body, Member, OrgContext, run_check
 from .score_service import recompute
@@ -59,6 +60,30 @@ def apply_template(conn: Connection, org_id: UUID | str, *, force: bool = False)
     get_profile(conn, org_id)
     conn.execute(text("UPDATE org_governance_profiles SET template_applied_at = now() WHERE org_id = :o"), o)
     return n
+
+
+def apply_example(conn: Connection, org_id: UUID | str) -> int:
+    """يستبدل هيكل المنشأة بالمثال الجاهز لكيانها. يرجع عدد الأجهزة."""
+    o = {"o": str(org_id)}
+    ex = EXAMPLES.get(_org(conn, org_id)["entity_legal_type"])
+    if not ex:
+        return 0
+    conn.execute(text("DELETE FROM org_bodies WHERE org_id = :o"), o)
+    for i, (bt, name, mandate, meetings, members) in enumerate(ex["bodies"]):
+        bid = conn.execute(text("""INSERT INTO org_bodies (org_id, body_type, name, mandate, meetings_per_year, sort, from_template)
+                                   VALUES (:o, :t, :n, :m, :mp, :s, true) RETURNING id"""),
+                           {**o, "t": bt, "n": name, "m": mandate or None, "mp": meetings, "s": (i + 1) * 10}).scalar_one()
+        for full_name, pos, ind, exe, appointed, term in members:
+            conn.execute(text("""INSERT INTO org_body_members (org_id, body_id, full_name, position, is_independent,
+                                                               is_executive, appointed_on, term_ends_on)
+                                 VALUES (:o, :b, :n, :p, :i, :e, :a, :t)"""),
+                         {**o, "b": bid, "n": full_name, "p": pos, "i": ind, "e": exe, "a": appointed, "t": term})
+    return len(ex["bodies"])
+
+
+def example_title(legal_type: str) -> str | None:
+    ex = EXAMPLES.get(legal_type)
+    return ex["title"] if ex else None
 
 
 def structure(conn: Connection, org_id: UUID | str) -> list[dict]:

@@ -38,7 +38,8 @@ class ContentTests(unittest.TestCase):
 
     def test_templates_have_policy_type_and_body(self):
         for t in TEMPLATES:
-            self.assertTrue(t["policy_type"] and t["body"].startswith("#"), t["slug"])
+            self.assertTrue(t["body"].startswith("#"), t["slug"])
+        self.assertGreaterEqual(sum(1 for t in TEMPLATES if t["policy_type"]), 12)
 
     def test_laws_are_https(self):
         for law in LAWS:

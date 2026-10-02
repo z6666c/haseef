@@ -73,6 +73,7 @@ export function createApi(
     // ---------- الحوكمة والهيكل
     governance: () => req<GovernanceStructure>("/governance/structure"),
     applyTemplate: () => req<{ bodies_added: number }>("/governance/structure/apply-template", { method: "POST" }),
+    applyExample: () => req<{ bodies: number }>("/governance/structure/apply-example", { method: "POST" }),
     updateProfile: (b: GovernanceProfile) => req<GovernanceProfile>("/governance/profile", { method: "PUT", body: JSON.stringify(b) }),
     addBody: (b: BodyInput) => req<{ id: string }>("/governance/bodies", { method: "POST", body: JSON.stringify(b) }),
     updateBody: (id: string, b: BodyInput) => req<{ updated: boolean }>(`/governance/bodies/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
@@ -250,6 +251,7 @@ export interface CheckRun {
 }
 export interface GovernanceStructure {
   legal_type: string; size: string | null; profile: GovernanceProfile; bodies: GovBody[]; latest_check: CheckRun | null;
+  example_title: string | null;
 }
 
 // ---------- الالتزامات

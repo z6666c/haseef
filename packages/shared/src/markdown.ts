@@ -29,6 +29,13 @@ export function renderMarkdown(src: string): string {
 
     if (/^---+\s*$/.test(line)) { html.push("<hr />"); i++; continue; }
 
+    if (line.startsWith(">")) {
+      const q: string[] = [];
+      while (i < lines.length && lines[i].startsWith(">")) { q.push(inline(lines[i].replace(/^>\s?/, ""))); i++; }
+      html.push(`<blockquote>${q.join("<br />")}</blockquote>`);
+      continue;
+    }
+
     if (line.trim().startsWith("|")) {
       const rows: string[][] = [];
       while (i < lines.length && lines[i].trim().startsWith("|")) {
@@ -47,13 +54,13 @@ export function renderMarkdown(src: string): string {
       const ordered = ol.test(line);
       const re = ordered ? ol : ul;
       const items: string[] = [];
-      while (i < lines.length && re.test(lines[i])) { items.push(`<li>${inline(lines[i].replace(re, ""))}</li>`); i++; }
+      while (i < lines.length && re.test(lines[i])) { items.push(`<li>${inline(lines[i].replace(re, "").replace(/^\[ \]\s*/, "☐ ").replace(/^\[x\]\s*/i, "☑ "))}</li>`); i++; }
       html.push(ordered ? `<ol>${items.join("")}</ol>` : `<ul>${items.join("")}</ul>`);
       continue;
     }
 
     const para: string[] = [];
-    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|\||\s*[-*]\s|\s*\d+[.)]\s|---)/.test(lines[i])) {
+    while (i < lines.length && lines[i].trim() && !/^(#{1,4}\s|\||>|\s*[-*]\s|\s*\d+[.)]\s|---)/.test(lines[i])) {
       para.push(inline(lines[i])); i++;
     }
     if (para.length) html.push(`<p>${para.join("<br />")}</p>`);

@@ -73,6 +73,17 @@ export default function GovernancePage() {
           </div>
         )}
         <AddBody busy={busy} onAdd={(b) => act(() => api.addBody(b), `أُضيف: ${b.name}`)} />
+        {data.example_title && (
+          <div className="example-box">
+            <div>
+              <strong>مثال جاهز من خبراء حصيف:</strong> {data.example_title}
+              <p className="muted small">هيكل متكامل بالأجهزة واللجان والأعضاء والتصنيفات كما يبنيه مستشار حوكمة. يستبدل هيكلك الحالي، ثم تعدّل الأسماء والتواريخ.</p>
+            </div>
+            <button className="btn btn-quiet" type="button" disabled={busy}
+                    onClick={() => { if (window.confirm("سيُستبدل الهيكل الحالي بالمثال الجاهز. متابعة؟")) act(() => api.applyExample(), "حُمّل المثال الجاهز وأُعيد الفحص"); }}>
+              ابدأ من المثال الجاهز</button>
+          </div>
+        )}
         {data.bodies.length > 0 && (
           <button className="link-btn" type="button" disabled={busy}
                   onClick={() => act(() => api.applyTemplate(), "أُكملت الأجهزة الناقصة من القالب")}>

@@ -272,6 +272,115 @@
    "body_md": "# سياسة السلامة والصحة المهنية — «اسم المنشأة»\n\n## التزاماتنا\n1. توفير بيئة عمل آمنة ومعدات وقاية مناسبة دون مقابل.\n2. تقييم مخاطر كل موقع ونشاط وتحديثه سنوياً.\n3. تدريب العاملين على السلامة وخطط الإخلاء عند التعيين ودورياً.\n4. الحفاظ على اشتراطات الدفاع المدني وصيانة أنظمة الإطفاء والإنذار.\n5. تسجيل الحوادث والإصابات والتحقيق فيها والإبلاغ وفق الأنظمة.\n6. توفير الإسعافات الأولية ومسؤول مدرَّب في كل موقع.\n\n**المسؤول:** «الاسم/المنصب».\n\n---\n*نموذج إرشادي من حصيف — يُراجع ويُكيَّف مع نشاط المنشأة وعقد تأسيسها قبل الاعتماد، ولا يغني عن الاستشارة القانونية المتخصصة.*\n"
   },
   {
+   "id": "tpl-board-minutes",
+   "kind": "TEMPLATE",
+   "category": "GOVERNANCE",
+   "title": "نموذج محضر اجتماع مجلس الإدارة",
+   "summary": "محضر منظم يوثق النصاب والقرارات والتصويت والإفصاح عن المصالح.",
+   "url": null,
+   "file_name": null,
+   "file_mime": null,
+   "file_size": null,
+   "policy_type": null,
+   "applies_legal_types": [
+    "CLOSED_JOINT_STOCK",
+    "PUBLIC_JOINT_STOCK"
+   ],
+   "related_codes": [
+    "JSC_BOARD_EXISTS"
+   ],
+   "review_status": "DRAFT",
+   "version": "1.0",
+   "updated_at": "2026-10-01T00:00:00Z",
+   "body_md": "# محضر اجتماع مجلس الإدارة رقم «الرقم» لعام «السنة»\n\n**الشركة:** «اسم الشركة» · **التاريخ:** «التاريخ» · **المكان / الوسيلة:** «المقر / اتصال مرئي» · **الوقت:** «من – إلى»\n\n## الحضور\n| الاسم | الصفة | التصنيف | الحضور |\n|---|---|---|---|\n| «الاسم» | رئيس المجلس | غير تنفيذي | أصالة |\n| «الاسم» | عضو | مستقل | أصالة |\n| «الاسم» | عضو | تنفيذي | بالإنابة عن «الاسم» |\n\n**النصاب:** حضر «العدد» من «العدد» — النصاب مكتمل.\n**أمين السر:** «الاسم».\n\n## الإفصاح عن المصالح\nلم يُفصح أي عضو عن مصلحة في بنود الجدول / أفصح «الاسم» عن مصلحة في البند «رقم» ولم يشارك في التصويت عليه.\n\n## جدول الأعمال والقرارات\n1. **المصادقة على محضر الاجتماع السابق** — صودق عليه بالإجماع.\n2. **«البند»** — بعد المناقشة قرر المجلس: «نص القرار». التصويت: «موافق/معارض/ممتنع».\n3. **ما يستجد من أعمال.**\n\n## المهام المتابعة\n| المهمة | المسؤول | الموعد |\n|---|---|---|\n| «المهمة» | «الاسم» | «التاريخ» |\n\n**التوقيعات:** رئيس المجلس — أمين السر — الأعضاء الحاضرون.\n\n---\n*نموذج إرشادي من حصيف — يُراجع ويُكيَّف مع نشاط المنشأة وعقد تأسيسها قبل الاعتماد، ولا يغني عن الاستشارة القانونية المتخصصة.*\n"
+  },
+  {
+   "id": "tpl-partners-resolution",
+   "kind": "TEMPLATE",
+   "category": "GOVERNANCE",
+   "title": "نموذج قرار الشركاء (الجمعية العامة السنوية)",
+   "summary": "قرار سنوي للمصادقة على القوائم المالية وإبراء ذمة المدير وتعيين المراجع.",
+   "url": null,
+   "file_name": null,
+   "file_mime": null,
+   "file_size": null,
+   "policy_type": null,
+   "applies_legal_types": [
+    "LLC"
+   ],
+   "related_codes": [
+    "LLC_ANNUAL_PARTNERS"
+   ],
+   "review_status": "DRAFT",
+   "version": "1.0",
+   "updated_at": "2026-10-01T00:00:00Z",
+   "body_md": "# قرار الشركاء في «اسم المنشأة» (شركة ذات مسؤولية محدودة)\n\n**السجل التجاري:** «رقم السجل» · **التاريخ:** «التاريخ»\n\nاجتمع الشركاء المالكون لـ«النسبة»% من رأس المال، وقرروا ما يلي:\n\n1. المصادقة على القوائم المالية للسنة المنتهية في «التاريخ» وتقرير مراجع الحسابات.\n2. إبراء ذمة المدير «الاسم» عن إدارته للسنة المالية المنتهية.\n3. تعيين «اسم المكتب» مراجعاً لحسابات السنة المالية «السنة» بأتعاب «المبلغ» ريال. *(أو: الاكتفاء بالإعفاء المقرر للمنشآت الصغيرة)*\n4. توزيع أرباح قدرها «المبلغ» ريال حسب حصص الشركاء / ترحيل الأرباح.\n5. تفويض المدير بإيداع القوائم المالية وتحديث بيانات الشركة لدى وزارة التجارة.\n\n| الشريك | الحصة | التوقيع |\n|---|---|---|\n| «الاسم» | «%» | |\n| «الاسم» | «%» | |\n\n---\n*نموذج إرشادي من حصيف — يُراجع ويُكيَّف مع نشاط المنشأة وعقد تأسيسها قبل الاعتماد، ولا يغني عن الاستشارة القانونية المتخصصة.*\n"
+  },
+  {
+   "id": "tpl-independence-declaration",
+   "kind": "TEMPLATE",
+   "category": "GOVERNANCE",
+   "title": "نموذج إقرار الاستقلالية لعضو مجلس الإدارة",
+   "summary": "إقرار سنوي يثبت انطباق معايير الاستقلال على العضو.",
+   "url": null,
+   "file_name": null,
+   "file_mime": null,
+   "file_size": null,
+   "policy_type": null,
+   "applies_legal_types": [
+    "CLOSED_JOINT_STOCK",
+    "PUBLIC_JOINT_STOCK"
+   ],
+   "related_codes": [
+    "PJSC_INDEPENDENTS",
+    "CJSC_INDEPENDENTS"
+   ],
+   "review_status": "DRAFT",
+   "version": "1.0",
+   "updated_at": "2026-10-01T00:00:00Z",
+   "body_md": "# إقرار استقلالية عضو مجلس الإدارة\n\nأنا «الاسم»، عضو مجلس إدارة «اسم الشركة»، أقر بأنني:\n\n- [ ] لا أملك 5% أو أكثر من أسهم الشركة أو إحدى شركات مجموعتها، ولست ممثلاً لمن يملكها.\n- [ ] لم أكن خلال السنتين الماضيتين من كبار التنفيذيين في الشركة أو مجموعتها.\n- [ ] ليست لي قرابة من الدرجة الأولى مع أي عضو مجلس أو كبار التنفيذيين.\n- [ ] لا أعمل لدى مراجع حسابات الشركة أو أحد كبار مورديها ولم أعمل لديهم خلال السنتين الماضيتين.\n- [ ] لا أتلقى من الشركة مبالغ تتجاوز مكافأة العضوية.\n- [ ] لا أشارك في عمل منافس للشركة.\n\nأتعهد بإبلاغ المجلس فوراً عند تغيّر أي مما سبق.\n\n**التوقيع:** «التوقيع» · **التاريخ:** «التاريخ»\n\n---\n*نموذج إرشادي من حصيف — يُراجع ويُكيَّف مع نشاط المنشأة وعقد تأسيسها قبل الاعتماد، ولا يغني عن الاستشارة القانونية المتخصصة.*\n"
+  },
+  {
+   "id": "tpl-coi-annual-declaration",
+   "kind": "TEMPLATE",
+   "category": "GOVERNANCE",
+   "title": "نموذج الإقرار السنوي بالمصالح",
+   "summary": "إقرار يوقعه أعضاء الإدارة والموظفون الرئيسيون سنوياً.",
+   "url": null,
+   "file_name": null,
+   "file_mime": null,
+   "file_size": null,
+   "policy_type": null,
+   "applies_legal_types": [],
+   "related_codes": [
+    "POL_CONFLICT_OF_INTEREST"
+   ],
+   "review_status": "DRAFT",
+   "version": "1.0",
+   "updated_at": "2026-10-01T00:00:00Z",
+   "body_md": "# الإقرار السنوي بالمصالح — «اسم المنشأة»\n\n**الاسم:** «الاسم» · **المنصب:** «المنصب» · **السنة:** «السنة»\n\n## 1. ملكيات ومناصب خارجية\n| الجهة | طبيعة المصلحة (ملكية / منصب / قرابة) | هل تتعامل مع المنشأة؟ |\n|---|---|---|\n| «الجهة» | «المصلحة» | نعم / لا |\n\n## 2. هدايا ومنافع خلال السنة\n| من | القيمة التقديرية | التاريخ |\n|---|---|---|\n| «الجهة» | «القيمة» | «التاريخ» |\n\n## 3. الإقرار\nأقر بأن ما سبق صحيح وكامل، وأتعهد بالإفصاح فوراً عن أي تعارض ينشأ خلال السنة.\n\n**التوقيع:** «التوقيع»\n\n---\n*نموذج إرشادي من حصيف — يُراجع ويُكيَّف مع نشاط المنشأة وعقد تأسيسها قبل الاعتماد، ولا يغني عن الاستشارة القانونية المتخصصة.*\n"
+  },
+  {
+   "id": "tpl-ropa-register",
+   "kind": "TEMPLATE",
+   "category": "PDPL",
+   "title": "نموذج سجل أنشطة معالجة البيانات الشخصية",
+   "summary": "جدول جاهز بأمثلة لأكثر أنشطة المعالجة شيوعاً في المنشآت.",
+   "url": null,
+   "file_name": null,
+   "file_mime": null,
+   "file_size": null,
+   "policy_type": null,
+   "applies_legal_types": [],
+   "related_codes": [
+    "PDPL_ROPA"
+   ],
+   "review_status": "DRAFT",
+   "version": "1.0",
+   "updated_at": "2026-10-01T00:00:00Z",
+   "body_md": "# سجل أنشطة معالجة البيانات الشخصية — «اسم المنشأة»\n\n| النشاط | الغرض | فئات البيانات | أصحاب البيانات | المستلمون | مدة الحفظ | نقل خارج المملكة | المسؤول |\n|---|---|---|---|---|---|---|---|\n| إدارة العملاء | تقديم الخدمة والفوترة | الاسم، الجوال، العنوان، السجل الضريبي | العملاء | نظام المحاسبة | «المدة» بعد آخر تعامل | لا | المبيعات |\n| شؤون الموظفين | التوظيف والرواتب | الهوية، الراتب، الآيبان، الحالة الصحية للتأمين | الموظفون | التأمينات، شركة التأمين، البنك | «المدة» بعد انتهاء العلاقة | لا | الموارد البشرية |\n| التوظيف | تقييم المتقدمين | السيرة الذاتية، المؤهلات | المتقدمون | — | 6 أشهر | لا | الموارد البشرية |\n| كاميرات المراقبة | أمن المنشأة | صور الزوار والموظفين | الزوار والموظفون | — | «المدة» | لا | الأمن |\n| التسويق | إرسال العروض | الجوال، البريد | المشتركون بموافقتهم | منصة الرسائل | حتى سحب الموافقة | «حسب المنصة» | التسويق |\n\n**يُحدّث السجل** عند إضافة نشاط أو نظام جديد، ويُراجع سنوياً.\n\n---\n*نموذج إرشادي من حصيف — يُراجع ويُكيَّف مع نشاط المنشأة وعقد تأسيسها قبل الاعتماد، ولا يغني عن الاستشارة القانونية المتخصصة.*\n"
+  },
+  {
    "id": "guide-structure-by-entity",
    "kind": "GUIDE",
    "category": "GOVERNANCE",
@@ -306,6 +415,72 @@
    "version": "1.0",
    "updated_at": "2026-10-01T00:00:00Z",
    "body_md": "# الامتثال لنظام حماية البيانات الشخصية — خطوات عملية\n\n1. **اعرف بياناتك:** أين تجمع بيانات العملاء والموظفين؟ (نماذج، واتساب، أنظمة المحاسبة).\n2. **سجّل أنشطة المعالجة:** لكل نشاط: الغرض، الفئات، من يطّلع، مدة الحفظ، هل تُنقل للخارج.\n3. **انشر سياسة خصوصية** قبل جمع البيانات.\n4. **قلّل البيانات:** اجمع ما تحتاجه فقط.\n5. **حدّد مدد الاحتفاظ** وأتلف ما انتهى غرضه.\n6. **أمّن الوصول:** تحقق ثنائي وصلاحيات حسب الحاجة.\n7. **راجع المورّدين:** عقود تلزمهم بالحماية، وتحقق من مكان استضافة البيانات.\n8. **استعد للحوادث:** إجراء مكتوب للإبلاغ عن التسرب خلال المدة النظامية.\n9. **احترم الحقوق:** آلية للرد على طلبات الوصول والتصحيح والإتلاف.\n10. **عيّن مسؤولاً** لحماية البيانات ولو بدوام جزئي.\n\n---\n*نموذج إرشادي من حصيف — يُراجع ويُكيَّف مع نشاط المنشأة وعقد تأسيسها قبل الاعتماد، ولا يغني عن الاستشارة القانونية المتخصصة.*\n"
+  },
+  {
+   "id": "guide-structure-examples",
+   "kind": "GUIDE",
+   "category": "GOVERNANCE",
+   "title": "أمثلة هيكلة جاهزة حسب حجم المنشأة ونوعها",
+   "summary": "ستة نماذج هيكلة عملية من المؤسسة الصغيرة إلى المساهمة المدرجة، مع عدد الأعضاء واللجان المقترحة.",
+   "url": null,
+   "file_name": null,
+   "file_mime": null,
+   "file_size": null,
+   "policy_type": null,
+   "applies_legal_types": [],
+   "related_codes": [
+    "STR_MANAGEMENT_DEFINED"
+   ],
+   "review_status": "DRAFT",
+   "version": "1.0",
+   "updated_at": "2026-10-01T00:00:00Z",
+   "body_md": "# أمثلة هيكلة جاهزة\n\n> اختر المثال الأقرب لمنشأتك، ثم عدّل الهيكل في «الحوكمة وهيكل الشركة».\n\n## 1. مؤسسة فردية صغيرة (أقل من 10 موظفين)\n| الجهاز | من يشغله | ملاحظات |\n|---|---|---|\n| المالك | صاحب المؤسسة | صلاحية نهائية |\n| المدير المسؤول | المالك أو مدير معيّن | تفويض مكتوب بحدود مالية |\n| المحاسب الخارجي | مكتب محاسبة | إقرار الزكاة والضريبة |\n\n**الحد الأدنى من الحوكمة:** تفويض مكتوب، فصل الحساب البنكي الشخصي عن حساب المؤسسة، سجل للعقود.\n\n## 2. شركة ذات مسؤولية محدودة ناشئة (2–3 شركاء، أقل من 50 موظفاً)\n- **جمعية الشركاء:** الشركاء جميعهم، اجتماع سنوي على الأقل للمصادقة على القوائم.\n- **المدير:** شريك مدير واحد، وصلاحياته محددة في عقد التأسيس.\n- **الإدارة التنفيذية:** المدير العام، المدير المالي.\n- **ممارسات فضلى:** مصفوفة صلاحيات، سياسة تعارض مصالح، توقيع مزدوج للمدفوعات الكبيرة.\n\n## 3. شركة ذات مسؤولية محدودة متوسطة (50–250 موظفاً)\n- **جمعية الشركاء** + **مجلس مديرين** من 3 أعضاء (اثنان من الشركاء وعضو خبير مستقل).\n- **لجنة مراجعة استشارية** من عضوين على الأقل لمتابعة المراجع الخارجي.\n- **وظيفة التزام** (ولو بدوام جزئي) و**مسؤول حماية بيانات**.\n- **الإدارة التنفيذية:** الرئيس التنفيذي، المالي، الموارد البشرية، العمليات.\n\n## 4. شركة مساهمة مبسطة (استثمار جريء / شركة ناشئة ممولة)\n- **مدير أو مجلس من 3** يمثل المؤسسين والمستثمر الرئيسي.\n- **حقوق المستثمرين** (مقاعد المجلس، الموافقات الجوهرية) موثقة في النظام الأساس.\n- **قرارات المساهمين** بالتمرير عند عدم عقد جمعية.\n\n## 5. شركة مساهمة مقفلة (شركة عائلية كبيرة)\n- **الجمعية العامة** سنوياً خلال 6 أشهر من نهاية السنة المالية.\n- **مجلس إدارة** من 5–7 أعضاء: أغلبية غير تنفيذية، وعضوان مستقلان على الأقل كممارسة فضلى.\n- **لجنة المراجعة** (3 أعضاء غير تنفيذيين، أحدهم مالي).\n- **لجنة الترشيحات والمكافآت** (ممارسة فضلى).\n- **مجلس العائلة وميثاق العائلة** منفصلان عن مجلس الإدارة.\n- **أمين سر المجلس** و**مراجعة داخلية** (ولو مُسندة لجهة خارجية).\n\n## 6. شركة مساهمة مدرجة\n- **مجلس** من 7–11 عضواً: مستقلون لا يقلون عن عضوين أو الثلث أيهما أكثر، أغلبية غير تنفيذية، رئيس غير تنفيذي.\n- **لجان إلزامية:** المراجعة، الترشيحات والمكافآت.\n- **لجان شائعة:** المخاطر، التنفيذية، الاستثمار.\n- **وظائف رقابية مستقلة:** المراجعة الداخلية (ترفع للجنة المراجعة)، الالتزام، إدارة المخاطر.\n- **علاقات المستثمرين** وسياسة إفصاح معتمدة.\n\n---\n*نموذج إرشادي من حصيف — يُراجع ويُكيَّف مع نشاط المنشأة وعقد تأسيسها قبل الاعتماد، ولا يغني عن الاستشارة القانونية المتخصصة.*\n"
+  },
+  {
+   "id": "guide-governance-calendar",
+   "kind": "GUIDE",
+   "category": "GOVERNANCE",
+   "title": "التقويم السنوي للحوكمة والامتثال",
+   "summary": "ما يجب إنجازه شهراً بشهر لمنشأة سنتها المالية تنتهي في ديسمبر.",
+   "url": null,
+   "file_name": null,
+   "file_mime": null,
+   "file_size": null,
+   "policy_type": null,
+   "applies_legal_types": [],
+   "related_codes": [
+    "JSC_ANNUAL_ASSEMBLY",
+    "STR_FS_FILED"
+   ],
+   "review_status": "DRAFT",
+   "version": "1.0",
+   "updated_at": "2026-10-01T00:00:00Z",
+   "body_md": "# التقويم السنوي للحوكمة والامتثال\n*(لسنة مالية تنتهي في 31 ديسمبر — عدّل التواريخ حسب سنتك)*\n\n| الربع | المهمة | المسؤول |\n|---|---|---|\n| يناير | إقرارات الاستقلالية وتعارض المصالح السنوية لأعضاء المجلس والإدارة | أمين السر |\n| يناير | مراجعة مصفوفة الصلاحيات بعد اعتماد الميزانية | المدير المالي |\n| فبراير – مارس | إقفال الحسابات وتسليم المراجع الخارجي | المدير المالي |\n| أبريل | تقديم إقرار الزكاة (خلال 120 يوماً من نهاية السنة) | المدير المالي |\n| أبريل – مايو | اعتماد القوائم المالية من المجلس / المديرين | المجلس |\n| قبل نهاية يونيو | انعقاد الجمعية العامة / جمعية الشركاء وإيداع القوائم المالية | أمين السر |\n| يوليو | تقييم أداء المجلس واللجان | لجنة الترشيحات |\n| أغسطس | مراجعة سجل أنشطة معالجة البيانات وسياسة الخصوصية | مسؤول حماية البيانات |\n| سبتمبر | اختبار خطة الاستجابة لتسرب البيانات | مسؤول التقنية |\n| أكتوبر | مراجعة نسب التوطين (نطاقات) وخطة التوظيف | الموارد البشرية |\n| نوفمبر | اعتماد الميزانية والخطة للسنة القادمة | المجلس |\n| ديسمبر | مراجعة السياسات التي يحل موعد مراجعتها، وتجديد التراخيص المستحقة في الربع الأول | الالتزام |\n\n**شهرياً:** ملف حماية الأجور، اشتراكات التأمينات، إقرار ضريبة القيمة المضافة (للمسجلين شهرياً).\n**ربع سنوياً:** اجتماع المجلس، اجتماع لجنة المراجعة، تقرير الالتزام.\n\n---\n*نموذج إرشادي من حصيف — يُراجع ويُكيَّف مع نشاط المنشأة وعقد تأسيسها قبل الاعتماد، ولا يغني عن الاستشارة القانونية المتخصصة.*\n"
+  },
+  {
+   "id": "guide-raci",
+   "kind": "GUIDE",
+   "category": "GOVERNANCE",
+   "title": "مصفوفة المسؤوليات (RACI) لقرارات الحوكمة",
+   "summary": "من يقرر، ومن يُستشار، ومن يُبلَّغ في أهم قرارات الشركة.",
+   "url": null,
+   "file_name": null,
+   "file_mime": null,
+   "file_size": null,
+   "policy_type": null,
+   "applies_legal_types": [
+    "LLC",
+    "SIMPLIFIED_JOINT_STOCK",
+    "CLOSED_JOINT_STOCK",
+    "PUBLIC_JOINT_STOCK"
+   ],
+   "related_codes": [
+    "POL_DOA"
+   ],
+   "review_status": "DRAFT",
+   "version": "1.0",
+   "updated_at": "2026-10-01T00:00:00Z",
+   "body_md": "# مصفوفة المسؤوليات لقرارات الحوكمة\n\n**م** = مسؤول التنفيذ · **ق** = صاحب القرار · **س** = يُستشار · **ب** = يُبلَّغ\n\n| القرار | الجمعية / الشركاء | المجلس / المديرون | الرئيس التنفيذي | لجنة المراجعة | المالي |\n|---|---|---|---|---|---|\n| تعديل عقد التأسيس / النظام الأساس | ق | س | م | ب | ب |\n| تعيين مراجع الحسابات | ق | س | ب | س | م |\n| اعتماد القوائم المالية | ق | س | م | س | م |\n| اعتماد الاستراتيجية والميزانية | ب | ق | م | ب | م |\n| تعيين الرئيس التنفيذي | ب | ق | — | ب | ب |\n| تعاملات الأطراف ذات العلاقة | ق (للجوهرية) | ق | م | س | س |\n| السياسات الداخلية | ب | ق | م | س | س |\n| عقد يتجاوز صلاحية الإدارة | ب | ق | م | ب | س |\n| تعيين مسؤول حماية البيانات | — | ق | م | ب | — |\n\n---\n*نموذج إرشادي من حصيف — يُراجع ويُكيَّف مع نشاط المنشأة وعقد تأسيسها قبل الاعتماد، ولا يغني عن الاستشارة القانونية المتخصصة.*\n"
   },
   {
    "id": "law-companies",
@@ -536,62 +711,196 @@
    "processes_personal_data": true,
    "vat_registered": true,
    "has_bylaws": true,
-   "bylaws_updated_on": null,
+   "bylaws_updated_on": "2024-06-10",
    "auditor_name": null,
    "auditor_appointed_on": null,
    "beneficial_owners_filed_on": "2025-08-28",
-   "last_assembly_on": null,
-   "last_fs_filed_on": "2026-05-05"
+   "last_assembly_on": "2026-05-20",
+   "last_fs_filed_on": "2026-05-28"
   },
   "bodies": [
    {
     "id": "b-0",
     "body_type": "PARTNERS_ASSEMBLY",
     "name": "جمعية الشركاء",
-    "mandate": "تعديل عقد التأسيس، تعيين المديرين وعزلهم، المصادقة على القوائم المالية، توزيع الأرباح.",
+    "mandate": "تعديل عقد التأسيس، تعيين المدير وعزله، المصادقة على القوائم المالية، توزيع الأرباح، اعتماد تعاملات الأطراف ذات العلاقة الجوهرية.",
     "meetings_per_year": 1,
     "sort": 10,
     "from_template": true,
-    "members": []
-   },
-   {
-    "id": "b-1",
-    "body_type": "MANAGER",
-    "name": "المدير / المديرون",
-    "mandate": "إدارة الشركة وتمثيلها أمام الغير وفق عقد التأسيس وحدود الصلاحيات.",
-    "meetings_per_year": null,
-    "sort": 20,
-    "from_template": true,
     "members": [
      {
-      "id": "m-ahmad",
-      "full_name": "أحمد العتيبي",
-      "position": "HEAD",
+      "id": "m-0-0",
+      "full_name": "أحمد العتيبي — 60%",
+      "position": "CHAIR",
       "is_independent": false,
       "is_executive": true,
-      "appointed_on": "2024-11-01",
+      "appointed_on": "2019-03-01",
+      "term_ends_on": null
+     },
+     {
+      "id": "m-0-1",
+      "full_name": "خالد العتيبي — 25%",
+      "position": "MEMBER",
+      "is_independent": false,
+      "is_executive": false,
+      "appointed_on": "2019-03-01",
+      "term_ends_on": null
+     },
+     {
+      "id": "m-0-2",
+      "full_name": "شركة الرواد القابضة — 15% (يمثلها فهد الدوسري)",
+      "position": "MEMBER",
+      "is_independent": false,
+      "is_executive": false,
+      "appointed_on": "2023-01-15",
       "term_ends_on": null
      }
     ]
    },
    {
-    "id": "b-2",
-    "body_type": "EXECUTIVE_MANAGEMENT",
-    "name": "الإدارة التنفيذية",
-    "mandate": "تنفيذ الخطط وإدارة العمليات اليومية ورفع التقارير للمدير.",
+    "id": "b-1",
+    "body_type": "MANAGER",
+    "name": "المدير العام (الشريك المدير)",
+    "mandate": "إدارة الشركة وتمثيلها أمام الغير والجهات الحكومية في حدود عقد التأسيس ومصفوفة الصلاحيات. يرفع تقريراً ربع سنوي للشركاء.",
     "meetings_per_year": null,
+    "sort": 20,
+    "from_template": true,
+    "members": [
+     {
+      "id": "m-1-0",
+      "full_name": "أحمد العتيبي",
+      "position": "HEAD",
+      "is_independent": false,
+      "is_executive": true,
+      "appointed_on": "2024-11-01",
+      "term_ends_on": "2027-10-31"
+     }
+    ]
+   },
+   {
+    "id": "b-2",
+    "body_type": "AUDIT_COMMITTEE",
+    "name": "لجنة المراجعة (استشارية)",
+    "mandate": "متابعة إعداد القوائم المالية والعلاقة مع المحاسب الخارجي، ومراجعة الرقابة على المدفوعات والمشتريات. ممارسة فضلى غير إلزامية للشركة ذات المسؤولية المحدودة.",
+    "meetings_per_year": 4,
     "sort": 30,
     "from_template": true,
-    "members": []
+    "members": [
+     {
+      "id": "m-2-0",
+      "full_name": "د. منى الحربي",
+      "position": "CHAIR",
+      "is_independent": true,
+      "is_executive": false,
+      "appointed_on": "2025-01-01",
+      "term_ends_on": "2027-12-31"
+     },
+     {
+      "id": "m-2-1",
+      "full_name": "خالد العتيبي",
+      "position": "MEMBER",
+      "is_independent": false,
+      "is_executive": false,
+      "appointed_on": "2025-01-01",
+      "term_ends_on": "2027-12-31"
+     },
+     {
+      "id": "m-2-2",
+      "full_name": "فهد الدوسري",
+      "position": "MEMBER",
+      "is_independent": false,
+      "is_executive": false,
+      "appointed_on": "2025-01-01",
+      "term_ends_on": "2027-12-31"
+     }
+    ]
+   },
+   {
+    "id": "b-3",
+    "body_type": "EXECUTIVE_MANAGEMENT",
+    "name": "الإدارة التنفيذية",
+    "mandate": "تنفيذ الخطة السنوية وإدارة المشاريع والموارد، واجتماع أسبوعي لمتابعة التدفق النقدي والتراخيص.",
+    "meetings_per_year": 52,
+    "sort": 40,
+    "from_template": true,
+    "members": [
+     {
+      "id": "m-3-0",
+      "full_name": "أحمد العتيبي — المدير العام",
+      "position": "HEAD",
+      "is_independent": false,
+      "is_executive": true,
+      "appointed_on": "2024-11-01",
+      "term_ends_on": null
+     },
+     {
+      "id": "m-3-1",
+      "full_name": "نورة الشهري — المديرة المالية",
+      "position": "MEMBER",
+      "is_independent": false,
+      "is_executive": true,
+      "appointed_on": "2022-04-01",
+      "term_ends_on": null
+     },
+     {
+      "id": "m-3-2",
+      "full_name": "سلطان القحطاني — مدير المشاريع",
+      "position": "MEMBER",
+      "is_independent": false,
+      "is_executive": true,
+      "appointed_on": "2021-09-01",
+      "term_ends_on": null
+     }
+    ]
+   },
+   {
+    "id": "b-4",
+    "body_type": "COMPLIANCE_FUNCTION",
+    "name": "الالتزام وإدارة المخاطر",
+    "mandate": "متابعة التراخيص والالتزامات النظامية، وتحديث سجل المخاطر ربع سنوياً، ورفع تقرير للجنة المراجعة.",
+    "meetings_per_year": null,
+    "sort": 50,
+    "from_template": true,
+    "members": [
+     {
+      "id": "m-4-0",
+      "full_name": "ريم السبيعي",
+      "position": "HEAD",
+      "is_independent": false,
+      "is_executive": true,
+      "appointed_on": "2025-02-01",
+      "term_ends_on": null
+     }
+    ]
+   },
+   {
+    "id": "b-5",
+    "body_type": "DPO",
+    "name": "مسؤول حماية البيانات الشخصية",
+    "mandate": "الإشراف على سجل أنشطة المعالجة، والرد على طلبات أصحاب البيانات، وقيادة الاستجابة لحوادث التسرب.",
+    "meetings_per_year": null,
+    "sort": 60,
+    "from_template": true,
+    "members": [
+     {
+      "id": "m-5-0",
+      "full_name": "ريم السبيعي",
+      "position": "HEAD",
+      "is_independent": false,
+      "is_executive": true,
+      "appointed_on": "2025-02-01",
+      "term_ends_on": null
+     }
+    ]
    }
   ],
   "latest_check": {
    "id": "run-1",
    "created_at": "2026-10-02T06:00:00Z",
-   "passed": 6,
-   "failed": 8,
+   "passed": 9,
+   "failed": 5,
    "not_applicable": 1,
-   "structure_score": 71.4,
+   "structure_score": 85.7,
    "results": [
     {
      "code": "STR_MANAGEMENT_DEFINED",
@@ -673,8 +982,8 @@
     },
     {
      "code": "LLC_ANNUAL_PARTNERS",
-     "status": "FAIL",
-     "message": "لم يُسجَّل التاريخ في ملف الحوكمة.",
+     "status": "PASS",
+     "message": "آخر مرة قبل 4 شهراً.",
      "level": "RECOMMENDED",
      "severity": "medium",
      "title": "اجتماع سنوي للشركاء أو المساهمين للمصادقة على القوائم المالية",
@@ -738,8 +1047,8 @@
     },
     {
      "code": "PDPL_PRIVACY_POLICY",
-     "status": "FAIL",
-     "message": "لا توجد سياسة معتمدة من هذا النوع.",
+     "status": "PASS",
+     "message": "سياسة معتمدة وسارية.",
      "level": "MANDATORY",
      "severity": "high",
      "title": "سياسة خصوصية معلنة ومعتمدة",
@@ -777,8 +1086,8 @@
     },
     {
      "code": "PDPL_DPO",
-     "status": "FAIL",
-     "message": "لم يُضف هذا الجهاز إلى الهيكل بعد.",
+     "status": "PASS",
+     "message": "موجود في الهيكل.",
      "level": "RECOMMENDED",
      "severity": "medium",
      "title": "تعيين مسؤول لحماية البيانات الشخصية",
@@ -789,8 +1098,1136 @@
      "review_status": "DRAFT"
     }
    ]
+  },
+  "example_title": "شركة عائلية ذات مسؤولية محدودة — 18 موظفاً"
+ },
+ "templates": {
+  "SOLE_PROPRIETORSHIP": [
+   {
+    "id": "b-0",
+    "body_type": "OWNER",
+    "name": "مالك المؤسسة",
+    "mandate": "صاحب الصلاحية النهائية والمسؤول شخصياً عن التزامات المؤسسة.",
+    "meetings_per_year": null,
+    "sort": 10,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-1",
+    "body_type": "MANAGER",
+    "name": "المدير المسؤول",
+    "mandate": "يدير الأعمال اليومية بتفويض من المالك ويُسجَّل في السجل التجاري عند تعيينه.",
+    "meetings_per_year": null,
+    "sort": 20,
+    "from_template": true,
+    "members": []
+   }
+  ],
+  "LLC": [
+   {
+    "id": "b-0",
+    "body_type": "PARTNERS_ASSEMBLY",
+    "name": "جمعية الشركاء",
+    "mandate": "تعديل عقد التأسيس، تعيين المديرين وعزلهم، المصادقة على القوائم المالية، توزيع الأرباح.",
+    "meetings_per_year": 1,
+    "sort": 10,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-1",
+    "body_type": "MANAGER",
+    "name": "المدير / المديرون",
+    "mandate": "إدارة الشركة وتمثيلها أمام الغير وفق عقد التأسيس وحدود الصلاحيات.",
+    "meetings_per_year": null,
+    "sort": 20,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-2",
+    "body_type": "EXECUTIVE_MANAGEMENT",
+    "name": "الإدارة التنفيذية",
+    "mandate": "تنفيذ الخطط وإدارة العمليات اليومية ورفع التقارير للمدير.",
+    "meetings_per_year": null,
+    "sort": 30,
+    "from_template": true,
+    "members": []
+   }
+  ],
+  "SIMPLIFIED_JOINT_STOCK": [
+   {
+    "id": "b-0",
+    "body_type": "GENERAL_ASSEMBLY",
+    "name": "الجمعية العامة للمساهمين",
+    "mandate": "القرارات الجوهرية وفق النظام الأساس (يجوز ألا تُعقد إذا نص النظام الأساس على ذلك).",
+    "meetings_per_year": 1,
+    "sort": 10,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-1",
+    "body_type": "MANAGER",
+    "name": "المدير / مجلس الإدارة",
+    "mandate": "إدارة الشركة وفق ما يحدده النظام الأساس (مدير واحد أو أكثر أو مجلس).",
+    "meetings_per_year": null,
+    "sort": 20,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-2",
+    "body_type": "EXECUTIVE_MANAGEMENT",
+    "name": "الإدارة التنفيذية",
+    "mandate": "إدارة العمليات اليومية.",
+    "meetings_per_year": null,
+    "sort": 30,
+    "from_template": true,
+    "members": []
+   }
+  ],
+  "CLOSED_JOINT_STOCK": [
+   {
+    "id": "b-0",
+    "body_type": "GENERAL_ASSEMBLY",
+    "name": "الجمعية العامة للمساهمين",
+    "mandate": "انتخاب المجلس، تعيين المراجع، المصادقة على القوائم المالية، توزيع الأرباح.",
+    "meetings_per_year": 1,
+    "sort": 10,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-1",
+    "body_type": "BOARD",
+    "name": "مجلس الإدارة",
+    "mandate": "الإشراف على الإدارة ووضع الاستراتيجية واعتماد السياسات والصلاحيات.",
+    "meetings_per_year": 4,
+    "sort": 20,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-2",
+    "body_type": "AUDIT_COMMITTEE",
+    "name": "لجنة المراجعة",
+    "mandate": "مراقبة القوائم المالية والرقابة الداخلية والتوصية بتعيين المراجع الخارجي.",
+    "meetings_per_year": 4,
+    "sort": 30,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-3",
+    "body_type": "COMPANY_SECRETARY",
+    "name": "أمين سر المجلس",
+    "mandate": "تنظيم اجتماعات المجلس وتدوين محاضره ومتابعة قراراته.",
+    "meetings_per_year": null,
+    "sort": 40,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-4",
+    "body_type": "EXECUTIVE_MANAGEMENT",
+    "name": "الإدارة التنفيذية",
+    "mandate": "تنفيذ استراتيجية المجلس وإدارة العمليات اليومية.",
+    "meetings_per_year": null,
+    "sort": 50,
+    "from_template": true,
+    "members": []
+   }
+  ],
+  "PUBLIC_JOINT_STOCK": [
+   {
+    "id": "b-0",
+    "body_type": "GENERAL_ASSEMBLY",
+    "name": "الجمعية العامة للمساهمين",
+    "mandate": "انتخاب المجلس، تعيين المراجع، المصادقة على القوائم المالية، توزيع الأرباح.",
+    "meetings_per_year": 1,
+    "sort": 10,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-1",
+    "body_type": "BOARD",
+    "name": "مجلس الإدارة",
+    "mandate": "الإشراف على الإدارة ووضع الاستراتيجية واعتماد السياسات والصلاحيات.",
+    "meetings_per_year": 4,
+    "sort": 20,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-2",
+    "body_type": "AUDIT_COMMITTEE",
+    "name": "لجنة المراجعة",
+    "mandate": "مراقبة القوائم المالية والرقابة الداخلية والتوصية بتعيين المراجع الخارجي.",
+    "meetings_per_year": 4,
+    "sort": 30,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-3",
+    "body_type": "NOMINATION_REMUNERATION_COMMITTEE",
+    "name": "لجنة الترشيحات والمكافآت",
+    "mandate": "معايير عضوية المجلس، تقييم الأداء، سياسة المكافآت.",
+    "meetings_per_year": 2,
+    "sort": 40,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-4",
+    "body_type": "RISK_COMMITTEE",
+    "name": "لجنة إدارة المخاطر",
+    "mandate": "تحديد المخاطر الجوهرية ومستوى المخاطر المقبول ومتابعتها.",
+    "meetings_per_year": 2,
+    "sort": 50,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-5",
+    "body_type": "COMPANY_SECRETARY",
+    "name": "أمين سر المجلس",
+    "mandate": "تنظيم اجتماعات المجلس وتدوين محاضره ومتابعة قراراته.",
+    "meetings_per_year": null,
+    "sort": 60,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-6",
+    "body_type": "INTERNAL_AUDIT",
+    "name": "المراجعة الداخلية",
+    "mandate": "تقييم الرقابة الداخلية ورفع التقارير للجنة المراجعة.",
+    "meetings_per_year": null,
+    "sort": 70,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-7",
+    "body_type": "COMPLIANCE_FUNCTION",
+    "name": "إدارة الالتزام",
+    "mandate": "متابعة الالتزام بالأنظمة واللوائح وتعليمات هيئة السوق المالية.",
+    "meetings_per_year": null,
+    "sort": 80,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-8",
+    "body_type": "EXECUTIVE_MANAGEMENT",
+    "name": "الإدارة التنفيذية",
+    "mandate": "تنفيذ استراتيجية المجلس وإدارة العمليات اليومية.",
+    "meetings_per_year": null,
+    "sort": 90,
+    "from_template": true,
+    "members": []
+   }
+  ],
+  "BRANCH_OF_FOREIGN": [
+   {
+    "id": "b-0",
+    "body_type": "MANAGER",
+    "name": "مدير الفرع",
+    "mandate": "تمثيل الشركة الأم في المملكة وإدارة الفرع وفق الصلاحيات الممنوحة له.",
+    "meetings_per_year": null,
+    "sort": 10,
+    "from_template": true,
+    "members": []
+   },
+   {
+    "id": "b-1",
+    "body_type": "EXECUTIVE_MANAGEMENT",
+    "name": "الإدارة التنفيذية للفرع",
+    "mandate": "إدارة العمليات اليومية للفرع.",
+    "meetings_per_year": null,
+    "sort": 20,
+    "from_template": true,
+    "members": []
+   }
+  ]
+ },
+ "examples": {
+  "LLC": {
+   "title": "شركة عائلية ذات مسؤولية محدودة — 18 موظفاً",
+   "bodies": [
+    {
+     "id": "b-0",
+     "body_type": "PARTNERS_ASSEMBLY",
+     "name": "جمعية الشركاء",
+     "mandate": "تعديل عقد التأسيس، تعيين المدير وعزله، المصادقة على القوائم المالية، توزيع الأرباح، اعتماد تعاملات الأطراف ذات العلاقة الجوهرية.",
+     "meetings_per_year": 1,
+     "sort": 10,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-0-0",
+       "full_name": "أحمد العتيبي — 60%",
+       "position": "CHAIR",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": "2019-03-01",
+       "term_ends_on": null
+      },
+      {
+       "id": "m-0-1",
+       "full_name": "خالد العتيبي — 25%",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": "2019-03-01",
+       "term_ends_on": null
+      },
+      {
+       "id": "m-0-2",
+       "full_name": "شركة الرواد القابضة — 15% (يمثلها فهد الدوسري)",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": "2023-01-15",
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-1",
+     "body_type": "MANAGER",
+     "name": "المدير العام (الشريك المدير)",
+     "mandate": "إدارة الشركة وتمثيلها أمام الغير والجهات الحكومية في حدود عقد التأسيس ومصفوفة الصلاحيات. يرفع تقريراً ربع سنوي للشركاء.",
+     "meetings_per_year": null,
+     "sort": 20,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-1-0",
+       "full_name": "أحمد العتيبي",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": "2024-11-01",
+       "term_ends_on": "2027-10-31"
+      }
+     ]
+    },
+    {
+     "id": "b-2",
+     "body_type": "AUDIT_COMMITTEE",
+     "name": "لجنة المراجعة (استشارية)",
+     "mandate": "متابعة إعداد القوائم المالية والعلاقة مع المحاسب الخارجي، ومراجعة الرقابة على المدفوعات والمشتريات. ممارسة فضلى غير إلزامية للشركة ذات المسؤولية المحدودة.",
+     "meetings_per_year": 4,
+     "sort": 30,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-2-0",
+       "full_name": "د. منى الحربي",
+       "position": "CHAIR",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": "2025-01-01",
+       "term_ends_on": "2027-12-31"
+      },
+      {
+       "id": "m-2-1",
+       "full_name": "خالد العتيبي",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": "2025-01-01",
+       "term_ends_on": "2027-12-31"
+      },
+      {
+       "id": "m-2-2",
+       "full_name": "فهد الدوسري",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": "2025-01-01",
+       "term_ends_on": "2027-12-31"
+      }
+     ]
+    },
+    {
+     "id": "b-3",
+     "body_type": "EXECUTIVE_MANAGEMENT",
+     "name": "الإدارة التنفيذية",
+     "mandate": "تنفيذ الخطة السنوية وإدارة المشاريع والموارد، واجتماع أسبوعي لمتابعة التدفق النقدي والتراخيص.",
+     "meetings_per_year": 52,
+     "sort": 40,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-3-0",
+       "full_name": "أحمد العتيبي — المدير العام",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": "2024-11-01",
+       "term_ends_on": null
+      },
+      {
+       "id": "m-3-1",
+       "full_name": "نورة الشهري — المديرة المالية",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": "2022-04-01",
+       "term_ends_on": null
+      },
+      {
+       "id": "m-3-2",
+       "full_name": "سلطان القحطاني — مدير المشاريع",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": "2021-09-01",
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-4",
+     "body_type": "COMPLIANCE_FUNCTION",
+     "name": "الالتزام وإدارة المخاطر",
+     "mandate": "متابعة التراخيص والالتزامات النظامية، وتحديث سجل المخاطر ربع سنوياً، ورفع تقرير للجنة المراجعة.",
+     "meetings_per_year": null,
+     "sort": 50,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-4-0",
+       "full_name": "ريم السبيعي",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": "2025-02-01",
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-5",
+     "body_type": "DPO",
+     "name": "مسؤول حماية البيانات الشخصية",
+     "mandate": "الإشراف على سجل أنشطة المعالجة، والرد على طلبات أصحاب البيانات، وقيادة الاستجابة لحوادث التسرب.",
+     "meetings_per_year": null,
+     "sort": 60,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-5-0",
+       "full_name": "ريم السبيعي",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": "2025-02-01",
+       "term_ends_on": null
+      }
+     ]
+    }
+   ]
+  },
+  "SOLE_PROPRIETORSHIP": {
+   "title": "مؤسسة فردية صغيرة بمدير مفوّض",
+   "bodies": [
+    {
+     "id": "b-0",
+     "body_type": "OWNER",
+     "name": "مالك المؤسسة",
+     "mandate": "الصلاحية النهائية والمسؤولية الشخصية عن التزامات المؤسسة.",
+     "meetings_per_year": null,
+     "sort": 10,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-0-0",
+       "full_name": "«اسم المالك»",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-1",
+     "body_type": "MANAGER",
+     "name": "المدير المسؤول (مفوّض)",
+     "mandate": "إدارة العمليات اليومية بتفويض مكتوب يحدد سقف الصرف والتوقيع.",
+     "meetings_per_year": null,
+     "sort": 20,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-1-0",
+       "full_name": "«اسم المدير»",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-2",
+     "body_type": "OTHER_COMMITTEE",
+     "name": "المحاسب الخارجي",
+     "mandate": "إعداد القوائم، إقرار الزكاة، إقرارات ضريبة القيمة المضافة.",
+     "meetings_per_year": 4,
+     "sort": 30,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-2-0",
+       "full_name": "«اسم المكتب»",
+       "position": "HEAD",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    }
+   ]
+  },
+  "SIMPLIFIED_JOINT_STOCK": {
+   "title": "شركة ناشئة ممولة — مجلس من ثلاثة يمثل المؤسسين والمستثمر",
+   "bodies": [
+    {
+     "id": "b-0",
+     "body_type": "GENERAL_ASSEMBLY",
+     "name": "المساهمون (قرارات بالتمرير)",
+     "mandate": "الموافقات الجوهرية المحددة في النظام الأساس واتفاقية المساهمين.",
+     "meetings_per_year": 1,
+     "sort": 10,
+     "from_template": true,
+     "members": []
+    },
+    {
+     "id": "b-1",
+     "body_type": "BOARD",
+     "name": "مجلس الإدارة",
+     "mandate": "اعتماد الميزانية وخطة التمويل وتعيين الرئيس التنفيذي وخيارات الموظفين.",
+     "meetings_per_year": 4,
+     "sort": 20,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-1-0",
+       "full_name": "«المؤسس الأول»",
+       "position": "CHAIR",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-1",
+       "full_name": "«المؤسس الثاني»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-2",
+       "full_name": "«ممثل المستثمر الرئيسي»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-2",
+     "body_type": "EXECUTIVE_MANAGEMENT",
+     "name": "الإدارة التنفيذية",
+     "mandate": "الرئيس التنفيذي، المدير التقني، المدير المالي.",
+     "meetings_per_year": 52,
+     "sort": 30,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-2-0",
+       "full_name": "«الرئيس التنفيذي»",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-3",
+     "body_type": "DPO",
+     "name": "مسؤول حماية البيانات",
+     "mandate": "إلزامي غالباً لمنصات التقنية التي تعالج بيانات المستخدمين على نطاق واسع.",
+     "meetings_per_year": null,
+     "sort": 40,
+     "from_template": true,
+     "members": []
+    }
+   ]
+  },
+  "CLOSED_JOINT_STOCK": {
+   "title": "شركة مساهمة مقفلة عائلية — مجلس من خمسة بعضوين مستقلين",
+   "bodies": [
+    {
+     "id": "b-0",
+     "body_type": "GENERAL_ASSEMBLY",
+     "name": "الجمعية العامة للمساهمين",
+     "mandate": "انتخاب المجلس، تعيين المراجع، المصادقة على القوائم، توزيع الأرباح.",
+     "meetings_per_year": 1,
+     "sort": 10,
+     "from_template": true,
+     "members": []
+    },
+    {
+     "id": "b-1",
+     "body_type": "BOARD",
+     "name": "مجلس الإدارة",
+     "mandate": "الاستراتيجية، الرقابة على الإدارة، اعتماد السياسات والصلاحيات وتعاملات الأطراف ذات العلاقة.",
+     "meetings_per_year": 4,
+     "sort": 20,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-1-0",
+       "full_name": "«كبير العائلة»",
+       "position": "CHAIR",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-1",
+       "full_name": "«ممثل الجيل الثاني»",
+       "position": "VICE_CHAIR",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-2",
+       "full_name": "«الرئيس التنفيذي»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-3",
+       "full_name": "«عضو مستقل — خبرة مالية»",
+       "position": "MEMBER",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-4",
+       "full_name": "«عضو مستقل — خبرة قطاعية»",
+       "position": "MEMBER",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-2",
+     "body_type": "AUDIT_COMMITTEE",
+     "name": "لجنة المراجعة",
+     "mandate": "القوائم المالية، المراجعة الداخلية، استقلال المراجع الخارجي.",
+     "meetings_per_year": 4,
+     "sort": 30,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-2-0",
+       "full_name": "«عضو مستقل — خبرة مالية»",
+       "position": "CHAIR",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-2-1",
+       "full_name": "«ممثل الجيل الثاني»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-2-2",
+       "full_name": "«خبير مالي من خارج المجلس»",
+       "position": "MEMBER",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-3",
+     "body_type": "NOMINATION_REMUNERATION_COMMITTEE",
+     "name": "لجنة الترشيحات والمكافآت",
+     "mandate": "تخطيط التعاقب، تقييم المجلس، سياسة المكافآت.",
+     "meetings_per_year": 2,
+     "sort": 40,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-3-0",
+       "full_name": "«عضو مستقل — خبرة قطاعية»",
+       "position": "CHAIR",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-3-1",
+       "full_name": "«كبير العائلة»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-3-2",
+       "full_name": "«ممثل الجيل الثاني»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-4",
+     "body_type": "COMPANY_SECRETARY",
+     "name": "أمين سر المجلس",
+     "mandate": "الدعوات والمحاضر وسجل القرارات وإقرارات الاستقلالية.",
+     "meetings_per_year": null,
+     "sort": 50,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-4-0",
+       "full_name": "«أمين السر»",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-5",
+     "body_type": "INTERNAL_AUDIT",
+     "name": "المراجعة الداخلية (مُسندة)",
+     "mandate": "خطة مراجعة سنوية مبنية على المخاطر، ترفع للجنة المراجعة.",
+     "meetings_per_year": null,
+     "sort": 60,
+     "from_template": true,
+     "members": []
+    },
+    {
+     "id": "b-6",
+     "body_type": "EXECUTIVE_MANAGEMENT",
+     "name": "الإدارة التنفيذية",
+     "mandate": "تنفيذ الاستراتيجية وإدارة العمليات.",
+     "meetings_per_year": 52,
+     "sort": 70,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-6-0",
+       "full_name": "«الرئيس التنفيذي»",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    }
+   ]
+  },
+  "PUBLIC_JOINT_STOCK": {
+   "title": "شركة مدرجة — مجلس من تسعة بثلاثة مستقلين وأربع لجان",
+   "bodies": [
+    {
+     "id": "b-0",
+     "body_type": "GENERAL_ASSEMBLY",
+     "name": "الجمعية العامة للمساهمين",
+     "mandate": "وفق نظام الشركات ولائحة حوكمة الشركات.",
+     "meetings_per_year": 1,
+     "sort": 10,
+     "from_template": true,
+     "members": []
+    },
+    {
+     "id": "b-1",
+     "body_type": "BOARD",
+     "name": "مجلس الإدارة",
+     "mandate": "الاستراتيجية والرقابة والإفصاح.",
+     "meetings_per_year": 6,
+     "sort": 20,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-1-0",
+       "full_name": "«رئيس المجلس — غير تنفيذي»",
+       "position": "CHAIR",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-1",
+       "full_name": "«نائب الرئيس»",
+       "position": "VICE_CHAIR",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-2",
+       "full_name": "«الرئيس التنفيذي»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-3",
+       "full_name": "«عضو غير تنفيذي 1»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-4",
+       "full_name": "«عضو غير تنفيذي 2»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-5",
+       "full_name": "«عضو غير تنفيذي 3»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-6",
+       "full_name": "«عضو مستقل 1»",
+       "position": "MEMBER",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-7",
+       "full_name": "«عضو مستقل 2»",
+       "position": "MEMBER",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-1-8",
+       "full_name": "«عضو مستقل 3»",
+       "position": "MEMBER",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-2",
+     "body_type": "AUDIT_COMMITTEE",
+     "name": "لجنة المراجعة",
+     "mandate": "القوائم، الرقابة الداخلية، المراجع الخارجي، الالتزام.",
+     "meetings_per_year": 6,
+     "sort": 30,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-2-0",
+       "full_name": "«عضو مستقل 1»",
+       "position": "CHAIR",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-2-1",
+       "full_name": "«عضو غير تنفيذي 1»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-2-2",
+       "full_name": "«خبير مالي من خارج المجلس»",
+       "position": "MEMBER",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-3",
+     "body_type": "NOMINATION_REMUNERATION_COMMITTEE",
+     "name": "لجنة الترشيحات والمكافآت",
+     "mandate": "عضوية المجلس، التقييم، المكافآت.",
+     "meetings_per_year": 2,
+     "sort": 40,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-3-0",
+       "full_name": "«عضو مستقل 2»",
+       "position": "CHAIR",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-3-1",
+       "full_name": "«عضو غير تنفيذي 2»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-3-2",
+       "full_name": "«عضو مستقل 3»",
+       "position": "MEMBER",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-4",
+     "body_type": "RISK_COMMITTEE",
+     "name": "لجنة المخاطر",
+     "mandate": "مستوى المخاطر المقبول، سجل المخاطر، استمرارية الأعمال.",
+     "meetings_per_year": 4,
+     "sort": 50,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-4-0",
+       "full_name": "«عضو مستقل 3»",
+       "position": "CHAIR",
+       "is_independent": true,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-4-1",
+       "full_name": "«الرئيس التنفيذي»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      },
+      {
+       "id": "m-4-2",
+       "full_name": "«عضو غير تنفيذي 3»",
+       "position": "MEMBER",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-5",
+     "body_type": "COMPANY_SECRETARY",
+     "name": "أمين سر المجلس",
+     "mandate": null,
+     "meetings_per_year": null,
+     "sort": 60,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-5-0",
+       "full_name": "«أمين السر»",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-6",
+     "body_type": "INTERNAL_AUDIT",
+     "name": "إدارة المراجعة الداخلية",
+     "mandate": "ترفع وظيفياً للجنة المراجعة وإدارياً للرئيس التنفيذي.",
+     "meetings_per_year": null,
+     "sort": 70,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-6-0",
+       "full_name": "«رئيس المراجعة الداخلية»",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-7",
+     "body_type": "COMPLIANCE_FUNCTION",
+     "name": "إدارة الالتزام",
+     "mandate": "الالتزام بالأنظمة وتعليمات هيئة السوق المالية والإفصاح.",
+     "meetings_per_year": null,
+     "sort": 80,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-7-0",
+       "full_name": "«مدير الالتزام»",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": false,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-8",
+     "body_type": "EXECUTIVE_MANAGEMENT",
+     "name": "الإدارة التنفيذية",
+     "mandate": null,
+     "meetings_per_year": 52,
+     "sort": 90,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-8-0",
+       "full_name": "«الرئيس التنفيذي»",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    }
+   ]
+  },
+  "BRANCH_OF_FOREIGN": {
+   "title": "فرع شركة أجنبية بمدير مقيم ومسؤول التزام",
+   "bodies": [
+    {
+     "id": "b-0",
+     "body_type": "MANAGER",
+     "name": "مدير الفرع",
+     "mandate": "تمثيل الشركة الأم بموجب وكالة موثقة، وإدارة الفرع في حدودها.",
+     "meetings_per_year": null,
+     "sort": 10,
+     "from_template": true,
+     "members": [
+      {
+       "id": "m-0-0",
+       "full_name": "«مدير الفرع»",
+       "position": "HEAD",
+       "is_independent": false,
+       "is_executive": true,
+       "appointed_on": null,
+       "term_ends_on": null
+      }
+     ]
+    },
+    {
+     "id": "b-1",
+     "body_type": "COMPLIANCE_FUNCTION",
+     "name": "مسؤول الالتزام المحلي",
+     "mandate": "التراخيص، الزكاة والضريبة، التوطين، إيداع القوائم.",
+     "meetings_per_year": null,
+     "sort": 20,
+     "from_template": true,
+     "members": []
+    },
+    {
+     "id": "b-2",
+     "body_type": "EXECUTIVE_MANAGEMENT",
+     "name": "الإدارة التنفيذية للفرع",
+     "mandate": null,
+     "meetings_per_year": 52,
+     "sort": 30,
+     "from_template": true,
+     "members": []
+    }
+   ]
   }
  },
+ "check_today": "2026-10-02",
  "obligations": [
   {
    "code": "CR_ANNUAL_CONFIRMATION",

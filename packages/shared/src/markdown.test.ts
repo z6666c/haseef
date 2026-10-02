@@ -25,3 +25,9 @@ test("headings, lists, tables", () => {
 test("slots highlighted", () => {
   assert.ok(renderMarkdown("«اسم المنشأة»").includes('class="md-slot"'));
 });
+
+test("blockquote and checkboxes", () => {
+  const out = renderMarkdown("> ملاحظة\n\n- [ ] بند");
+  assert.ok(out.includes("<blockquote>ملاحظة</blockquote>"));
+  assert.ok(out.includes("<li>☐ بند</li>"));
+});

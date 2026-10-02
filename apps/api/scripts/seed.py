@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from haseef.db import platform_tx
 from haseef.security import hash_password
+from haseef.content.examples import BODIES as EX_BODIES, PROFILE as EX_PROFILE
 from haseef.services import governance_service as gs
 from haseef.services.catalog_service import sync_catalog
 from haseef.services.score_service import recompute  # noqa: F401
@@ -96,15 +97,22 @@ def run() -> None:
         for org in (nukhba, waha):
             conn.execute(text("DELETE FROM org_bodies WHERE org_id = :o"), {"o": org})
             conn.execute(text("DELETE FROM org_obligations WHERE org_id = :o"), {"o": org})
-            gs.apply_template(conn, org)
-        conn.execute(text("""UPDATE org_governance_profiles SET employees_count = 18, vat_registered = true, has_bylaws = true,
-                                 last_fs_filed_on = :fs, beneficial_owners_filed_on = :ubo WHERE org_id = :o"""),
-                     {"o": nukhba, "fs": TODAY - timedelta(days=150), "ubo": TODAY - timedelta(days=400)})
+        # النخبة: مثال هيكلة متكامل (content/examples.py)؛ واحة: القالب الأساسي فقط
+        gs.get_profile(conn, nukhba)
+        sets = ", ".join(f"{k} = :{k}" for k in EX_PROFILE)
+        conn.execute(text(f"UPDATE org_governance_profiles SET {sets}, template_applied_at = now() WHERE org_id = :o"),
+                     {**EX_PROFILE, "o": nukhba})
+        for i, (bt, name, mandate, meetings, members) in enumerate(EX_BODIES):
+            bid = conn.execute(text("""INSERT INTO org_bodies (org_id, body_type, name, mandate, meetings_per_year, sort, from_template)
+                                       VALUES (:o, :t, :n, :m, :mp, :s, true) RETURNING id"""),
+                               {"o": nukhba, "t": bt, "n": name, "m": mandate, "mp": meetings, "s": (i + 1) * 10}).scalar_one()
+            for full_name, pos, ind, exe, appointed, term in members:
+                conn.execute(text("""INSERT INTO org_body_members (org_id, body_id, full_name, position, is_independent,
+                                                                   is_executive, appointed_on, term_ends_on)
+                                     VALUES (:o, :b, :n, :p, :i, :e, :a, :t)"""),
+                             {"o": nukhba, "b": bid, "n": full_name, "p": pos, "i": ind, "e": exe, "a": appointed, "t": term})
+        gs.apply_template(conn, waha)
         conn.execute(text("UPDATE org_governance_profiles SET employees_count = 6, vat_registered = false WHERE org_id = :o"), {"o": waha})
-        manager = conn.execute(text("SELECT id FROM org_bodies WHERE org_id = :o AND body_type = 'MANAGER'"), {"o": nukhba}).scalar_one()
-        conn.execute(text("""INSERT INTO org_body_members (org_id, body_id, full_name, position, is_executive, appointed_on)
-                             VALUES (:o, :b, 'أحمد العتيبي', 'HEAD', true, :d)"""),
-                     {"o": nukhba, "b": manager, "d": TODAY - timedelta(days=700)})
         for org in (nukhba, waha):
             gs.sync_obligations(conn, org)
 

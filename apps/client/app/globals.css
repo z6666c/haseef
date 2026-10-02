@@ -320,3 +320,7 @@ fieldset.checks { display: flex; gap: 18px; flex-wrap: wrap; }
   .obl-status { justify-items: start; }
   .members thead { display: none; }
 }
+
+.example-box { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 16px;
+  border-radius: var(--r-md); background: var(--emerald-wash); border: 1px solid rgb(16 185 129 / 0.25); }
+.example-box p { margin: 4px 0 0; }

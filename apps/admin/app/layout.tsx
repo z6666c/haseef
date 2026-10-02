@@ -17,7 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         {process.env.NEXT_PUBLIC_DEMO === "1" && (
-          <div className="demo-ribbon" role="note">نسخة عرض تجريبية — البيانات وهمية، والتغييرات لا تُحفظ ولا تُرسل أي تنبيهات.</div>
+          <div className="demo-ribbon" role="note">نسخة عرض تجريبية — البيانات وهمية. جرّب التعديل بحرية: التغييرات تبقى حتى تحديث الصفحة، ولا تُرسل أي تنبيهات.</div>
         )}
         {children}
       </body>

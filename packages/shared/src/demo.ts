@@ -4,6 +4,7 @@
 
 import type { ComplianceItem, Dashboard, Me, ScoreReason } from "./types.ts";
 import CONTENT from "./demo-content.json" with { type: "json" };
+import { runCheck, type CkStandard } from "./governanceCheck.ts";
 
 
 /** بيانات الدخول لنسخة العرض فقط. ليست حسابات حقيقية ولا تفتح أي نظام فعلي. */
@@ -214,12 +215,112 @@ type DemoPolicy = { id: string; source: string | null; policy_type: string; titl
 const policies: DemoPolicy[] = [
   { id: uid(), source: null, policy_type: "CONFLICT_OF_INTEREST", title: "سياسة تعارض المصالح", version: "1.0",
     approval_date: inDays(-200), review_due_date: inDays(165), status: "ACTIVE", body_md: null },
+  { id: uid(), source: null, policy_type: "PRIVACY_POLICY", title: "سياسة الخصوصية", version: "1.1",
+    approval_date: inDays(-120), review_due_date: inDays(245), status: "ACTIVE", body_md: null },
 ];
 function policyView(x: DemoPolicy) {
   const d = daysLeft(x.review_due_date);
   const eff = x.status !== "ACTIVE" ? x.status : d < 0 ? "OVERDUE_REVIEW" : d <= 30 ? "NEEDS_REVIEW" : "ACTIVE";
   return { id: x.id, policy_type: x.policy_type, title: x.title, version: x.version, approval_date: x.approval_date,
            review_due_date: x.review_due_date, status: x.status, effective_status: eff, days_remaining: d };
+}
+
+// ---------- الحوكمة والمحتوى المرجعي (حالة قابلة للتعديل داخل الصفحة) ----------
+type DemoMember = { id: string; full_name: string; position: string; is_independent: boolean; is_executive: boolean;
+  appointed_on: string | null; term_ends_on: string | null };
+type DemoBody = { id: string; body_type: string; name: string; mandate: string | null; meetings_per_year: number | null;
+  sort: number; from_template: boolean; members: DemoMember[] };
+type LibDoc = { id: string; slug: string | null; kind: "TEMPLATE" | "LAW" | "GUIDE" | "FILE"; category: string; title: string;
+  summary: string | null; url: string | null; body_md: string | null; policy_type: string | null; file_name: string | null;
+  file_mime: string | null; file_size: number | null; file_b64?: string | null; applies_legal_types: string[]; related_codes: string[];
+  review_status: string; version: string; is_visible: boolean; min_plan: string | null; created_at: string; updated_at: string;
+  created_by_name?: string | null };
+const MEMBER_KEYS = ["full_name", "position", "is_independent", "is_executive", "appointed_on", "term_ends_on"];
+const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+const pick = (o: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter((k) => k in o).map((k) => [k, o[k]]));
+
+const standards = clone(CONTENT.admin_standards) as (CkStandard & { is_visible: boolean; review_status: string; description: string;
+  legal_reference: string | null; source_url: string | null; updated_at: string })[];
+const obligationCatalog = clone(CONTENT.admin_obligations) as { code: string; is_visible: boolean; review_status: string; [k: string]: unknown }[];
+const library: LibDoc[] = (clone(CONTENT.library) as Omit<LibDoc, "slug" | "is_visible" | "min_plan" | "created_at">[]).map((d) => ({
+  ...d, slug: d.id, is_visible: true, min_plan: null, created_at: d.updated_at,
+}));
+library.push({ id: "file-sample", slug: null, kind: "FILE", category: "GOVERNANCE", title: "قائمة تحقق: الاستعداد للجمعية العامة السنوية",
+  summary: "ملف مرفوع من فريق حصيف (مثال على رفع الملفات): 15 بنداً قبل الجمعية وبعدها.", url: null, body_md: null, policy_type: null,
+  file_name: "قائمة-الاستعداد-للجمعية.txt", file_mime: "text/plain", file_size: 0, applies_legal_types: [], related_codes: [],
+  review_status: "APPROVED", version: "1.0", is_visible: true, min_plan: null, created_at: ts(-5), updated_at: ts(-5), created_by_name: "الدعم الفني",
+  file_b64: null });
+const SAMPLE_FILE = `قائمة الاستعداد للجمعية العامة السنوية — حصيف
+
+قبل 30 يوماً
+[ ] اعتماد المجلس للقوائم المالية المراجعة
+[ ] تحديد جدول الأعمال واعتماده من المجلس
+[ ] تجهيز تقرير المجلس السنوي وتقرير لجنة المراجعة
+[ ] ترشيح مراجع الحسابات وأتعابه (توصية لجنة المراجعة)
+
+قبل 21 يوماً
+[ ] نشر الدعوة وفق النظام الأساس ووسائل الإعلان المعتمدة
+[ ] إتاحة المستندات للمساهمين / الشركاء
+[ ] تجهيز التصويت الإلكتروني إن وُجد
+
+يوم الجمعية
+[ ] التحقق من النصاب وتسجيله
+[ ] الإفصاح عن تعاملات الأطراف ذات العلاقة
+[ ] التصويت على كل بند منفصلاً وتسجيل النتائج
+
+خلال 15 يوماً بعدها
+[ ] توقيع المحضر من الرئيس وأمين السر وجامع الأصوات
+[ ] إيداع القوائم المالية والمحضر لدى الجهات المختصة
+[ ] تحديث بيانات المراجع والمجلس في السجلات الرسمية
+[ ] صرف الأرباح المعتمدة في موعدها
+[ ] أرشفة المستندات في حصيف
+`;
+const sampleB64 = typeof btoa === "function" ? btoa(unescape(encodeURIComponent(SAMPLE_FILE))) : "";
+library[library.length - 1].file_b64 = sampleB64;
+library[library.length - 1].file_size = SAMPLE_FILE.length * 2;
+
+function fileOf(id: string) {
+  const d = library.find((x) => x.id === id);
+  if (!d?.file_b64) throw new DemoError(404, "الملف غير موجود");
+  return { __file: d.file_b64, mime: d.file_mime ?? "application/octet-stream" };
+}
+
+const gov = clone(CONTENT.structure) as { legal_type: string; size: string | null; profile: Record<string, unknown>;
+  bodies: DemoBody[]; latest_check: unknown; example_title: string | null };
+const oblState = new Map<string, { status: string; note: string | null; source: string }>(
+  CONTENT.obligations.map((o) => [o.code, { status: o.status, note: o.note, source: o.source }]));
+
+function activePolicyTypes(): Set<string> {
+  return new Set(policies.filter((x) => x.status === "ACTIVE").map((x) => x.policy_type));
+}
+
+function recheck(): void {
+  const visible = standards.filter((x) => x.is_visible);
+  const { results, score } = runCheck(visible, {
+    legal_type: gov.legal_type, size: gov.size, profile: gov.profile, bodies: gov.bodies,
+    active_policy_types: activePolicyTypes(), ropa_count: 0, doa_count: 0, today: inDays(0),
+  });
+  const by = new Map(visible.map((x) => [x.code, x]));
+  gov.latest_check = {
+    id: uid(), created_at: new Date().toISOString(),
+    passed: results.filter((r) => r.status === "PASS").length, failed: results.filter((r) => r.status === "FAIL").length,
+    not_applicable: results.filter((r) => r.status === "NA").length, structure_score: score,
+    results: results.map((r) => ({ ...r, description: by.get(r.code)!.description, legal_reference: by.get(r.code)!.legal_reference,
+                                   source_url: by.get(r.code)!.source_url, review_status: by.get(r.code)!.review_status })),
+  };
+}
+
+function obligationsView() {
+  const visible = new Map(obligationCatalog.map((o) => [o.code, o]));
+  const active = activePolicyTypes();
+  return CONTENT.obligations.filter((o) => visible.get(o.code)?.is_visible).map((o) => {
+    const st = oblState.get(o.code)!;
+    let eff = st.status;
+    let tracked: unknown = st.status === "PENDING" ? o.tracked : null;
+    if (st.status === "PENDING" && o.tracked) eff = o.effective_status;
+    if (st.status === "PENDING" && !o.tracked && o.policy_type && active.has(o.policy_type)) { eff = "IN_PLACE"; tracked = { type: "POLICY" }; }
+    return { ...o, ...st, review_status: visible.get(o.code)!.review_status, tracked, effective_status: eff };
+  });
 }
 
 // ---------- الموجّه ----------
@@ -330,18 +431,45 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       if (body.role) t.platform_role = String(body.role); else team.splice(team.indexOf(t), 1);
       return { role: body.role ?? null };
     }
-    if (p === "/admin/catalog/standards") return CONTENT.admin_standards;
-    if (p === "/admin/catalog/obligations") return CONTENT.admin_obligations;
-    if (p === "/admin/library" && method === "GET") return CONTENT.library.map((d) => ({ ...d, slug: d.id, is_visible: true, min_plan: null,
-      created_at: d.updated_at, created_by_name: "حصيف", updated_by_name: null, adoptions: d.kind === "TEMPLATE" ? 1 : 0 }));
-    if ((m = p.match(/^\/admin\/library\/([^/]+)$/)) && method === "GET") return CONTENT.library.find((d) => d.id === m![1]);
-    if (p.startsWith("/admin/catalog/") || p.startsWith("/admin/library")) {
-      throw new DemoError(403, "تعديل المحتوى المرجعي غير متاح في نسخة العرض");
+    if (p === "/admin/catalog/standards") return standards;
+    if (p === "/admin/catalog/obligations") return obligationCatalog.map((o) => ({ ...o, orgs: oblState.has(o.code) ? 1 : 0 }));
+    if ((m = p.match(/^\/admin\/catalog\/(standards|obligations)\/([^/]+)$/)) && method === "PATCH") {
+      const coll: { code: string }[] = m[1] === "standards" ? standards : obligationCatalog;
+      const row = coll.find((x) => x.code === m![2]); if (!row) throw new DemoError(404, "العنصر غير موجود");
+      Object.assign(row, pick(body, ["is_visible", "review_status", "title", "description", "legal_reference", "source_url"]), { updated_at: new Date().toISOString() });
+      log(m[1] === "standards" ? "ADMIN_CATALOG_STANDARD" : "ADMIN_CATALOG_OBLIGATION", null, { key: m[2], ...body });
+      if (m[1] === "standards") recheck();
+      return { updated: true };
+    }
+    if (p === "/admin/catalog/obligations" && method === "POST") throw new DemoError(403, "إضافة التزام جديد متاحة في النسخة الفعلية");
+    if (p === "/admin/library" && method === "GET") return library.map((d) => ({ ...d, created_by_name: d.created_by_name ?? "فريق حصيف",
+      updated_by_name: null, adoptions: policies.filter((x) => x.source === d.id).length }));
+    if (p === "/admin/library" && method === "POST") {
+      const id = uid();
+      const kind = String(body.kind) as LibDoc["kind"];
+      library.unshift({ id, slug: null, kind, category: String(body.category), title: String(body.title), summary: (body.summary as string) ?? null,
+        url: (body.url as string) ?? null, body_md: (body.body_md as string) ?? null, policy_type: null,
+        file_name: kind === "FILE" ? String(body.file_name) : null, file_mime: kind === "FILE" ? String(body.file_mime || "application/octet-stream") : null,
+        file_size: kind === "FILE" ? Math.round(String(body.file_base64 ?? "").length * 0.75) : null, file_b64: (body.file_base64 as string) ?? null,
+        applies_legal_types: (body.applies_legal_types as string[]) ?? [], related_codes: [], review_status: "DRAFT", version: "1.0",
+        is_visible: true, min_plan: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), created_by_name: "فريق عمليات حصيف" });
+      log("ADMIN_LIBRARY_ADD", null, { title: body.title, kind });
+      return { id };
+    }
+    if ((m = p.match(/^\/admin\/library\/([^/]+)\/file$/))) return fileOf(m[1]);
+    if ((m = p.match(/^\/admin\/library\/([^/]+)$/))) {
+      const k = library.findIndex((d) => d.id === m![1]); if (k < 0) throw new DemoError(404, "المستند غير موجود");
+      if (method === "GET") return library[k];
+      if (method === "DELETE") { log("ADMIN_LIBRARY_DELETE", null, { title: library[k].title }); library.splice(k, 1); return undefined; }
+      Object.assign(library[k], pick(body, ["is_visible", "review_status", "title", "summary", "body_md", "url", "category"]), { updated_at: new Date().toISOString() });
+      log("ADMIN_LIBRARY_EDIT", null, { title: library[k].title, ...pick(body, ["is_visible", "review_status"]) });
+      return { updated: true };
     }
     if ((m = p.match(/^\/admin\/organizations\/([^/]+)\/governance$/))) {
-      return { bodies: CONTENT.structure.bodies, latest_check: CONTENT.structure.latest_check,
-               obligations: { total: CONTENT.obligations.length, in_place: CONTENT.obligations.filter((o) => o.effective_status === "IN_PLACE").length,
-                              pending: CONTENT.obligations.filter((o) => o.effective_status !== "IN_PLACE").length } };
+      const obl = obligationsView();
+      return { bodies: gov.bodies, latest_check: gov.latest_check,
+               obligations: { total: obl.length, in_place: obl.filter((o) => o.effective_status === "IN_PLACE").length,
+                              pending: obl.filter((o) => o.effective_status === "PENDING" || o.effective_status === "AT_RISK").length } };
     }
     if (p === "/admin/audit") { const id = q.get("org_id"); return id ? audit.filter((a) => a.org_id === id) : audit; }
     if (p === "/admin/dispatches") return dispatches();
@@ -351,15 +479,59 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
   }
 
   // واجهة العميل — الحوكمة والالتزامات والمكتبة (بيانات ثابتة من demo-content.json)
-  if (p.startsWith("/governance")) {
-    if (method === "GET" || p === "/governance/check") return p === "/governance/check" ? CONTENT.structure.latest_check : CONTENT.structure;
-    throw new DemoError(403, "تعديل الهيكل غير متاح في نسخة العرض — في النسخة الفعلية يُحفظ ويُعاد الفحص فوراً");
+  if (p === "/governance/structure" && method === "GET") return gov;
+  if (p === "/governance/check") { if (method === "POST") recheck(); return gov.latest_check; }
+  if (p === "/governance/structure/apply-template") {
+    const have = new Set(gov.bodies.map((b) => b.body_type));
+    const add = (CONTENT.templates[gov.legal_type as keyof typeof CONTENT.templates] ?? []).filter((b) => !have.has(b.body_type));
+    gov.bodies.push(...add.map((b) => ({ ...clone(b), id: uid(), sort: 900 + b.sort })));
+    recheck(); return { bodies_added: add.length };
   }
-  if (p === "/obligations") return CONTENT.obligations;
-  if (p.startsWith("/obligations/")) throw new DemoError(403, "تغيير الحالة غير متاح في نسخة العرض");
-  if (p === "/library") return CONTENT.library.map((d) => ({ ...d, adopted: policies.some((x) => x.source === d.id) }));
+  if (p === "/governance/structure/apply-example") {
+    const ex = CONTENT.examples[gov.legal_type as keyof typeof CONTENT.examples];
+    gov.bodies = clone(ex.bodies).map((b) => ({ ...b, id: uid(), members: b.members.map((x) => ({ ...x, id: uid() })) }));
+    recheck(); return { bodies: gov.bodies.length };
+  }
+  if (p === "/governance/profile") { Object.assign(gov.profile, body); recheck(); return gov.profile; }
+  if (p === "/governance/bodies" && method === "POST") {
+    const id = uid();
+    gov.bodies.push({ id, body_type: String(body.body_type), name: String(body.name), mandate: (body.mandate as string) ?? null,
+                      meetings_per_year: (body.meetings_per_year as number) ?? null, sort: 1000, from_template: false, members: [] });
+    recheck(); return { id };
+  }
+  if ((m = p.match(/^\/governance\/bodies\/([^/]+)\/members$/))) {
+    const b = gov.bodies.find((x) => x.id === m![1]); if (!b) throw new DemoError(404, "الجهاز غير موجود");
+    if (body.is_independent && body.is_executive) throw new DemoError(422, "لا يكون العضو مستقلاً وتنفيذياً في الوقت نفسه");
+    const id = uid(); b.members.push({ id, ...(pick(body, MEMBER_KEYS) as Omit<DemoMember, "id">) }); recheck(); return { id };
+  }
+  if ((m = p.match(/^\/governance\/bodies\/([^/]+)$/))) {
+    const k = gov.bodies.findIndex((x) => x.id === m![1]); if (k < 0) throw new DemoError(404, "الجهاز غير موجود");
+    if (method === "DELETE") gov.bodies.splice(k, 1);
+    else Object.assign(gov.bodies[k], pick(body, ["body_type", "name", "mandate", "meetings_per_year"]));
+    recheck(); return method === "DELETE" ? undefined : { updated: true };
+  }
+  if ((m = p.match(/^\/governance\/members\/([^/]+)$/))) {
+    for (const b of gov.bodies) {
+      const k = b.members.findIndex((x) => x.id === m![1]);
+      if (k < 0) continue;
+      if (method === "DELETE") b.members.splice(k, 1);
+      else {
+        if (body.is_independent && body.is_executive) throw new DemoError(422, "لا يكون العضو مستقلاً وتنفيذياً في الوقت نفسه");
+        Object.assign(b.members[k], pick(body, MEMBER_KEYS));
+      }
+      recheck(); return method === "DELETE" ? undefined : { updated: true };
+    }
+    throw new DemoError(404, "العضو غير موجود");
+  }
+  if (p === "/obligations") return obligationsView();
+  if ((m = p.match(/^\/obligations\/([^/]+)$/))) {
+    const o = oblState.get(m[1]); if (!o) throw new DemoError(404, "الالتزام غير موجود");
+    Object.assign(o, { status: body.status, note: body.note ?? null, source: "MANUAL" }); return { updated: true };
+  }
+  if (p === "/library") return library.filter((d) => d.is_visible).map((d) => ({ ...d, adopted: policies.some((x) => x.source === d.id) }));
+  if ((m = p.match(/^\/library\/([^/]+)\/file$/))) return fileOf(m[1]);
   if ((m = p.match(/^\/library\/([^/]+)\/adopt$/))) {
-    const d = CONTENT.library.find((x) => x.id === m![1]);
+    const d = library.find((x) => x.id === m![1] && x.is_visible);
     if (!d || !d.policy_type) throw new DemoError(404, "النموذج غير متاح للتبني");
     const id = uid();
     policies.push({ id, source: d.id, policy_type: d.policy_type, title: d.title.replace(/^نموذج /, ""), version: "1.0",
@@ -368,12 +540,12 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     return { policy_id: id };
   }
   if ((m = p.match(/^\/library\/([^/]+)$/))) {
-    const d = CONTENT.library.find((x) => x.id === m![1]); if (!d) throw new DemoError(404, "المستند غير موجود"); return d;
+    const d = library.find((x) => x.id === m![1] && x.is_visible); if (!d) throw new DemoError(404, "المستند غير موجود"); return d;
   }
   if (p === "/policies" && method === "GET") return policies.map(policyView);
   if ((m = p.match(/^\/policies\/([^/]+)\/approve$/))) {
     const x = policies.find((y) => y.id === m![1]); if (!x) throw new DemoError(404, "السياسة غير موجودة");
-    Object.assign(x, { status: "ACTIVE", approval_date: inDays(0), review_due_date: inDays(365) }); return { status: "ACTIVE" };
+    Object.assign(x, { status: "ACTIVE", approval_date: inDays(0), review_due_date: inDays(365) }); recheck(); return { status: "ACTIVE" };
   }
   if ((m = p.match(/^\/policies\/([^/]+)$/))) {
     const x = policies.find((y) => y.id === m![1]); if (!x) throw new DemoError(404, "السياسة غير موجودة");
@@ -412,6 +584,11 @@ export async function demoFetch(url: string, init: RequestInit = {}): Promise<Re
   try { body = init.body ? JSON.parse(String(init.body)) : {}; } catch { /* ليس JSON */ }
   try {
     const out = route(method, path, body, token);
+    if (out && typeof out === "object" && "__file" in out) {
+      const o = out as { __file: string; mime: string };
+      const bin = Uint8Array.from(atob(o.__file), (ch) => ch.charCodeAt(0));
+      return new Response(bin, { status: 200, headers: { "Content-Type": o.mime } });
+    }
     return out === undefined ? new Response(null, { status: 204 }) : new Response(JSON.stringify(out), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e) {
     const status = e instanceof DemoError ? e.status : 500;

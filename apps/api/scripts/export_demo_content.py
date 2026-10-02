@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from haseef.content.library import GUIDES, LAWS, TEMPLATES  # noqa: E402
 from haseef.content.obligations import OBLIGATIONS, applies_to  # noqa: E402
+from haseef.content.examples import EXAMPLES, PROFILE as EX_PROFILE  # noqa: E402
 from haseef.content.standards import STANDARDS, STRUCTURE_TEMPLATES  # noqa: E402
 from haseef.domain.governance_check import Body, Member, OrgContext, run_check  # noqa: E402
 
@@ -30,23 +31,26 @@ for kind, docs in (("TEMPLATE", TEMPLATES), ("GUIDE", GUIDES), ("LAW", LAWS)):
                         "related_codes": d.get("related", []), "review_status": "DRAFT", "version": "1.0",
                         "updated_at": "2026-10-01T00:00:00Z", "body_md": d.get("body")})
 
-bodies = []
-for i, (bt, name, mandate, meetings) in enumerate(STRUCTURE_TEMPLATES[LEGAL]):
-    members = [{"id": "m-ahmad", "full_name": "أحمد العتيبي", "position": "HEAD", "is_independent": False, "is_executive": True,
-                "appointed_on": "2024-11-01", "term_ends_on": None}] if bt == "MANAGER" else []
-    bodies.append({"id": f"b-{i}", "body_type": bt, "name": name, "mandate": mandate, "meetings_per_year": meetings,
-                   "sort": (i + 1) * 10, "from_template": True, "members": members})
+def _bodies(spec):
+    out = []
+    for i, (bt, name, mandate, meetings, members) in enumerate(spec):
+        out.append({"id": f"b-{i}", "body_type": bt, "name": name, "mandate": mandate or None, "meetings_per_year": meetings,
+                    "sort": (i + 1) * 10, "from_template": True,
+                    "members": [{"id": f"m-{i}-{j}", "full_name": n, "position": p, "is_independent": ind, "is_executive": ex,
+                                 "appointed_on": a.isoformat() if a else None, "term_ends_on": t.isoformat() if t else None}
+                                for j, (n, p, ind, ex, a, t) in enumerate(members)]})
+    return out
 
-profile = {"employees_count": 18, "fiscal_year_end_month": 12, "processes_personal_data": True, "vat_registered": True,
-           "has_bylaws": True, "bylaws_updated_on": None, "auditor_name": None, "auditor_appointed_on": None,
-           "beneficial_owners_filed_on": "2025-08-28", "last_assembly_on": None, "last_fs_filed_on": "2026-05-05"}
+
+bodies = _bodies(EXAMPLES[LEGAL]["bodies"])
+profile = {k: (v.isoformat() if isinstance(v, date) else v) for k, v in EX_PROFILE.items()}
 
 stds = [{**s, "applies_legal_types": s["applies"]} for s in STANDARDS]
-ctx = OrgContext(legal_type=LEGAL, size="SMALL", profile={**profile, "beneficial_owners_filed_on": date(2025, 8, 28),
-                 "last_fs_filed_on": date(2026, 5, 5)},
-                 bodies=[Body(b["body_type"], b["name"], [Member(m["full_name"], m["position"], m["is_independent"], m["is_executive"])
+ctx = OrgContext(legal_type=LEGAL, size="SMALL", profile=EX_PROFILE,
+                 bodies=[Body(b["body_type"], b["name"], [Member(m["full_name"], m["position"], m["is_independent"], m["is_executive"],
+                                                                 date.fromisoformat(m["term_ends_on"]) if m["term_ends_on"] else None)
                                                           for m in b["members"]]) for b in bodies],
-                 active_policy_types={"CONFLICT_OF_INTEREST"}, ropa_count=0, doa_count=0, today=date(2026, 10, 2))
+                 active_policy_types={"CONFLICT_OF_INTEREST", "PRIVACY_POLICY"}, ropa_count=0, doa_count=0, today=date(2026, 10, 2))
 results, score = run_check(stds, ctx)
 by = {s["code"]: s for s in STANDARDS}
 check = {"id": "run-1", "created_at": "2026-10-02T06:00:00Z", "passed": sum(r.status == "PASS" for r in results),
@@ -83,7 +87,11 @@ admin_obligations = [{"code": o["code"], "kind": o["kind"], "domain": o["domain"
                       "risk_level": o["risk"], "applies": o["applies"], "is_visible": True, "review_status": "DRAFT",
                       "orgs": 2, "updated_at": "2026-10-01T00:00:00Z"} for o in OBLIGATIONS]
 
+templates = {lt: _bodies([(bt, n, m, mp, []) for bt, n, m, mp in tpl]) for lt, tpl in STRUCTURE_TEMPLATES.items()}
+examples = {lt: {"title": ex["title"], "bodies": _bodies(ex["bodies"])} for lt, ex in EXAMPLES.items()}
+
 json.dump({"library": library, "structure": {"legal_type": LEGAL, "size": "SMALL", "profile": profile, "bodies": bodies,
-                                             "latest_check": check},
+                                             "latest_check": check, "example_title": EXAMPLES[LEGAL]["title"]},
+           "templates": templates, "examples": examples, "check_today": "2026-10-02",
            "obligations": obligations, "admin_standards": admin_standards, "admin_obligations": admin_obligations},
           sys.stdout, ensure_ascii=False, indent=1)

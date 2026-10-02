@@ -78,6 +78,7 @@ def get_structure(t: Tenant = Depends(get_tenant)):
         "profile": gs.get_profile(t.conn, t.org_id),
         "bodies": gs.structure(t.conn, t.org_id),
         "latest_check": gs.latest_run(t.conn, t.org_id),
+        "example_title": gs.example_title(org["entity_legal_type"]),
     }
 
 
@@ -88,6 +89,16 @@ def apply_template(t: Tenant = Depends(get_tenant)):
     _audit(t.conn, t, "GOV_APPLY_TEMPLATE", "organization", t.org_id, {"bodies_added": n})
     _after_change(t)
     return {"bodies_added": n}
+
+
+@router.post("/governance/structure/apply-example")
+def apply_example(t: Tenant = Depends(get_tenant)):
+    """يستبدل الهيكل بمثال جاهز لكيان المنشأة (يُطلب تأكيد في الواجهة لأنه يحذف الهيكل الحالي)."""
+    _write(t)
+    n = gs.apply_example(t.conn, t.org_id)
+    _audit(t.conn, t, "GOV_APPLY_EXAMPLE", "organization", t.org_id, {"bodies": n})
+    _after_change(t)
+    return {"bodies": n}
 
 
 @router.put("/governance/profile")
