@@ -235,3 +235,19 @@ export const DSR_STATUS_LABEL: Record<string, string> = { OPEN: "جديد", IN_P
 export const CHANNEL_LABEL: Record<string, string> = { EMAIL: "بريد", PHONE: "هاتف", WEBSITE: "الموقع", IN_PERSON: "حضورياً", OTHER: "أخرى" };
 export const INCIDENT_STATUS_LABEL: Record<string, string> = { OPEN: "مفتوحة", CONTAINED: "احتُويت", REPORTED: "أُبلغ عنها", CLOSED: "مغلقة" };
 export const SEVERITY_LABEL: Record<string, string> = { LOW: "منخفضة", MEDIUM: "متوسطة", HIGH: "عالية" };
+
+// ---------- الاستشارات القانونية
+export const CONSULT_STATUS_LABEL: Record<string, string> = {
+  REQUESTED: "بانتظار التأكيد", CONFIRMED: "مؤكدة", COMPLETED: "مكتملة", CANCELED: "ملغاة",
+};
+export const CONSULT_MODE_LABEL: Record<string, string> = { VIDEO: "مكالمة مرئية", PHONE: "مكالمة هاتفية", IN_PERSON: "حضورياً" };
+export const PAYMENT_STATUS_LABEL: Record<string, string> = { UNPAID: "بانتظار الدفع", PAID: "مدفوعة", REFUNDED: "مستردة" };
+export function minutesLabel(m: number): string {
+  if (m === 30) return "نصف ساعة";
+  if (m === 60) return "ساعة";
+  if (m === 90) return "ساعة ونصف";
+  if (m === 120) return "ساعتان";
+  if (m % 60 === 0) return `${m / 60} ساعات`;
+  return `${m} دقيقة`;
+}
+export const sarFmt = (n: number) => `${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ريال`;

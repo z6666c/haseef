@@ -148,3 +148,13 @@ export const DocSeal = (p: P) => (
     <path d="m15.2 19.2-.7 2.3 2-1 2 1-.7-2.3" stroke={A} />
   </Svg>
 );
+
+/** الاستشارات القانونية — ميزان */
+export const Scales = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 4v16M8 20h8M5 7h14" />
+    <path d="M12 4.5 7 7M12 4.5 17 7" />
+    <path d="m5 7-2.5 6a3 3 0 0 0 5 0Z" stroke={A} />
+    <path d="m19 7-2.5 6a3 3 0 0 0 5 0Z" stroke={A} />
+  </Svg>
+);

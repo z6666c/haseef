@@ -20,7 +20,7 @@ export default function Overview() {
     <>
       <h1>نظرة عامة</h1>
       <dl className="kpis">
-        <div><dt>الإيراد الشهري المتكرر</dt><dd>{sar(Number(k.mrr_sar))} <small>ريال</small></dd></div>
+        {k.mrr_sar !== null && <div><dt>الإيراد الشهري المتكرر</dt><dd>{sar(Number(k.mrr_sar))} <small>ريال</small></dd></div>}
         <div><dt>منشآت فعّالة</dt><dd>{k.active_orgs}</dd></div>
         <div><dt>في الفترة التجريبية</dt><dd>{k.trials}</dd></div>
         <div><dt>متوسط مؤشر حصافة</dt><dd>{k.avg_score ?? "—"}{k.avg_score !== null && <small>%</small>}</dd></div>

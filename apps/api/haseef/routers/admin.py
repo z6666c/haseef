@@ -29,7 +29,10 @@ def overview(a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
     by_industry = conn.execute(text("""
         SELECT COALESCE(industry_type, 'غير محدد') AS industry, count(*) AS n
         FROM organizations WHERE is_active GROUP BY 1 ORDER BY n DESC LIMIT 10""")).mappings().all()
-    return {"kpis": dict(kpis), "by_plan": [dict(r) for r in by_plan], "by_industry": [dict(r) for r in by_industry]}
+    k = dict(kpis)
+    if a.role == "SUPPORT":
+        k["mrr_sar"] = None          # الدعم الفني لا يرى الأرقام المالية
+    return {"kpis": k, "by_plan": [dict(r) for r in by_plan], "by_industry": [dict(r) for r in by_industry]}
 
 
 @router.get("/organizations")
@@ -64,7 +67,7 @@ def dispatches(a: Admin = Depends(require_admin("SUPPORT")), status: str | None 
 @router.get("/ai-usage")
 def ai_usage(a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
     conn = a.conn
-    return [dict(r) for r in conn.execute(text("""
+    rows = [dict(r) for r in conn.execute(text("""
         SELECT o.id AS org_id, o.name, s.plan_tier, p.monthly_ai_audits AS quota,
                count(DISTINCT l.audit_id)                    AS audits_this_month,
                COALESCE(sum(l.input_tokens + l.output_tokens), 0) AS tokens,
@@ -76,3 +79,7 @@ def ai_usage(a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
               AND l.created_at >= date_trunc('month', now() AT TIME ZONE 'Asia/Riyadh') AT TIME ZONE 'Asia/Riyadh'
         GROUP BY o.id, o.name, s.plan_tier, p.monthly_ai_audits
         ORDER BY cost_sar DESC""")).mappings()]
+    if a.role == "SUPPORT":
+        for r in rows:
+            r["cost_sar"] = None
+    return rows

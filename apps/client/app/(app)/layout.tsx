@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PLAN_LABEL, type Me } from "@haseef/shared";
-import { BellMessage, BookOpen, BuildingBadge, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar } from "@/components/Icons";
+import { BellMessage, BookOpen, BuildingBadge, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, Scales } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { api, getSession, setSession } from "@/lib/session";
 
@@ -16,6 +16,7 @@ const NAV = [
   { href: "/governance", label: "الحوكمة وهيكل الشركة", Icon: GavelDocument },
   { href: "/policies", label: "السياسات الداخلية", Icon: DocSeal },
   { href: "/library", label: "المكتبة المرجعية", Icon: BookOpen },
+  { href: "/legal", label: "استشارة محامٍ", Icon: Scales },
   { href: "/pdpl", label: "حماية البيانات PDPL", Icon: FingerprintShield },
   { href: null, label: "فاحص العقود بالذكاء الاصطناعي", Icon: FileSparkle, soon: "المرحلة 2" },
   { href: null, label: "التنبيهات والواتساب", Icon: BellMessage, soon: "المرحلة 3" },

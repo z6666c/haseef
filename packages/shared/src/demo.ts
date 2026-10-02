@@ -371,7 +371,7 @@ function requireRole(role: keyof typeof ROLE_NAME, method: string, p: string, bo
   if (role === "SUPER_ADMIN") return;
   if (method === "GET") {
     // المحاسبة: الفوترة فقط — لا تنبيهات (بيانات تواصل العملاء)، لا فريق، لا محتوى، لا حوكمة المنشآت
-    if (role === "BILLING" && (/^\/admin\/(dispatches|team|catalog|library)/.test(p) || /\/governance$/.test(p)))
+    if (role === "BILLING" && (/^\/admin\/(dispatches|team|catalog|library|legal\/lawyers)/.test(p) || /\/governance$/.test(p)))
       throw new DemoError(403, "هذا القسم غير متاح لصلاحية المحاسبة");
     return;
   }
@@ -380,10 +380,52 @@ function requireRole(role: keyof typeof ROLE_NAME, method: string, p: string, bo
   };
   if (/\/(suspend|reactivate)$/.test(p) || p.startsWith("/admin/team") || (method === "DELETE" && p.startsWith("/admin/library"))) return deny([]);
   if ("review_status" in body) throw new DemoError(403, "اعتماد المحتوى أو إعادته لمسودة للمدير العام فقط");
+  if (/^\/admin\/legal\/consultations\/[^/]+\/payment$/.test(p) || /^\/admin\/legal\/rates\//.test(p)) return deny(["BILLING"]);
+  if (/^\/admin\/legal\/lawyers/.test(p)) return deny([]);
   if (/\/subscription\/extend-trial$/.test(p)) return deny(["BILLING", "SUPPORT"]);
   if (/\/subscription\//.test(p)) return deny(["BILLING"]);
   return deny(["SUPPORT"]);
 }
+
+// ---------- الاستشارات القانونية (نسخة العرض) ----------
+const LEGAL_RATES = [
+  { topic: "CORPORATE", title: "الشركات والحوكمة", description: "عقود التأسيس، قرارات الشركاء والمجالس، تعديل الهيكل، المستفيد الحقيقي.", tier: "GENERAL", hourly_rate_sar: 650, is_active: true },
+  { topic: "CONTRACTS", title: "العقود التجارية", description: "مراجعة وصياغة العقود مع العملاء والموردين والمقاولين.", tier: "GENERAL", hourly_rate_sar: 650, is_active: true },
+  { topic: "LABOR", title: "العمل والموارد البشرية", description: "عقود العمل، لائحة تنظيم العمل، الإنهاء والمخالصات، النزاعات العمالية.", tier: "GENERAL", hourly_rate_sar: 650, is_active: true },
+  { topic: "PDPL", title: "حماية البيانات الشخصية", description: "سياسة الخصوصية، النقل خارج المملكة، حوادث التسرب، عقود المعالجين.", tier: "GENERAL", hourly_rate_sar: 650, is_active: true },
+  { topic: "COMPLIANCE", title: "التراخيص والامتثال التنظيمي", description: "متطلبات الجهات الرقابية، المخالفات والغرامات، التظلمات.", tier: "GENERAL", hourly_rate_sar: 650, is_active: true },
+  { topic: "RESTRUCTURING", title: "إعادة الهيكلة والاندماج", description: "التحول بين أنواع الشركات، الاندماج والاستحواذ، دخول مستثمر.", tier: "SPECIALIZED", hourly_rate_sar: 950, is_active: true },
+  { topic: "DISPUTES", title: "النزاعات والتقاضي والتحكيم", description: "تقييم موقف نزاع قائم، الإنذارات، الاستعداد للتقاضي أو التحكيم.", tier: "SPECIALIZED", hourly_rate_sar: 950, is_active: true },
+];
+const LAWYERS = [
+  { id: "lw-1", full_name: "أ. نوف الحمدان (تجريبي)", license_number: "DEMO-LIC-001", specialties: ["CORPORATE", "RESTRUCTURING"], bio: "حوكمة الشركات وإعادة الهيكلة — 12 سنة خبرة.", email: null, phone_number: null, is_active: true },
+  { id: "lw-2", full_name: "أ. ماجد السهلي (تجريبي)", license_number: "DEMO-LIC-002", specialties: ["CONTRACTS", "DISPUTES"], bio: "العقود التجارية والتحكيم — 15 سنة خبرة.", email: null, phone_number: null, is_active: true },
+  { id: "lw-3", full_name: "أ. هيا العنزي (تجريبي)", license_number: "DEMO-LIC-003", specialties: ["LABOR", "PDPL", "COMPLIANCE"], bio: "العمل وحماية البيانات والامتثال التنظيمي — 9 سنوات خبرة.", email: null, phone_number: null, is_active: true },
+];
+const r2 = (x: number) => Math.round(x * 100) / 100;
+function legalQuote(rate: number, minutes: number, urgent: boolean, plan: string) {
+  if (![30, 60, 90, 120, 180, 240].includes(minutes)) throw new DemoError(422, "مدة غير مدعومة");
+  const base = r2(rate * minutes / 60), uPct = urgent ? 30 : 0, urgent_fee = r2(base * uPct / 100);
+  const dPct = plan === "ENTERPRISE" ? 25 : plan === "PROFESSIONAL_GRC" ? 15 : 0, discount = r2((base + urgent_fee) * dPct / 100);
+  const subtotal = r2(base + urgent_fee - discount), vat = r2(subtotal * 0.15);
+  return { hourly_rate: rate, minutes, base, urgent_pct: uPct, urgent_fee, discount_pct: dPct, discount, subtotal, vat_pct: 15, vat, total: r2(subtotal + vat) };
+}
+type DemoConsult = { id: string; topic: string; subject: string; details: string | null; duration_minutes: number; urgent: boolean;
+  mode: string; preferred_at: string; price: ReturnType<typeof legalQuote>; total_sar: number; status: string; lawyer_id: string | null;
+  scheduled_at: string | null; meeting_link: string | null; payment_status: string; payment_reference: string | null;
+  cancel_reason: string | null; lawyer_summary: string | null; created_at: string };
+const consults: DemoConsult[] = [(() => {
+  const price = legalQuote(650, 60, false, "PROFESSIONAL_GRC"); const at = new Date(Date.now() + 51 * 3600e3).toISOString();
+  return { id: uid(), topic: "LABOR", subject: "إنهاء عقد موظف خلال فترة التجربة",
+    details: "موظف في الشهر الثالث من فترة التجربة، نرغب بإنهاء العقد. ما الإجراء الصحيح والمستحقات؟", duration_minutes: 60, urgent: false,
+    mode: "VIDEO", preferred_at: at, price, total_sar: price.total, status: "CONFIRMED", lawyer_id: "lw-3", scheduled_at: at,
+    meeting_link: "https://meet.example.sa/haseef-demo", payment_status: "PAID", payment_reference: "INV-LEGAL-0001",
+    cancel_reason: null, lawyer_summary: null, created_at: ago(60 * 20) };
+})()];
+const consultView = (c: DemoConsult) => {
+  const l = LAWYERS.find((x) => x.id === c.lawyer_id);
+  return { ...c, topic_title: LEGAL_RATES.find((r) => r.topic === c.topic)!.title, lawyer_name: l?.full_name ?? null, lawyer_license: l?.license_number ?? null };
+};
 
 // ---------- الموجّه ----------
 class DemoError extends Error {
@@ -413,7 +455,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     if (!isAdmin) throw new DemoError(403, "هذه الواجهة لفريق حصيف فقط");
     if (p === "/admin/me") return { user_id: TEAM_ME[role].id, role };
     requireRole(role, method, p, body);
-    if (p === "/admin/overview") return overview();
+    if (p === "/admin/overview") { const ov = overview(); return role === "SUPPORT" ? { ...ov, kpis: { ...ov.kpis, mrr_sar: null } } : ov; }
     if (p === "/admin/organizations" && method === "GET") return orgs.map(orgRow);
     if (p === "/admin/organizations" && method === "POST") {
       const o: Org = { id: uid(), name: String(body.name), cr: String(body.cr_number), legal: String(body.entity_legal_type), industry: String(body.industry_type ?? "—"),
@@ -429,6 +471,9 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       const o = findOrg(m[1]);
       if (method === "GET") {
         const full = orgDetail(o);
+        if (role === "SUPPORT") return { ...full, restricted: false,
+          subscription: full.subscription && (({ monthly_price_sar: _m, yearly_price_sar: _y, ...rest }) => rest)(full.subscription),
+          billing: full.billing.map((b) => ({ ...b, amount_sar: null, reference: null })) };
         if (role !== "BILLING") return { ...full, restricted: false };
         const { haseef_score: _s, suspension_reason: _r, ...org } = full.organization;
         return { ...full, organization: org, counts: null, restricted: true,
@@ -548,15 +593,34 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
                obligations: { total: obl.length, in_place: obl.filter((o) => o.effective_status === "IN_PLACE").length,
                               pending: obl.filter((o) => o.effective_status === "PENDING" || o.effective_status === "AT_RISK").length } };
     }
+    if (p === "/admin/legal/consultations") return consults.map((c) => ({ ...consultView(c), org_name: "مؤسسة النخبة للمقاولات", org_id: ORG_A,
+      requested_by_name: "أحمد العتيبي", details: role === "BILLING" ? null : c.details, lawyer_summary: role === "BILLING" ? null : c.lawyer_summary }))
+      .sort((a, b) => Number(["COMPLETED", "CANCELED"].includes(a.status)) - Number(["COMPLETED", "CANCELED"].includes(b.status)));
+    if ((m = p.match(/^\/admin\/legal\/consultations\/([^/]+)\/(assign|complete|cancel|payment)$/))) {
+      const c = consults.find((x) => x.id === m![1]); if (!c) throw new DemoError(404, "الطلب غير موجود");
+      if (m[2] === "assign") { Object.assign(c, { lawyer_id: body.lawyer_id, scheduled_at: body.scheduled_at, meeting_link: body.meeting_link ?? null, status: "CONFIRMED" }); return { status: "CONFIRMED" }; }
+      if (m[2] === "complete") { if (c.status !== "CONFIRMED") throw new DemoError(409, "الاستشارة غير مؤكدة"); Object.assign(c, { status: "COMPLETED", lawyer_summary: body.lawyer_summary ?? null }); return { status: "COMPLETED" }; }
+      if (m[2] === "cancel") { Object.assign(c, { status: "CANCELED", cancel_reason: body.reason }); return { status: "CANCELED" }; }
+      Object.assign(c, { payment_status: body.payment_status, payment_reference: body.payment_reference }); return { payment_status: body.payment_status };
+    }
+    if (p === "/admin/legal/rates") return LEGAL_RATES;
+    if ((m = p.match(/^\/admin\/legal\/rates\/([^/]+)$/))) {
+      const r = LEGAL_RATES.find((x) => x.topic === m![1]); if (!r) throw new DemoError(404, "المجال غير موجود");
+      Object.assign(r, { hourly_rate_sar: Number(body.hourly_rate_sar), is_active: !!body.is_active }); return { updated: true };
+    }
+    if (p === "/admin/legal/lawyers" && method === "GET") return LAWYERS;
+    if (p === "/admin/legal/lawyers" && method === "POST") { const id = uid(); LAWYERS.push({ ...(body as unknown as typeof LAWYERS[number]), id }); return { id }; }
+    if ((m = p.match(/^\/admin\/legal\/lawyers\/([^/]+)$/))) { const l = LAWYERS.find((x) => x.id === m![1]); if (l) Object.assign(l, body, { id: l.id }); return { updated: true }; }
     if (p === "/admin/audit") {
       const id = q.get("org_id");
       const billingOnly = ["ADMIN_RECORD_PAYMENT", "ADMIN_CHANGE_PLAN", "ADMIN_EXTEND_TRIAL", "ADMIN_CANCEL_SUBSCRIPTION",
                            "ADMIN_CREATE_ORG", "ADMIN_SUSPEND_ORG", "ADMIN_REACTIVATE_ORG"];
-      return audit.filter((a) => (!id || a.org_id === id) && (role !== "BILLING" || billingOnly.includes(a.action)));
+      return audit.filter((a) => (!id || a.org_id === id) && (role !== "BILLING" || billingOnly.includes(a.action)))
+        .map((a) => role === "SUPPORT" && a.changes ? { ...a, changes: Object.fromEntries(Object.entries(a.changes).filter(([k]) => k !== "amount_sar" && k !== "reference")) } : a);
     }
     if (p === "/admin/dispatches") return dispatches();
     if (p === "/admin/ai-usage") return orgs.map((o) => ({ org_id: o.id, name: o.name, plan_tier: o.sub?.plan_tier ?? null,
-      quota: o.sub?.plan_tier === "ESSENTIAL" ? 3 : 15, audits_this_month: o.id === ORG_A ? 4 : 0, tokens: o.id === ORG_A ? 48_200 : 0, cost_sar: o.id === ORG_A ? 3.6 : 0 }));
+      quota: o.sub?.plan_tier === "ESSENTIAL" ? 3 : 15, audits_this_month: o.id === ORG_A ? 4 : 0, tokens: o.id === ORG_A ? 48_200 : 0, cost_sar: role === "SUPPORT" ? null : o.id === ORG_A ? 3.6 : 0 }));
     throw new DemoError(404, "غير متاح في نسخة العرض");
   }
 
@@ -605,6 +669,35 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     }
     throw new DemoError(404, "العضو غير موجود");
   }
+  // ---------- الاستشارات القانونية
+  if (p === "/legal/rates") return { rates: LEGAL_RATES.filter((r) => r.is_active), durations: [30, 60, 90, 120, 180, 240], vat_pct: 15,
+    urgent_pct: 30, plan_tier: "PROFESSIONAL_GRC", plan_discount_pct: 15 };
+  if (p === "/legal/quote") {
+    const r = LEGAL_RATES.find((x) => x.topic === body.topic && x.is_active); if (!r) throw new DemoError(404, "المجال غير متاح");
+    return legalQuote(r.hourly_rate_sar, Number(body.duration_minutes), !!body.urgent, "PROFESSIONAL_GRC");
+  }
+  if (p === "/legal/consultations" && method === "GET") return consults.map(consultView).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  if (p === "/legal/consultations" && method === "POST") {
+    const r = LEGAL_RATES.find((x) => x.topic === body.topic && x.is_active); if (!r) throw new DemoError(404, "المجال غير متاح");
+    const pref = new Date(String(body.preferred_at));
+    if (pref.getTime() < Date.now() + 2 * 3600e3) throw new DemoError(422, "اختر موعداً بعد ساعتين على الأقل من الآن");
+    if (body.urgent && pref.getTime() > Date.now() + 48 * 3600e3) throw new DemoError(422, "الاستشارة العاجلة تكون خلال 48 ساعة");
+    const price = legalQuote(r.hourly_rate_sar, Number(body.duration_minutes), !!body.urgent, "PROFESSIONAL_GRC");
+    const id = uid();
+    consults.push({ id, topic: r.topic, subject: String(body.subject), details: (body.details as string) ?? null, duration_minutes: Number(body.duration_minutes),
+      urgent: !!body.urgent, mode: String(body.mode ?? "VIDEO"), preferred_at: pref.toISOString(), price, total_sar: price.total, status: "REQUESTED",
+      lawyer_id: null, scheduled_at: null, meeting_link: null, payment_status: "UNPAID", payment_reference: null, cancel_reason: null,
+      lawyer_summary: null, created_at: new Date().toISOString() });
+    return { id, total_sar: price.total };
+  }
+  if ((m = p.match(/^\/legal\/consultations\/([^/]+)\/cancel$/))) {
+    const c = consults.find((x) => x.id === m![1]); if (!c) throw new DemoError(404, "الطلب غير موجود");
+    if (!["REQUESTED", "CONFIRMED"].includes(c.status)) throw new DemoError(409, "لا يمكن إلغاء هذا الطلب");
+    if (c.status === "CONFIRMED" && c.scheduled_at && new Date(c.scheduled_at).getTime() < Date.now() + 24 * 3600e3)
+      throw new DemoError(409, "لا يُلغى الموعد المؤكد قبل أقل من 24 ساعة. تواصل مع فريق حصيف.");
+    Object.assign(c, { status: "CANCELED", cancel_reason: String(body.reason) }); return { status: "CANCELED" };
+  }
+
   // ---------- حماية البيانات
   if (p === "/pdpl/summary") {
     const open = (r: { status: string }) => r.status === "OPEN" || r.status === "IN_PROGRESS";

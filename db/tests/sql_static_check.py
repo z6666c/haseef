@@ -30,6 +30,8 @@ FRAGMENTS = {
     "_REQ_COLS": "id, requester_name, (due_on - app.today_riyadh()) AS days_left",
     "_INC_COLS": "id, title, discovered_at + interval '72 hours' AS notify_deadline",
     "NOTIFY_HOURS": "72",
+    "_C_COLS": "c.id, r.title AS topic_title, l.full_name AS lawyer_name",
+    "_C_FROM": "FROM legal_consultations c JOIN legal_rates r ON r.topic = c.topic LEFT JOIN legal_lawyers l ON l.id = c.lawyer_id",
     "profile_sets": "employees_count = employees_count",
     "table": "gov_standards",   # تعديل عام لكتالوجات المحتوى
     "key_col": "code",

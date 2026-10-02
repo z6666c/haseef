@@ -176,8 +176,16 @@ def org_detail(org_id: UUID, a: Admin = Depends(require_admin("SUPPORT", "BILLIN
                            for m in members if m["role"] == "ORG_ADMIN" and m["membership_active"]]
         return {"organization": org_d, "subscription": sub, "members": billing_contact,
                 "billing": [dict(b) for b in billing], "counts": None, "restricted": True}
+    bills = [dict(b) for b in billing]
+    if a.role == "SUPPORT":
+        # الدعم الفني يرى أحداث الاشتراك (للمساعدة) دون المبالغ ومراجع الفواتير
+        for b in bills:
+            b["amount_sar"] = None
+            b["reference"] = None
+        if sub:
+            sub = {k: v for k, v in sub.items() if k not in ("monthly_price_sar", "yearly_price_sar")}
     return {"organization": dict(org), "subscription": sub, "members": [dict(m) for m in members],
-            "billing": [dict(b) for b in billing], "counts": dict(counts), "restricted": False}
+            "billing": bills, "counts": dict(counts), "restricted": False}
 
 
 @router.patch("/organizations/{org_id}")
@@ -470,4 +478,9 @@ def audit(org_id: UUID | None = None, limit: int = 100, a: Admin = Depends(requi
         WHERE (CAST(:o AS uuid) IS NULL OR l.org_id = :o)
           AND (CAST(:only AS text[]) IS NULL OR l.action = ANY(CAST(:only AS text[])))
         ORDER BY l.created_at DESC LIMIT :l"""), {"o": org_id, "l": min(limit, 500), "only": only}).mappings()
-    return [dict(r) for r in rows]
+    out = [dict(r) for r in rows]
+    if a.role == "SUPPORT":                       # الدعم الفني: بلا مبالغ أو مراجع فواتير
+        for r in out:
+            if r["changes"]:
+                r["changes"] = {k: v for k, v in r["changes"].items() if k not in ("amount_sar", "reference")}
+    return out

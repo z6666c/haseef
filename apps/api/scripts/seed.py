@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import secrets
 from datetime import date, datetime, timedelta, timezone
 
@@ -133,6 +134,28 @@ def run() -> None:
                                      'حُذفت السيرة من بريد التوظيف والأرشيف، وأُبلغ بذلك هاتفياً.', :c2)"""),
                      {"o": nukhba, "r1": TODAY - timedelta(days=22), "d1": TODAY + timedelta(days=8),
                       "r2": TODAY - timedelta(days=40), "d2": TODAY - timedelta(days=10), "c2": TODAY - timedelta(days=33)})
+        # الاستشارات القانونية: محامون تجريبيون (أسماء وتراخيص وهمية) وطلب مؤكد لمنشأة النخبة
+        lawyers = []
+        for name, lic, spec, bio in [
+            ("أ. نوف الحمدان (تجريبي)", "DEMO-LIC-001", ["CORPORATE", "RESTRUCTURING"], "حوكمة الشركات وإعادة الهيكلة — 12 سنة خبرة."),
+            ("أ. ماجد السهلي (تجريبي)", "DEMO-LIC-002", ["CONTRACTS", "DISPUTES"], "العقود التجارية والتحكيم — 15 سنة خبرة."),
+            ("أ. هيا العنزي (تجريبي)", "DEMO-LIC-003", ["LABOR", "PDPL", "COMPLIANCE"], "العمل وحماية البيانات والامتثال التنظيمي — 9 سنوات خبرة."),
+        ]:
+            lawyers.append(conn.execute(text("""INSERT INTO legal_lawyers (full_name, license_number, specialties, bio)
+                VALUES (:n, :l, :s, :b) ON CONFLICT (license_number) DO UPDATE SET full_name = EXCLUDED.full_name RETURNING id"""),
+                {"n": name, "l": lic, "s": spec, "b": bio}).scalar_one())
+        conn.execute(text("DELETE FROM legal_consultations WHERE org_id = :o"), {"o": nukhba})
+        from haseef.domain.legal_pricing import quote as legal_quote
+        q1 = legal_quote(650, 60, urgent=False, plan_tier="PROFESSIONAL_GRC")
+        conn.execute(text("""INSERT INTO legal_consultations (org_id, topic, subject, details, duration_minutes, mode, preferred_at,
+                                 price, total_sar, status, lawyer_id, scheduled_at, meeting_link, payment_status, payment_reference)
+                             VALUES (:o, 'LABOR', 'إنهاء عقد موظف خلال فترة التجربة',
+                                     'موظف في الشهر الثالث من فترة التجربة، نرغب بإنهاء العقد. ما الإجراء الصحيح والمستحقات؟',
+                                     60, 'VIDEO', :pref, CAST(:price AS jsonb), :total, 'CONFIRMED', :l, :pref,
+                                     'https://meet.example.sa/haseef-demo', 'PAID', 'INV-LEGAL-0001')"""),
+                     {"o": nukhba, "pref": datetime.now(timezone.utc) + timedelta(days=2, hours=3), "price": json.dumps(q1.as_dict()),
+                      "total": q1.total, "l": lawyers[2]})
+
         disc = datetime.now(timezone.utc) - timedelta(days=60)
         conn.execute(text("""INSERT INTO pdpl_incidents (org_id, title, description, discovered_at, occurred_at, data_categories,
                                  subjects_affected, severity, harm_likely, status, authority_notified_at, subjects_notified_at,

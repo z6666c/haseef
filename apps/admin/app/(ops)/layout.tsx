@@ -12,6 +12,7 @@ const NAV: { href: string; label: string; roles?: PlatformRole[] }[] = [
   { href: "/", label: "نظرة عامة" },
   { href: "/organizations", label: "المنشآت" },
   { href: "/dispatches", label: "التنبيهات", roles: ["SUPPORT"] },
+  { href: "/legal", label: "الاستشارات القانونية" },
   { href: "/content", label: "المحتوى المرجعي", roles: ["SUPPORT"] },
   { href: "/usage", label: "استهلاك الذكاء الاصطناعي" },
   { href: "/team", label: "الفريق", roles: ["SUPPORT"] },

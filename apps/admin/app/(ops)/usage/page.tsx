@@ -13,14 +13,15 @@ export default function Usage() {
 
   if (error) return <p className="error" role="alert">{error}</p>;
   if (!rows) return null;
-  const total = rows.reduce((s, r) => s + Number(r.cost_sar), 0);
+  const showCost = rows.every((r) => r.cost_sar !== null);   // الدعم الفني لا يرى التكلفة
+  const total = rows.reduce((s, r) => s + Number(r.cost_sar ?? 0), 0);
 
   return (
     <>
       <h1>استهلاك الذكاء الاصطناعي</h1>
-      <p className="muted">هذا الشهر: تكلفة إجمالية {n(total, 2)} ريال. المنشآت مرتبة من الأعلى تكلفة.</p>
+      <p className="muted">{showCost ? <>هذا الشهر: تكلفة إجمالية {n(total, 2)} ريال. المنشآت مرتبة من الأعلى تكلفة.</> : "استهلاك هذا الشهر مقارنة بحصة كل باقة."}</p>
       <table className="table">
-        <thead><tr><th>المنشأة</th><th>الباقة</th><th className="num">التدقيقات / الحصة</th><th className="num">التوكنز</th><th className="num">التكلفة (ريال)</th></tr></thead>
+        <thead><tr><th>المنشأة</th><th>الباقة</th><th className="num">التدقيقات / الحصة</th><th className="num">التوكنز</th>{showCost && <th className="num">التكلفة (ريال)</th>}</tr></thead>
         <tbody>
           {rows.map((r) => {
             const over = r.quota !== null && r.audits_this_month >= r.quota;
@@ -34,7 +35,7 @@ export default function Usage() {
                   </span>
                 </td>
                 <td className="num">{n(Number(r.tokens))}</td>
-                <td className="num">{n(Number(r.cost_sar), 2)}</td>
+                {showCost && <td className="num">{n(Number(r.cost_sar), 2)}</td>}
               </tr>
             );
           })}

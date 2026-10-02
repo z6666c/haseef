@@ -102,6 +102,15 @@ export function createApi(
     updateIncident: (id: string, b: Record<string, unknown>) =>
       req<{ updated: boolean }>(`/pdpl/incidents/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
 
+    // ---------- الاستشارات القانونية
+    legalRates: () => req<LegalRatesInfo>("/legal/rates"),
+    legalQuote: (b: { topic: string; duration_minutes: number; urgent: boolean }) =>
+      req<LegalQuote>("/legal/quote", { method: "POST", body: JSON.stringify(b) }),
+    legalBook: (b: LegalBookInput) => req<{ id: string; total_sar: number }>("/legal/consultations", { method: "POST", body: JSON.stringify(b) }),
+    legalMine: () => req<Consultation[]>("/legal/consultations"),
+    legalCancel: (id: string, reason: string) =>
+      req<{ status: string }>(`/legal/consultations/${id}/cancel`, { method: "POST", body: JSON.stringify({ reason }) }),
+
     // ---------- الالتزامات
     obligations: () => req<Obligation[]>("/obligations"),
     setObligation: (code: string, status: ObligationStatus, note?: string | null) =>
@@ -166,6 +175,20 @@ export function createApi(
       patchDoc: (id: string, b: Record<string, unknown>) =>
         req<{ updated: boolean }>(`/admin/library/${id}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
       deleteDoc: (id: string) => req<void>(`/admin/library/${id}`, { method: "DELETE", org: false }),
+      legalConsultations: () => req<AdminConsultation[]>("/admin/legal/consultations", { org: false }),
+      legalAssign: (id: string, b: { lawyer_id: string; scheduled_at: string; meeting_link: string | null }) =>
+        post(`/admin/legal/consultations/${id}/assign`, b),
+      legalComplete: (id: string, lawyer_summary: string | null) => post(`/admin/legal/consultations/${id}/complete`, { lawyer_summary }),
+      legalCancel: (id: string, reason: string) => post(`/admin/legal/consultations/${id}/cancel`, { reason }),
+      legalPayment: (id: string, payment_status: "PAID" | "REFUNDED", payment_reference: string) =>
+        post(`/admin/legal/consultations/${id}/payment`, { payment_status, payment_reference }),
+      legalRates: () => req<(LegalRate & { is_active: boolean })[]>("/admin/legal/rates", { org: false }),
+      legalSetRate: (topic: string, hourly_rate_sar: number, is_active: boolean) =>
+        req<{ updated: boolean }>(`/admin/legal/rates/${topic}`, { method: "PATCH", org: false, body: JSON.stringify({ hourly_rate_sar, is_active }) }),
+      lawyers: () => req<Lawyer[]>("/admin/legal/lawyers", { org: false }),
+      addLawyer: (b: Omit<Lawyer, "id">) => post<{ id: string }>("/admin/legal/lawyers", b),
+      updateLawyer: (id: string, b: Omit<Lawyer, "id">) =>
+        req<{ updated: boolean }>(`/admin/legal/lawyers/${id}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
       orgGovernance: (id: string) => req<AdminOrgGovernance>(`/admin/organizations/${id}/governance`, { org: false }),
     },
   };
@@ -174,7 +197,7 @@ export function createApi(
 export type Api = ReturnType<typeof createApi>;
 
 export interface AdminOverview {
-  kpis: { active_orgs: number; trials: number; mrr_sar: number; avg_score: number | null };
+  kpis: { active_orgs: number; trials: number; mrr_sar: number | null; avg_score: number | null };
   by_plan: { plan_tier: string; n: number }[];
   by_industry: { industry: string; n: number }[];
 }
@@ -197,7 +220,7 @@ export interface AdminDispatches {
 }
 export interface AdminUsage {
   org_id: string; name: string; plan_tier: string | null; quota: number | null;
-  audits_this_month: number; tokens: number; cost_sar: number;
+  audits_this_month: number; tokens: number; cost_sar: number | null;
 }
 
 export interface AdminMember {
@@ -348,4 +371,32 @@ export interface PdplOverview {
   requests: { open: number; overdue: number };
   incidents: { open: number; notify_overdue: number };
   notify_hours: number; request_days: number;
+}
+
+// ---------- الاستشارات القانونية
+export interface LegalRate { topic: string; title: string; description: string | null; tier: "GENERAL" | "SPECIALIZED"; hourly_rate_sar: number }
+export interface LegalRatesInfo {
+  rates: LegalRate[]; durations: number[]; vat_pct: number; urgent_pct: number; plan_tier: string | null; plan_discount_pct: number;
+}
+export interface LegalQuote {
+  hourly_rate: number; minutes: number; base: number; urgent_pct: number; urgent_fee: number; discount_pct: number;
+  discount: number; subtotal: number; vat_pct: number; vat: number; total: number;
+}
+export interface LegalBookInput {
+  topic: string; duration_minutes: number; urgent: boolean; subject: string; details: string | null;
+  mode: "VIDEO" | "PHONE" | "IN_PERSON"; preferred_at: string;
+}
+export interface Consultation {
+  id: string; topic: string; topic_title: string; subject: string; details: string | null; duration_minutes: number;
+  urgent: boolean; mode: string; preferred_at: string; price: LegalQuote; total_sar: number;
+  status: "REQUESTED" | "CONFIRMED" | "COMPLETED" | "CANCELED"; scheduled_at: string | null; meeting_link: string | null;
+  payment_status: "UNPAID" | "PAID" | "REFUNDED"; cancel_reason: string | null; lawyer_summary: string | null;
+  created_at: string; lawyer_name: string | null; lawyer_license: string | null;
+}
+export interface AdminConsultation extends Consultation {
+  lawyer_id: string | null; payment_reference: string | null; org_name: string; org_id: string; requested_by_name: string | null;
+}
+export interface Lawyer {
+  id: string; full_name: string; license_number: string; specialties: string[]; bio: string | null;
+  email: string | null; phone_number: string | null; is_active: boolean;
 }

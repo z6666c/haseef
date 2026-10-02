@@ -346,3 +346,24 @@ fieldset.checks { display: flex; gap: 18px; flex-wrap: wrap; }
 .btn-danger-soft { background: var(--crimson-wash); color: var(--crimson); border-color: transparent; }
 .btn-danger-soft:hover { background: var(--crimson-wash); filter: brightness(.97); }
 .pdpl-stats dd small { font-size: var(--t-sm); font-weight: 600; }
+
+/* الاستشارات القانونية */
+.rate-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 10px; margin-bottom: 8px; }
+.rate-card { text-align: start; display: grid; gap: 6px; align-content: start; padding: 14px; border-radius: var(--r-md); border: 1px solid var(--line);
+  background: var(--surface); cursor: pointer; font: inherit; color: inherit; }
+.rate-card:hover { border-color: var(--emerald); }
+.rate-card[aria-pressed="true"] { border-color: var(--emerald); box-shadow: 0 0 0 3px var(--haseef-emerald-glow); }
+.rate-card .tag { justify-self: start; }
+.rate-price b { font-size: var(--t-xl); }
+.legal-form { margin-top: 12px; }
+.legal-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; }
+.quote { background: var(--paper); border-radius: var(--r-md); padding: 16px; display: grid; gap: 12px; align-content: start; }
+.quote h3 { font-size: var(--t-md); margin: 0; }
+.quote dl { margin: 0; display: grid; gap: 8px; font-size: var(--t-sm); }
+.quote dl div { display: flex; justify-content: space-between; gap: 8px; }
+.quote dt { color: var(--muted); }
+.quote dd { margin: 0; font-variant-numeric: tabular-nums; }
+.quote .disc dd { color: var(--emerald-deep); }
+.quote .total { border-top: 1px solid var(--line); padding-top: 8px; font-size: var(--t-md); font-weight: 700; }
+.quote .total dt { color: var(--ink); }
+@media (max-width: 860px) { .legal-grid { grid-template-columns: 1fr; } }
