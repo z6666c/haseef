@@ -313,6 +313,7 @@ export interface AdminLibraryDoc extends LibraryDoc {
 }
 export interface AdminOrgGovernance {
   bodies: GovBody[]; latest_check: CheckRun | null;
+  pdpl: { records: number; requests_open: number; requests_overdue: number; incidents_open: number; incidents_notify_overdue: number };
   obligations: { total: number; in_place: number; pending: number };
 }
 

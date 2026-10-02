@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
-  auditSummary,
+  auditSummary, type AdminOrgGovernance,
   AUDIT_ACTION_LABEL, BILLING_EVENT_LABEL, BILLING_STATUS_LABEL, LEGAL_TYPE_LABEL, ORG_ROLE_LABEL, PLAN_LABEL,
   SIZE_LABEL, countDays, formatDate, type AdminMember, type AdminOrgDetail, type AuditEntry,
 } from "@haseef/shared";
@@ -26,9 +26,11 @@ export default function OrgDetail() {
   const [tempPw, setTempPw] = useState<{ pw: string; email: string } | null>(null);
   const [dialog, setDialog] = useState<"payment" | "plan" | "trial" | "invite" | null>(null);
 
+  const [gov, setGov] = useState<AdminOrgGovernance | null>(null);
   const load = useCallback(() => {
     api.admin.orgDetail(id).then(setD).catch((e: Error) => setError(e.message));
     api.admin.audit(id).then(setAudit).catch(() => {});
+    api.admin.orgGovernance(id).then(setGov).catch(() => {});
   }, [id]);
   useEffect(load, [load]);
 
@@ -163,6 +165,35 @@ export default function OrgDetail() {
           </tbody>
         </table>
       </section>
+
+      {/* ---------------- الحوكمة وحماية البيانات ---------------- */}
+      {gov && (
+        <section className="block">
+          <h2>الحوكمة والالتزام وحماية البيانات</h2>
+          <dl className="kpis compact">
+            <div><dt>استيفاء معايير الحوكمة</dt>
+              <dd>{gov.latest_check?.structure_score != null ? `${Math.round(gov.latest_check.structure_score)}%` : "—"}
+                {gov.latest_check && <small> · {gov.latest_check.failed} فجوة</small>}</dd></div>
+            <div><dt>أجهزة الهيكل</dt><dd>{gov.bodies.length}<small> · {gov.bodies.reduce((n, b) => n + b.members.length, 0)} عضواً</small></dd></div>
+            <div><dt>الالتزامات المستوفاة</dt><dd>{gov.obligations.in_place}<small> من {gov.obligations.total}</small></dd></div>
+            <div><dt>أنشطة المعالجة</dt><dd>{gov.pdpl.records}</dd></div>
+            <div><dt>طلبات أصحاب البيانات المفتوحة</dt><dd>{gov.pdpl.requests_open}
+              {gov.pdpl.requests_overdue > 0 && <small className="error"> · {gov.pdpl.requests_overdue} متأخر</small>}</dd></div>
+            <div><dt>حوادث تسرب مفتوحة</dt><dd>{gov.pdpl.incidents_open}
+              {gov.pdpl.incidents_notify_overdue > 0 && <small className="error"> · تجاوزت مهلة الإبلاغ</small>}</dd></div>
+          </dl>
+          {gov.latest_check && gov.latest_check.results.filter((r) => r.status === "FAIL" && r.level === "MANDATORY").length > 0 && (
+            <>
+              <h3 className="small">الفجوات الإلزامية</h3>
+              <ul className="audit-list">
+                {gov.latest_check.results.filter((r) => r.status === "FAIL" && r.level === "MANDATORY").map((r) => (
+                  <li key={r.code}><strong>{r.title}</strong><span className="muted">{r.message}</span></li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
 
       {/* ---------------- سجل التدقيق ---------------- */}
       <section className="block">

@@ -499,7 +499,12 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     }
     if ((m = p.match(/^\/admin\/organizations\/([^/]+)\/governance$/))) {
       const obl = obligationsView();
+      const openR = dsr.filter((r) => r.status === "OPEN" || r.status === "IN_PROGRESS");
       return { bodies: gov.bodies, latest_check: gov.latest_check,
+               pdpl: { records: ropa.length, requests_open: openR.length, requests_overdue: openR.filter((r) => daysLeft(r.due_on) < 0).length,
+                       incidents_open: incidents.filter((i) => i.status !== "CLOSED").length,
+                       incidents_notify_overdue: incidents.filter((i) => i.harm_likely && !i.authority_notified_at && i.status !== "CLOSED"
+                         && Date.now() > new Date(i.discovered_at).getTime() + 72 * 3600e3).length },
                obligations: { total: obl.length, in_place: obl.filter((o) => o.effective_status === "IN_PLACE").length,
                               pending: obl.filter((o) => o.effective_status === "PENDING" || o.effective_status === "AT_RISK").length } };
     }

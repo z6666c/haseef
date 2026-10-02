@@ -312,7 +312,19 @@ def org_governance(org_id: UUID, c: Connection = Depends(get_platform_admin)):
     if not c.execute(text("SELECT 1 FROM organizations WHERE id = :o"), {"o": org_id}).scalar_one_or_none():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "لم يُعثر على المنشأة")
     obligations = gs.list_obligations(c, org_id)
+    o = {"o": org_id}
+    pdpl = {
+        "records": c.execute(text("SELECT count(*) FROM pdpl_data_records WHERE org_id = :o"), o).scalar_one(),
+        "requests_open": c.execute(text("""SELECT count(*) FROM pdpl_requests WHERE org_id = :o
+                                           AND status IN ('OPEN','IN_PROGRESS')"""), o).scalar_one(),
+        "requests_overdue": c.execute(text("""SELECT count(*) FROM pdpl_requests WHERE org_id = :o
+                                              AND status IN ('OPEN','IN_PROGRESS') AND due_on < app.today_riyadh()"""), o).scalar_one(),
+        "incidents_open": c.execute(text("SELECT count(*) FROM pdpl_incidents WHERE org_id = :o AND status <> 'CLOSED'"), o).scalar_one(),
+        "incidents_notify_overdue": c.execute(text("""SELECT count(*) FROM pdpl_incidents WHERE org_id = :o AND harm_likely
+            AND authority_notified_at IS NULL AND status <> 'CLOSED' AND now() > discovered_at + interval '72 hours'"""), o).scalar_one(),
+    }
     return {
+        "pdpl": pdpl,
         "bodies": gs.structure(c, org_id),
         "latest_check": gs.latest_run(c, org_id),
         "obligations": {
