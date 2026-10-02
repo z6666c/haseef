@@ -83,6 +83,10 @@ export default function RadarPage() {
                   : <span className="muted">لم يُسجَّل أي اجتماع</span>}</dd>
               </div>
               <div>
+                <dt>هيكل الحوكمة</dt>
+                <dd><Link href="/governance">الهيكل ونتيجة الفحص ←</Link></dd>
+              </div>
+              <div>
                 <dt>مصفوفة الصلاحيات</dt>
                 <dd>{gov.doa_rules > 0
                   ? <>{gov.doa_rules} تفويض ساري، آخر تحديث <span dir="ltr">{formatDate(gov.doa_last_updated!)}</span></>
@@ -97,12 +101,13 @@ export default function RadarPage() {
           {!pdpl.available ? (
             <p className="muted">متاحة في باقة الحوكمة والنمو.</p>
           ) : pdpl.completeness_pct === null ? (
-            <p className="muted">سجل أنشطة المعالجة فارغ. ابدأ بمسيرات الرواتب وملفات الموظفين.</p>
+            <p className="muted">سجل أنشطة المعالجة فارغ. <Link href="/pdpl">أضف أنشطتك الشائعة بنقرة ←</Link></p>
           ) : (
             <>
               <p className="col-big"><b dir="ltr">{pdpl.completeness_pct}%</b> اكتمال سجل المعالجة</p>
               <meter min={0} max={100} value={pdpl.completeness_pct} aria-label="اكتمال سجل المعالجة" />
               <p className="muted small">{pdpl.complete_records} من {pdpl.records} نشاطاً مكتمل البيانات{pdpl.cross_border > 0 && `، ${pdpl.cross_border} بنقل خارج المملكة`}</p>
+              <p className="small"><Link href="/pdpl">السجل والطلبات والحوادث ←</Link></p>
             </>
           )}
         </section>

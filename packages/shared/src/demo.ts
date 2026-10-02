@@ -85,7 +85,9 @@ function dashboard(): Dashboard {
       policies_due: 1,
     },
     governance: { available: true, last_meeting_title: null, last_meeting_date: null, last_meeting_status: null, doa_rules: 0, doa_last_updated: null },
-    pdpl: { available: true, records: 0, complete_records: 0, completeness_pct: null, cross_border: 0 },
+    pdpl: { available: true, records: ropa.length, complete_records: ropa.filter((r) => r.purpose && r.owner_membership_id).length,
+            completeness_pct: ropa.length ? Math.round(100 * ropa.filter((r) => r.purpose && r.owner_membership_id).length / ropa.length) : null,
+            cross_border: ropa.filter((r) => r.cross_border_transfer).length },
   };
 }
 
@@ -298,7 +300,7 @@ function recheck(): void {
   const visible = standards.filter((x) => x.is_visible);
   const { results, score } = runCheck(visible, {
     legal_type: gov.legal_type, size: gov.size, profile: gov.profile, bodies: gov.bodies,
-    active_policy_types: activePolicyTypes(), ropa_count: 0, doa_count: 0, today: inDays(0),
+    active_policy_types: activePolicyTypes(), ropa_count: ropa.length, doa_count: 0, today: inDays(0),
   });
   const by = new Map(visible.map((x) => [x.code, x]));
   gov.latest_check = {
@@ -322,6 +324,36 @@ function obligationsView() {
     return { ...o, ...st, review_status: visible.get(o.code)!.review_status, tracked, effective_status: eff };
   });
 }
+
+// ---------- حماية البيانات (نسخة العرض) ----------
+const OWNER_ID = "own-ahmad";
+type DemoRopa = { id: string; activity_name: string; purpose: string; data_subjects: string; data_categories: string[];
+  includes_sensitive_data: boolean; legal_basis: string; owner_membership_id: string | null; retention_period_months: number;
+  storage_location: string; cross_border_transfer: boolean; transfer_destination: string | null; transfer_safeguard: string | null;
+  processors: string[]; security_controls: string | null; next_review_date: string | null };
+const ropa: DemoRopa[] = [];
+const ropaView = (r: DemoRopa) => ({ ...r, owner_name: r.owner_membership_id === OWNER_ID ? "أحمد العتيبي"
+  : r.owner_membership_id === "own-reem" ? "ريم السبيعي" : null, updated_at: new Date().toISOString() });
+const dsr = [
+  { id: uid(), requester_name: "محمد الغامدي", requester_contact: "m.ghamdi@example.sa", request_type: "ACCESS", channel: "EMAIL",
+    details: "يطلب نسخة من بياناته المحفوظة لدى المنشأة بصفته عميلاً سابقاً.", received_on: inDays(-22), due_on: inDays(8),
+    identity_verified: true, status: "IN_PROGRESS", response_note: null as string | null, completed_on: null as string | null },
+  { id: uid(), requester_name: "عبدالله الشمري", requester_contact: "+966500000077", request_type: "DESTRUCTION", channel: "PHONE",
+    details: "متقدم سابق لوظيفة يطلب حذف سيرته الذاتية.", received_on: inDays(-40), due_on: inDays(-10), identity_verified: true,
+    status: "COMPLETED", response_note: "حُذفت السيرة من بريد التوظيف والأرشيف، وأُبلغ بذلك هاتفياً." as string | null,
+    completed_on: inDays(-33) as string | null },
+];
+const disc0 = new Date(Date.now() - 60 * DAY);
+const incidents: { id: string; title: string; description: string | null; discovered_at: string; occurred_at: string | null;
+  data_categories: string[]; subjects_affected: number | null; severity: string; harm_likely: boolean; status: string;
+  authority_notified_at: string | null; subjects_notified_at: string | null; root_cause: string | null; actions_taken: string | null }[] = [
+  { id: uid(), title: "إرسال كشف رواتب لبريد خاطئ", description: "أُرسل كشف رواتب شهر يوليو لعنوان بريد خارجي بالخطأ.",
+    discovered_at: disc0.toISOString(), occurred_at: new Date(disc0.getTime() - 3 * 3600e3).toISOString(),
+    data_categories: ["الاسم", "الراتب", "الآيبان"], subjects_affected: 18, severity: "MEDIUM", harm_likely: true, status: "CLOSED",
+    authority_notified_at: new Date(disc0.getTime() + 30 * 3600e3).toISOString(), subjects_notified_at: new Date(disc0.getTime() + 40 * 3600e3).toISOString(),
+    root_cause: "إكمال تلقائي لعنوان البريد في برنامج البريد.",
+    actions_taken: "طُلب من المستلم الحذف وأكّد كتابياً، أُبلغت الجهة المختصة والموظفون، وعُطّل الإكمال التلقائي." },
+];
 
 // ---------- الموجّه ----------
 class DemoError extends Error {
@@ -523,6 +555,76 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     }
     throw new DemoError(404, "العضو غير موجود");
   }
+  // ---------- حماية البيانات
+  if (p === "/pdpl/summary") {
+    const open = (r: { status: string }) => r.status === "OPEN" || r.status === "IN_PROGRESS";
+    return { records: { n: ropa.length, no_owner: ropa.filter((r) => !r.owner_membership_id).length,
+                        cross_border: ropa.filter((r) => r.cross_border_transfer).length,
+                        sensitive: ropa.filter((r) => r.includes_sensitive_data).length, review_overdue: 0 },
+             requests: { open: dsr.filter(open).length, overdue: dsr.filter((r) => open(r) && daysLeft(r.due_on) < 0).length },
+             incidents: { open: incidents.filter((i) => i.status !== "CLOSED").length,
+                          notify_overdue: incidents.filter((i) => i.harm_likely && !i.authority_notified_at && i.status !== "CLOSED"
+                            && Date.now() > new Date(i.discovered_at).getTime() + 72 * 3600e3).length },
+             notify_hours: 72, request_days: 30 };
+  }
+  if (p === "/pdpl/owners") return [{ id: OWNER_ID, full_name: "أحمد العتيبي", role: "ORG_ADMIN" }, { id: "own-reem", full_name: "ريم السبيعي", role: "DPO" }];
+  if (p === "/pdpl/record-templates") return CONTENT.ropa_templates.map((t) => ({ key: t.key, activity_name: t.activity_name, data_subjects: t.data_subjects }));
+  if (p === "/pdpl/records" && method === "GET") return ropa.map(ropaView);
+  if ((m = p.match(/^\/pdpl\/records\/from-template\/([^/]+)$/))) {
+    const t = CONTENT.ropa_templates.find((x) => x.key === m![1]); if (!t) throw new DemoError(404, "النموذج غير موجود");
+    const { key: _k, ...rest } = t;
+    const id = uid();
+    ropa.push({ cross_border_transfer: false, transfer_destination: null, transfer_safeguard: null, ...clone(rest), id,
+                owner_membership_id: OWNER_ID, next_review_date: inDays(365) } as DemoRopa);
+    recheck(); return { id };
+  }
+  if (p === "/pdpl/records" && method === "POST") {
+    if (body.cross_border_transfer && !(body.transfer_destination && body.transfer_safeguard)) throw new DemoError(422, "النقل خارج المملكة يتطلب تحديد الوجهة والأساس النظامي");
+    const id = uid(); ropa.push({ ...(body as unknown as DemoRopa), id }); recheck(); return { id };
+  }
+  if ((m = p.match(/^\/pdpl\/records\/([^/]+)$/))) {
+    const k = ropa.findIndex((r) => r.id === m![1]); if (k < 0) throw new DemoError(404, "النشاط غير موجود");
+    if (method === "DELETE") ropa.splice(k, 1); else Object.assign(ropa[k], body, { id: ropa[k].id });
+    recheck(); return method === "DELETE" ? undefined : { updated: true };
+  }
+  if (p === "/pdpl/requests" && method === "GET") return dsr.map((r) => ({ ...r, days_left: daysLeft(r.due_on) }))
+    .sort((a, b) => Number(["COMPLETED", "REJECTED"].includes(a.status)) - Number(["COMPLETED", "REJECTED"].includes(b.status)) || a.due_on.localeCompare(b.due_on));
+  if (p === "/pdpl/requests" && method === "POST") {
+    const id = uid(); const recv = String(body.received_on);
+    const due = (body.due_on as string) || iso(new Date(new Date(`${recv}T00:00:00Z`).getTime() + 30 * DAY));
+    dsr.push({ id, requester_name: String(body.requester_name), requester_contact: (body.requester_contact as string) ?? null,
+               request_type: String(body.request_type), channel: String(body.channel), details: (body.details as string) ?? null,
+               received_on: recv, due_on: due, identity_verified: false, status: "OPEN", response_note: null, completed_on: null });
+    return { id, due_on: due };
+  }
+  if ((m = p.match(/^\/pdpl\/requests\/([^/]+)$/))) {
+    const r = dsr.find((x) => x.id === m![1]); if (!r) throw new DemoError(404, "الطلب غير موجود");
+    if (body.status === "COMPLETED" && !body.identity_verified) throw new DemoError(422, "تحقق من هوية مقدم الطلب قبل إغلاقه بالتنفيذ");
+    const done = body.status === "COMPLETED" || body.status === "REJECTED";
+    Object.assign(r, { status: body.status, identity_verified: !!body.identity_verified, response_note: (body.response_note as string) ?? r.response_note,
+                       completed_on: done ? r.completed_on ?? inDays(0) : null });
+    return { updated: true };
+  }
+  if (p === "/pdpl/incidents" && method === "GET") return incidents.map((i) => ({ ...i,
+    notify_deadline: new Date(new Date(i.discovered_at).getTime() + 72 * 3600e3).toISOString() }))
+    .sort((a, b) => Number(a.status === "CLOSED") - Number(b.status === "CLOSED") || b.discovered_at.localeCompare(a.discovered_at));
+  if (p === "/pdpl/incidents" && method === "POST") {
+    const id = uid();
+    incidents.push({ id, title: String(body.title), description: (body.description as string) ?? null, discovered_at: String(body.discovered_at),
+      occurred_at: (body.occurred_at as string) ?? null, data_categories: (body.data_categories as string[]) ?? [],
+      subjects_affected: (body.subjects_affected as number) ?? null, severity: String(body.severity ?? "MEDIUM"), harm_likely: body.harm_likely !== false,
+      status: "OPEN", authority_notified_at: null, subjects_notified_at: null, root_cause: null, actions_taken: null });
+    return { id };
+  }
+  if ((m = p.match(/^\/pdpl\/incidents\/([^/]+)$/))) {
+    const i = incidents.find((x) => x.id === m![1]); if (!i) throw new DemoError(404, "الحادثة غير موجودة");
+    if (body.status === "REPORTED" && !(body.authority_notified_at || i.authority_notified_at)) throw new DemoError(422, "سجّل وقت إبلاغ الجهة المختصة");
+    for (const k of ["harm_likely", "authority_notified_at", "subjects_notified_at", "root_cause", "actions_taken"] as const)
+      if (body[k] !== undefined && body[k] !== null) (i as Record<string, unknown>)[k] = body[k];
+    i.status = String(body.status);
+    return { updated: true };
+  }
+
   if (p === "/obligations") return obligationsView();
   if ((m = p.match(/^\/obligations\/([^/]+)$/))) {
     const o = oblState.get(m[1]); if (!o) throw new DemoError(404, "الالتزام غير موجود");

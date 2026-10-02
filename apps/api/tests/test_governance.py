@@ -53,6 +53,17 @@ class ContentTests(unittest.TestCase):
             self.assertIn(s["rule"]["check"], kinds, s["code"])
 
 
+class PdplContentTests(unittest.TestCase):
+    def test_ropa_templates_valid(self):
+        from haseef.content.pdpl import ROPA_TEMPLATES
+        for t in ROPA_TEMPLATES:
+            self.assertIn(t["data_subjects"], {"EMPLOYEES", "CUSTOMERS", "VENDORS", "APPLICANTS", "VISITORS", "OTHER"})
+            self.assertIn(t["legal_basis"], {"CONSENT", "CONTRACTUAL", "LEGAL_OBLIGATION", "VITAL_INTEREST", "PUBLIC_INTEREST", "LEGITIMATE_INTEREST"})
+            self.assertIn(t["storage_location"], {"SAUDI_LOCAL_CLOUD", "ON_PREMISE", "FOREIGN_CLOUD"})
+            if t.get("cross_border_transfer"):
+                self.assertTrue(t["transfer_destination"] and t["transfer_safeguard"])
+
+
 class CheckTests(unittest.TestCase):
     def test_sole_proprietorship_ignores_jsc_rules(self):
         results, _ = run_check(std(), ctx(legal="SOLE_PROPRIETORSHIP"))

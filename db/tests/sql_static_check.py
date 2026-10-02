@@ -25,6 +25,11 @@ FRAGMENTS = {
                  "applies_legal_types, related_codes, review_status, version, updated_at",
     "_LIB_ADMIN_COLS": "d.id, d.slug, d.kind, d.title, cu.full_name AS created_by_name, uu.full_name AS updated_by_name",
     "_plan_ok(t)": "true",
+    "_REC_COLS": "r.id, r.activity_name, u.full_name AS owner_name",
+    "_REC_FROM": "FROM pdpl_data_records r LEFT JOIN memberships m ON m.id = r.owner_membership_id LEFT JOIN users u ON u.id = m.user_id",
+    "_REQ_COLS": "id, requester_name, (due_on - app.today_riyadh()) AS days_left",
+    "_INC_COLS": "id, title, discovered_at + interval '72 hours' AS notify_deadline",
+    "NOTIFY_HOURS": "72",
     "profile_sets": "employees_count = employees_count",
     "table": "gov_standards",   # تعديل عام لكتالوجات المحتوى
     "key_col": "code",

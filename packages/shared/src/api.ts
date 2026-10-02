@@ -84,6 +84,24 @@ export function createApi(
     deleteMember: (id: string) => req<void>(`/governance/members/${id}`, { method: "DELETE" }),
     runCheck: () => req<CheckRun>("/governance/check", { method: "POST" }),
 
+    // ---------- حماية البيانات الشخصية
+    pdplSummary: () => req<PdplOverview>("/pdpl/summary"),
+    ropa: () => req<RopaRecord[]>("/pdpl/records"),
+    ropaOwners: () => req<{ id: string; full_name: string; role: string }[]>("/pdpl/owners"),
+    ropaTemplates: () => req<{ key: string; activity_name: string; data_subjects: string }[]>("/pdpl/record-templates"),
+    addRopa: (b: RopaInput) => req<{ id: string }>("/pdpl/records", { method: "POST", body: JSON.stringify(b) }),
+    addRopaFromTemplate: (key: string) => req<{ id: string }>(`/pdpl/records/from-template/${key}`, { method: "POST" }),
+    updateRopa: (id: string, b: RopaInput) => req<{ updated: boolean }>(`/pdpl/records/${id}`, { method: "PUT", body: JSON.stringify(b) }),
+    deleteRopa: (id: string) => req<void>(`/pdpl/records/${id}`, { method: "DELETE" }),
+    dsr: () => req<DataRequest[]>("/pdpl/requests"),
+    addDsr: (b: DataRequestInput) => req<{ id: string; due_on: string }>("/pdpl/requests", { method: "POST", body: JSON.stringify(b) }),
+    updateDsr: (id: string, b: { status: string; identity_verified: boolean; response_note: string | null }) =>
+      req<{ updated: boolean }>(`/pdpl/requests/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+    incidents: () => req<Incident[]>("/pdpl/incidents"),
+    addIncident: (b: IncidentInput) => req<{ id: string }>("/pdpl/incidents", { method: "POST", body: JSON.stringify(b) }),
+    updateIncident: (id: string, b: Record<string, unknown>) =>
+      req<{ updated: boolean }>(`/pdpl/incidents/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+
     // ---------- الالتزامات
     obligations: () => req<Obligation[]>("/obligations"),
     setObligation: (code: string, status: ObligationStatus, note?: string | null) =>
@@ -296,4 +314,35 @@ export interface AdminLibraryDoc extends LibraryDoc {
 export interface AdminOrgGovernance {
   bodies: GovBody[]; latest_check: CheckRun | null;
   obligations: { total: number; in_place: number; pending: number };
+}
+
+// ---------- حماية البيانات الشخصية
+export interface RopaInput {
+  activity_name: string; purpose: string; data_subjects: string; data_categories: string[]; includes_sensitive_data: boolean;
+  legal_basis: string; owner_membership_id: string | null; retention_period_months: number; storage_location: string;
+  cross_border_transfer: boolean; transfer_destination: string | null; transfer_safeguard: string | null;
+  processors: string[]; security_controls: string | null; next_review_date: string | null;
+}
+export interface RopaRecord extends RopaInput { id: string; owner_name: string | null; updated_at: string }
+export interface DataRequestInput {
+  requester_name: string; requester_contact: string | null; request_type: string; channel: string; details: string | null;
+  received_on: string; due_on?: string | null;
+}
+export interface DataRequest extends DataRequestInput {
+  id: string; due_on: string; identity_verified: boolean; status: "OPEN" | "IN_PROGRESS" | "COMPLETED" | "REJECTED";
+  response_note: string | null; completed_on: string | null; days_left: number;
+}
+export interface IncidentInput {
+  title: string; description: string | null; discovered_at: string; occurred_at: string | null; data_categories: string[];
+  subjects_affected: number | null; severity: "LOW" | "MEDIUM" | "HIGH"; harm_likely: boolean;
+}
+export interface Incident extends IncidentInput {
+  id: string; status: "OPEN" | "CONTAINED" | "REPORTED" | "CLOSED"; authority_notified_at: string | null;
+  subjects_notified_at: string | null; root_cause: string | null; actions_taken: string | null; notify_deadline: string;
+}
+export interface PdplOverview {
+  records: { n: number; no_owner: number; cross_border: number; sensitive: number; review_overdue: number };
+  requests: { open: number; overdue: number };
+  incidents: { open: number; notify_overdue: number };
+  notify_hours: number; request_days: number;
 }

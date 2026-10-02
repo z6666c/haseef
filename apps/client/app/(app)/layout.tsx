@@ -16,7 +16,7 @@ const NAV = [
   { href: "/governance", label: "الحوكمة وهيكل الشركة", Icon: GavelDocument },
   { href: "/policies", label: "السياسات الداخلية", Icon: DocSeal },
   { href: "/library", label: "المكتبة المرجعية", Icon: BookOpen },
-  { href: null, label: "حماية البيانات PDPL", Icon: FingerprintShield, soon: "المرحلة 3" },
+  { href: "/pdpl", label: "حماية البيانات PDPL", Icon: FingerprintShield },
   { href: null, label: "فاحص العقود بالذكاء الاصطناعي", Icon: FileSparkle, soon: "المرحلة 2" },
   { href: null, label: "التنبيهات والواتساب", Icon: BellMessage, soon: "المرحلة 3" },
 ];

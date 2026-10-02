@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from haseef.content.library import GUIDES, LAWS, TEMPLATES  # noqa: E402
 from haseef.content.obligations import OBLIGATIONS, applies_to  # noqa: E402
+from haseef.content.pdpl import ROPA_TEMPLATES  # noqa: E402
 from haseef.content.examples import EXAMPLES, PROFILE as EX_PROFILE  # noqa: E402
 from haseef.content.standards import STANDARDS, STRUCTURE_TEMPLATES  # noqa: E402
 from haseef.domain.governance_check import Body, Member, OrgContext, run_check  # noqa: E402
@@ -92,6 +93,6 @@ examples = {lt: {"title": ex["title"], "bodies": _bodies(ex["bodies"])} for lt, 
 
 json.dump({"library": library, "structure": {"legal_type": LEGAL, "size": "SMALL", "profile": profile, "bodies": bodies,
                                              "latest_check": check, "example_title": EXAMPLES[LEGAL]["title"]},
-           "templates": templates, "examples": examples, "check_today": "2026-10-02",
+           "templates": templates, "examples": examples, "check_today": "2026-10-02", "ropa_templates": ROPA_TEMPLATES,
            "obligations": obligations, "admin_standards": admin_standards, "admin_obligations": admin_obligations},
           sys.stdout, ensure_ascii=False, indent=1)

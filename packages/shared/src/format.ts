@@ -215,3 +215,23 @@ export function fileSize(bytes: number | null | undefined): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} ك.ب`;
   return `${(bytes / 1024 / 1024).toFixed(1)} م.ب`;
 }
+
+// ---------- حماية البيانات
+export const DATA_SUBJECTS_LABEL: Record<string, string> = {
+  EMPLOYEES: "الموظفون", CUSTOMERS: "العملاء", VENDORS: "الموردون", APPLICANTS: "المتقدمون للوظائف", VISITORS: "الزوار", OTHER: "أخرى",
+};
+export const LEGAL_BASIS_LABEL: Record<string, string> = {
+  CONSENT: "الموافقة", CONTRACTUAL: "تنفيذ عقد", LEGAL_OBLIGATION: "التزام نظامي", VITAL_INTEREST: "مصلحة حيوية",
+  PUBLIC_INTEREST: "مصلحة عامة", LEGITIMATE_INTEREST: "مصلحة مشروعة",
+};
+export const STORAGE_LABEL: Record<string, string> = {
+  SAUDI_LOCAL_CLOUD: "سحابة داخل المملكة", ON_PREMISE: "خوادم المنشأة", FOREIGN_CLOUD: "سحابة خارج المملكة",
+};
+export const DSR_TYPE_LABEL: Record<string, string> = {
+  ACCESS: "الاطلاع على البيانات", COPY: "نسخة من البيانات", CORRECTION: "تصحيح", DESTRUCTION: "إتلاف",
+  WITHDRAW_CONSENT: "سحب الموافقة", OBJECTION: "اعتراض", OTHER: "أخرى",
+};
+export const DSR_STATUS_LABEL: Record<string, string> = { OPEN: "جديد", IN_PROGRESS: "قيد المعالجة", COMPLETED: "نُفّذ", REJECTED: "رُفض" };
+export const CHANNEL_LABEL: Record<string, string> = { EMAIL: "بريد", PHONE: "هاتف", WEBSITE: "الموقع", IN_PERSON: "حضورياً", OTHER: "أخرى" };
+export const INCIDENT_STATUS_LABEL: Record<string, string> = { OPEN: "مفتوحة", CONTAINED: "احتُويت", REPORTED: "أُبلغ عنها", CLOSED: "مغلقة" };
+export const SEVERITY_LABEL: Record<string, string> = { LOW: "منخفضة", MEDIUM: "متوسطة", HIGH: "عالية" };

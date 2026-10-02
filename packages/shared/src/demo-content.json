@@ -2228,6 +2228,130 @@
   }
  },
  "check_today": "2026-10-02",
+ "ropa_templates": [
+  {
+   "key": "HR",
+   "activity_name": "شؤون الموظفين والرواتب",
+   "data_subjects": "EMPLOYEES",
+   "purpose": "إدارة علاقة العمل: التعيين، صرف الرواتب، التأمينات، التأمين الصحي، الإجازات، والتقييم.",
+   "data_categories": [
+    "الاسم",
+    "رقم الهوية / الإقامة",
+    "الجوال والعنوان",
+    "الراتب والآيبان",
+    "المؤهلات",
+    "بيانات التأمين الصحي"
+   ],
+   "includes_sensitive_data": true,
+   "legal_basis": "LEGAL_OBLIGATION",
+   "retention_period_months": 120,
+   "storage_location": "SAUDI_LOCAL_CLOUD",
+   "processors": [
+    "نظام الموارد البشرية والرواتب",
+    "شركة التأمين الصحي",
+    "البنك"
+   ],
+   "security_controls": "صلاحيات مقصورة على الموارد البشرية والمالية، تحقق ثنائي، نسخ احتياطي يومي."
+  },
+  {
+   "key": "CUSTOMERS",
+   "activity_name": "إدارة العملاء والفوترة",
+   "data_subjects": "CUSTOMERS",
+   "purpose": "تقديم الخدمة وإصدار الفواتير والتحصيل والوفاء بالمتطلبات الضريبية.",
+   "data_categories": [
+    "الاسم",
+    "الجوال والبريد",
+    "العنوان الوطني",
+    "الرقم الضريبي",
+    "سجل التعاملات"
+   ],
+   "includes_sensitive_data": false,
+   "legal_basis": "CONTRACTUAL",
+   "retention_period_months": 72,
+   "storage_location": "SAUDI_LOCAL_CLOUD",
+   "processors": [
+    "نظام المحاسبة والفوترة"
+   ],
+   "security_controls": "صلاحيات حسب الدور، تشفير الاتصال، سجل دخول."
+  },
+  {
+   "key": "APPLICANTS",
+   "activity_name": "التوظيف واستقبال السير الذاتية",
+   "data_subjects": "APPLICANTS",
+   "purpose": "تقييم المتقدمين للوظائف والتواصل معهم.",
+   "data_categories": [
+    "الاسم",
+    "السيرة الذاتية",
+    "المؤهلات والخبرات",
+    "الجوال والبريد"
+   ],
+   "includes_sensitive_data": false,
+   "legal_basis": "CONSENT",
+   "retention_period_months": 6,
+   "storage_location": "SAUDI_LOCAL_CLOUD",
+   "processors": [],
+   "security_controls": "بريد توظيف مخصص بصلاحيات محدودة، حذف دوري بعد 6 أشهر."
+  },
+  {
+   "key": "CCTV",
+   "activity_name": "كاميرات المراقبة",
+   "data_subjects": "VISITORS",
+   "purpose": "حماية الأشخاص والممتلكات في مقر المنشأة.",
+   "data_categories": [
+    "صور وتسجيلات مرئية"
+   ],
+   "includes_sensitive_data": false,
+   "legal_basis": "LEGAL_OBLIGATION",
+   "retention_period_months": 3,
+   "storage_location": "ON_PREMISE",
+   "processors": [
+    "مزود صيانة أنظمة المراقبة"
+   ],
+   "security_controls": "جهاز تسجيل في غرفة مقفلة، وصول للأمن فقط، لوحات تنبيه بوجود المراقبة."
+  },
+  {
+   "key": "MARKETING",
+   "activity_name": "التسويق والرسائل الترويجية",
+   "data_subjects": "CUSTOMERS",
+   "purpose": "إرسال العروض والتحديثات لمن وافق على ذلك.",
+   "data_categories": [
+    "الاسم",
+    "الجوال",
+    "البريد",
+    "تفضيلات التواصل"
+   ],
+   "includes_sensitive_data": false,
+   "legal_basis": "CONSENT",
+   "retention_period_months": 24,
+   "storage_location": "FOREIGN_CLOUD",
+   "processors": [
+    "منصة إرسال الرسائل"
+   ],
+   "cross_border_transfer": true,
+   "transfer_destination": "«الدولة» — مزود منصة الرسائل",
+   "transfer_safeguard": "«الأساس النظامي للنقل — مثلاً: قرار كفاية أو ضمانات تعاقدية وفق لائحة النقل»",
+   "security_controls": "رابط إلغاء اشتراك في كل رسالة، تحديث قائمة الموافقات أسبوعياً."
+  },
+  {
+   "key": "VENDORS",
+   "activity_name": "الموردون والمقاولون من الباطن",
+   "data_subjects": "VENDORS",
+   "purpose": "التعاقد والدفع ومتابعة التنفيذ.",
+   "data_categories": [
+    "اسم ممثل المورد",
+    "الجوال والبريد",
+    "الحساب البنكي"
+   ],
+   "includes_sensitive_data": false,
+   "legal_basis": "CONTRACTUAL",
+   "retention_period_months": 72,
+   "storage_location": "SAUDI_LOCAL_CLOUD",
+   "processors": [
+    "نظام المشتريات"
+   ],
+   "security_controls": "صلاحيات للمشتريات والمالية، اعتماد مزدوج لتغيير الحساب البنكي."
+  }
+ ],
  "obligations": [
   {
    "code": "CR_ANNUAL_CONFIRMATION",

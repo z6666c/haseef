@@ -116,6 +116,29 @@ def run() -> None:
         for org in (nukhba, waha):
             gs.sync_obligations(conn, org)
 
+        # حماية البيانات: طلبان من أصحاب البيانات وحادثة مغلقة (سجل الأنشطة يُترك فارغاً لتظهر الفجوة)
+        conn.execute(text("DELETE FROM pdpl_requests WHERE org_id = :o"), {"o": nukhba})
+        conn.execute(text("DELETE FROM pdpl_incidents WHERE org_id = :o"), {"o": nukhba})
+        conn.execute(text("""INSERT INTO pdpl_requests (org_id, requester_name, requester_contact, request_type, channel, details,
+                                                        received_on, due_on, status, identity_verified, response_note, completed_on)
+                             VALUES (:o, 'محمد الغامدي', 'm.ghamdi@example.sa', 'ACCESS', 'EMAIL',
+                                     'يطلب نسخة من بياناته المحفوظة لدى المنشأة بصفته عميلاً سابقاً.', :r1, :d1, 'IN_PROGRESS', true, NULL, NULL),
+                                    (:o, 'عبدالله الشمري', '+966500000077', 'DESTRUCTION', 'PHONE',
+                                     'متقدم سابق لوظيفة يطلب حذف سيرته الذاتية.', :r2, :d2, 'COMPLETED', true,
+                                     'حُذفت السيرة من بريد التوظيف والأرشيف، وأُبلغ بذلك هاتفياً.', :c2)"""),
+                     {"o": nukhba, "r1": TODAY - timedelta(days=22), "d1": TODAY + timedelta(days=8),
+                      "r2": TODAY - timedelta(days=40), "d2": TODAY - timedelta(days=10), "c2": TODAY - timedelta(days=33)})
+        disc = datetime.now(timezone.utc) - timedelta(days=60)
+        conn.execute(text("""INSERT INTO pdpl_incidents (org_id, title, description, discovered_at, occurred_at, data_categories,
+                                 subjects_affected, severity, harm_likely, status, authority_notified_at, subjects_notified_at,
+                                 root_cause, actions_taken)
+                             VALUES (:o, 'إرسال كشف رواتب لبريد خاطئ', 'أُرسل كشف رواتب شهر يوليو لعنوان بريد خارجي بالخطأ.',
+                                     :disc, :occ, CAST(:cats AS jsonb), 18, 'MEDIUM', true, 'CLOSED', :notif, :subj,
+                                     'إكمال تلقائي لعنوان البريد في برنامج البريد.',
+                                     'طُلب من المستلم الحذف وأكّد كتابياً، أُبلغت الجهة المختصة والموظفون، وعُطّل الإكمال التلقائي وأصبح إرسال الكشوف عبر النظام فقط.')"""),
+                     {"o": nukhba, "disc": disc, "occ": disc - timedelta(hours=3), "cats": '["الاسم", "الراتب", "الآيبان"]',
+                      "notif": disc + timedelta(hours=30), "subj": disc + timedelta(hours=40)})
+
     for org in (nukhba, waha):
         with platform_tx() as conn:
             gs.run_and_save(conn, org, None)        # يعيد احتساب المؤشر أيضاً
