@@ -11,6 +11,8 @@ import { runCheck, type CkStandard } from "./governanceCheck.ts";
 const DEMO_USERS: Record<string, { password: string; token: string }> = {
   "demo@haseef.sa": { password: "Haseef@2026", token: "demo-client" },
   "admin@haseef.sa": { password: "Haseef@2026", token: "demo-admin" },
+  "support@haseef.sa": { password: "support@haseef.sa@", token: "demo-support" },
+  "billing@haseef.sa": { password: "billing@haseef.sa@", token: "demo-billing" },
 };
 
 const ORG_A = "0a1f5c1e-0000-4000-8000-000000000001";
@@ -145,8 +147,8 @@ const orgs: Org[] = [
 ];
 const team: { id: string; full_name: string; email: string; platform_role: string; is_active: boolean; last_login_at: string | null; must_change_password: boolean }[] = [
   { id: ADMIN_ME.id, full_name: "فريق عمليات حصيف", email: "admin@haseef.sa", platform_role: "SUPER_ADMIN", is_active: true, last_login_at: ago(1), must_change_password: false },
-  { id: uid(), full_name: "الدعم الفني", email: "support@haseef.sa", platform_role: "SUPPORT", is_active: true, last_login_at: ago(60 * 3), must_change_password: false },
-  { id: uid(), full_name: "المحاسبة", email: "billing@haseef.sa", platform_role: "BILLING", is_active: true, last_login_at: ago(60 * 30), must_change_password: false },
+  { id: "0a1f5c1e-0000-4000-8000-0000000000b2", full_name: "الدعم الفني", email: "support@haseef.sa", platform_role: "SUPPORT", is_active: true, last_login_at: ago(60 * 3), must_change_password: false },
+  { id: "0a1f5c1e-0000-4000-8000-0000000000b3", full_name: "المحاسبة", email: "billing@haseef.sa", platform_role: "BILLING", is_active: true, last_login_at: ago(60 * 30), must_change_password: false },
 ];
 let auditSeq = 50;
 const audit: { id: number; created_at: string; action: string; entity_type: string; entity_id: string | null; changes: Record<string, unknown> | null; ip: string | null; actor: string | null; actor_role: string | null; org_name: string | null; org_id: string | null }[] = [
@@ -355,6 +357,28 @@ const incidents: { id: string; title: string; description: string | null; discov
     actions_taken: "طُلب من المستلم الحذف وأكّد كتابياً، أُبلغت الجهة المختصة والموظفون، وعُطّل الإكمال التلقائي." },
 ];
 
+// ---------- أدوار فريق حصيف في نسخة العرض (تطابق صلاحيات الخادم) ----------
+const TEAM_ROLE: Record<string, "SUPER_ADMIN" | "SUPPORT" | "BILLING"> = {
+  "demo-admin": "SUPER_ADMIN", "demo-support": "SUPPORT", "demo-billing": "BILLING",
+};
+const TEAM_ME: Record<string, { id: string; email: string; full_name: string }> = {
+  SUPER_ADMIN: { id: "0a1f5c1e-0000-4000-8000-0000000000b1", email: "admin@haseef.sa", full_name: "فريق عمليات حصيف" },
+  SUPPORT: { id: "0a1f5c1e-0000-4000-8000-0000000000b2", email: "support@haseef.sa", full_name: "الدعم الفني" },
+  BILLING: { id: "0a1f5c1e-0000-4000-8000-0000000000b3", email: "billing@haseef.sa", full_name: "المحاسبة" },
+};
+const ROLE_NAME = { SUPER_ADMIN: "المدير العام", SUPPORT: "الدعم الفني", BILLING: "المحاسبة" } as const;
+function requireRole(role: keyof typeof ROLE_NAME, method: string, p: string, body: Record<string, unknown>) {
+  if (method === "GET" || role === "SUPER_ADMIN") return;
+  const deny = (allowed: (keyof typeof ROLE_NAME)[]) => {
+    if (!allowed.includes(role)) throw new DemoError(403, `هذا الإجراء متاح لـ: ${["المدير العام", ...allowed.map((r) => ROLE_NAME[r])].join("، ")}`);
+  };
+  if (/\/(suspend|reactivate)$/.test(p) || p.startsWith("/admin/team") || (method === "DELETE" && p.startsWith("/admin/library"))) return deny([]);
+  if ("review_status" in body) throw new DemoError(403, "اعتماد المحتوى أو إعادته لمسودة للمدير العام فقط");
+  if (/\/subscription\/extend-trial$/.test(p)) return deny(["BILLING", "SUPPORT"]);
+  if (/\/subscription\//.test(p)) return deny(["BILLING"]);
+  return deny(["SUPPORT"]);
+}
+
 // ---------- الموجّه ----------
 class DemoError extends Error {
   status: number;
@@ -374,13 +398,15 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     return { access_token: u.token, token_type: "bearer", must_change_password: false };
   }
   if (!token) throw new DemoError(401, "سجّل الدخول أولاً");
-  const isAdmin = token === "demo-admin";
-  if (p === "/auth/me") return isAdmin ? ADMIN_ME : CLIENT_ME;
+  const role = TEAM_ROLE[token];
+  const isAdmin = !!role;
+  if (p === "/auth/me") return isAdmin ? { ...ADMIN_ME, ...TEAM_ME[role] } : CLIENT_ME;
   if (p === "/auth/change-password") return undefined;
 
   if (p.startsWith("/admin")) {
     if (!isAdmin) throw new DemoError(403, "هذه الواجهة لفريق حصيف فقط");
-    if (p === "/admin/me") return { user_id: ADMIN_ME.id, role: "SUPER_ADMIN" };
+    if (p === "/admin/me") return { user_id: TEAM_ME[role].id, role };
+    requireRole(role, method, p, body);
     if (p === "/admin/overview") return overview();
     if (p === "/admin/organizations" && method === "GET") return orgs.map(orgRow);
     if (p === "/admin/organizations" && method === "POST") {
