@@ -22,10 +22,14 @@ TODAY = date.today()
 
 
 def run() -> None:
+    from haseef.config import get_settings
+    if get_settings().env == "production":
+        raise SystemExit("seed.py لبيئة التطوير فقط: يضع كلمات مرور معروفة")
     passwords: dict[str, str] = {}
 
-    def user(conn, email: str, name: str, phone: str | None = None, role: str | None = None) -> str:
-        pw = secrets.token_urlsafe(9)
+    def user(conn, email: str, name: str, phone: str | None = None, role: str | None = None,
+             password: str | None = None) -> str:
+        pw = password or secrets.token_urlsafe(9)
         passwords[email] = pw
         return conn.execute(text("""
             INSERT INTO users (email, full_name, phone_number, password_hash, is_platform_admin, platform_role)
@@ -60,8 +64,9 @@ def run() -> None:
         sara = user(conn, "sara@waha.example", "سارة القحطاني", "+966500000002")
         advisor = user(conn, "advisor@example.sa", "مكتب الامتثال الاستشاري")
         user(conn, "ops@haseef.sa", "فريق عمليات حصيف", role="SUPER_ADMIN")
-        user(conn, "support@haseef.sa", "الدعم الفني", role="SUPPORT")
-        user(conn, "billing@haseef.sa", "المحاسبة", role="BILLING")
+        # كلمتا مرور ثابتتان لبيئة التطوير فقط (طلب المالك): البريد + @ — لا تُستخدم في الإنتاج
+        user(conn, "support@haseef.sa", "الدعم الفني", role="SUPPORT", password="support@haseef.sa@")
+        user(conn, "billing@haseef.sa", "المحاسبة", role="BILLING", password="billing@haseef.sa@")
 
         for org, uid, role in [(nukhba, ahmad, "ORG_ADMIN"), (waha, sara, "ORG_ADMIN"),
                                (nukhba, advisor, "EXTERNAL_ADVISOR"), (waha, advisor, "EXTERNAL_ADVISOR")]:
