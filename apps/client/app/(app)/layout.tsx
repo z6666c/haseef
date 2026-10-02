@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PLAN_LABEL, type Me } from "@haseef/shared";
-import { BellMessage, BookOpen, BuildingBadge, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, Scales } from "@/components/Icons";
+import { PLAN_LABEL, PLATFORM_LEGAL_PAGES, type Me } from "@haseef/shared";
+import {
+  BellMessage, BookOpen, BuildingBadge, BuildingsGroup, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, ReportChart, Scales,
+} from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { api, getSession, setSession } from "@/lib/session";
 
@@ -18,8 +20,10 @@ const NAV = [
   { href: "/library", label: "المكتبة المرجعية", Icon: BookOpen },
   { href: "/legal", label: "استشارة محامٍ", Icon: Scales },
   { href: "/pdpl", label: "حماية البيانات PDPL", Icon: FingerprintShield },
+  { href: "/alerts", label: "التنبيهات والواتساب", Icon: BellMessage },
+  { href: "/group", label: "المجموعة والمنشآت", Icon: BuildingsGroup },
+  { href: "/reports", label: "تقرير المجلس", Icon: ReportChart },
   { href: null, label: "فاحص العقود بالذكاء الاصطناعي", Icon: FileSparkle, soon: "المرحلة 2" },
-  { href: null, label: "التنبيهات والواتساب", Icon: BellMessage, soon: "المرحلة 3" },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -102,6 +106,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <button type="button" onClick={logout}>تسجيل الخروج</button>
           </div>
         </div>
+        <nav className="side-legal" aria-label="الوثائق القانونية">
+          {PLATFORM_LEGAL_PAGES.map((p) => <Link key={p.key} href={p.href}>{p.short}</Link>)}
+        </nav>
       </aside>
       <main className="content">{children}</main>
     </div>

@@ -158,3 +158,22 @@ export const Scales = (p: P) => (
     <path d="m19 7-2.5 6a3 3 0 0 0 5 0Z" stroke={A} />
   </Svg>
 );
+
+/** المجموعة والمنشآت — مبنى رئيسي ومنشأتان تابعتان */
+export const BuildingsGroup = (p: P) => (
+  <Svg {...p}>
+    <path d="M9 20.5V5.5L13.5 3.5v17" />
+    <path d="M11.2 8h.1M11.2 11.5h.1M11.2 15h.1" />
+    <path d="M3 20.5v-8h6M15 20.5v-6h6v6" stroke={A} />
+    <path d="M2 20.5h20" />
+  </Svg>
+);
+
+/** تقرير المجلس — وثيقة بمخطط أعمدة */
+export const ReportChart = (p: P) => (
+  <Svg {...p}>
+    <path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8Z" />
+    <path d="M14 3v5h5" />
+    <path d="M9 17.5v-3M12 17.5v-5M15 17.5v-2" stroke={A} />
+  </Svg>
+);

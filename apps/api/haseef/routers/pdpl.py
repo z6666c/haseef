@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import text
 
 from ..content.pdpl import ROPA_TEMPLATES
+from ..domain import dpia as dp
 from ..deps import WRITERS, Tenant, get_tenant
 from ..services import governance_service as gs
 from .compliance import _audit
@@ -275,6 +276,148 @@ def update_incident(incident_id: UUID, body: IncidentUpdate, t: Tenant = Depends
     return {"updated": True}
 
 
+# ------------------------------------------------------------------ تقييم الأثر (DPIA)
+class Mitigation(BaseModel):
+    code: str = Field(min_length=1, max_length=40)
+    text: str = Field(min_length=3, max_length=1000)
+    owner: str | None = Field(default=None, max_length=150)
+    due_on: date | None = None
+    status: Literal["PLANNED", "IN_PROGRESS", "DONE"] = "PLANNED"
+
+
+class DpiaIn(BaseModel):
+    project_name: str = Field(min_length=3, max_length=255)
+    description: str | None = None
+    related_record_id: UUID | None = None
+    answers: dict[str, bool] = Field(default_factory=dict)
+    mitigations: list[Mitigation] | None = None      # None = تُقترح تلقائياً من الإجابات
+    dpo_opinion: str | None = None
+
+
+_DPIA_COLS = """d.id, d.project_name, d.description, d.related_record_id, r.activity_name AS related_activity,
+               d.questionnaire_version, d.answers, d.risk_score, d.risk_level, d.residual_score, d.residual_level,
+               d.mitigations, d.dpo_opinion, d.status, d.completed_at, d.approved_at, ua.full_name AS approved_by_name,
+               uc.full_name AS created_by_name, d.created_at, d.updated_at"""
+_DPIA_FROM = """FROM dpia_assessments d LEFT JOIN pdpl_data_records r ON r.id = d.related_record_id
+               LEFT JOIN users ua ON ua.id = d.approved_by LEFT JOIN users uc ON uc.id = d.created_by"""
+
+
+def _dpia_row(t: Tenant, did: UUID) -> dict:
+    row = t.conn.execute(text(f"SELECT {_DPIA_COLS} {_DPIA_FROM} WHERE d.id = :id"), {"id": did}).mappings().one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "التقييم غير موجود")
+    out = dict(row)
+    a = dp.assess(out["answers"] or {}, out["mitigations"] or [])
+    out["required"], out["triggers"], out["open_mitigations"] = a.required, a.triggers, a.open_mitigations
+    return out
+
+
+def _dpia_values(body: DpiaIn) -> dict:
+    try:
+        mits = [m.model_dump(mode="json") for m in body.mitigations] if body.mitigations is not None \
+            else dp.suggested_mitigations(body.answers)
+        a = dp.assess(body.answers, mits)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    return {"project_name": body.project_name, "description": body.description, "rel": body.related_record_id,
+            "answers": json.dumps(body.answers), "mits": json.dumps(mits, ensure_ascii=False),
+            "score": a.score, "level": a.level, "rscore": a.residual_score, "rlevel": a.residual_level,
+            "opinion": body.dpo_opinion, "v": dp.VERSION}
+
+
+@router.get("/dpia/questionnaire")
+def dpia_questionnaire():
+    return {"version": dp.VERSION, "levels": dp.LEVEL_LABEL,
+            "questions": [{k: q[k] for k in ("key", "section", "q", "weight", "trigger", "mitigation")} for q in dp.QUESTIONS]}
+
+
+@router.get("/dpia")
+def dpia_list(t: Tenant = Depends(get_tenant)):
+    rows = t.conn.execute(text(f"SELECT {_DPIA_COLS} {_DPIA_FROM} ORDER BY (d.status = 'APPROVED'), d.updated_at DESC")).mappings()
+    out = []
+    for r in rows:
+        d = dict(r)
+        a = dp.assess(d["answers"] or {}, d["mitigations"] or [])
+        d["required"], d["triggers"], d["open_mitigations"] = a.required, a.triggers, a.open_mitigations
+        out.append(d)
+    return out
+
+
+@router.get("/dpia/{dpia_id}")
+def dpia_get(dpia_id: UUID, t: Tenant = Depends(get_tenant)):
+    return _dpia_row(t, dpia_id)
+
+
+@router.post("/dpia", status_code=201)
+def dpia_add(body: DpiaIn, t: Tenant = Depends(get_tenant)):
+    _write(t)
+    v = _dpia_values(body)
+    did = t.conn.execute(text("""
+        INSERT INTO dpia_assessments (org_id, project_name, description, related_record_id, questionnaire_version, answers,
+            risk_score, risk_level, residual_score, residual_level, mitigations, dpo_opinion, created_by)
+        VALUES (:o, :project_name, :description, :rel, :v, CAST(:answers AS jsonb), :score, :level, :rscore, :rlevel,
+            CAST(:mits AS jsonb), :opinion, :u) RETURNING id"""), {**v, "o": t.org_id, "u": t.principal.user_id}).scalar_one()
+    _audit(t.conn, t, "DPIA_ADD", "dpia", did, {"project": body.project_name, "level": v["level"]})
+    return _dpia_row(t, did)
+
+
+@router.put("/dpia/{dpia_id}")
+def dpia_update(dpia_id: UUID, body: DpiaIn, t: Tenant = Depends(get_tenant)):
+    _write(t)
+    cur = t.conn.execute(text("SELECT status FROM dpia_assessments WHERE id = :id"), {"id": dpia_id}).scalar_one_or_none()
+    if cur is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "التقييم غير موجود")
+    if cur == "APPROVED":
+        raise HTTPException(status.HTTP_409_CONFLICT, "التقييم معتمد ولا يُعدَّل. أنشئ تقييماً جديداً للتغيير.")
+    v = _dpia_values(body)
+    t.conn.execute(text("""
+        UPDATE dpia_assessments SET project_name = :project_name, description = :description, related_record_id = :rel,
+            answers = CAST(:answers AS jsonb), risk_score = :score, risk_level = :level, residual_score = :rscore,
+            residual_level = :rlevel, mitigations = CAST(:mits AS jsonb), dpo_opinion = :opinion, updated_at = now()
+        WHERE id = :id"""), {**v, "id": dpia_id})
+    _audit(t.conn, t, "DPIA_EDIT", "dpia", dpia_id, {"level": v["level"], "residual": v["rlevel"]})
+    return _dpia_row(t, dpia_id)
+
+
+class DpiaStatus(BaseModel):
+    status: Literal["IN_PROGRESS", "COMPLETED", "APPROVED"]
+
+
+@router.post("/dpia/{dpia_id}/status")
+def dpia_status(dpia_id: UUID, body: DpiaStatus, t: Tenant = Depends(get_tenant)):
+    _write(t)
+    d = _dpia_row(t, dpia_id)
+    if d["status"] == "APPROVED":
+        raise HTTPException(status.HTTP_409_CONFLICT, "التقييم معتمد مسبقاً")
+    if body.status in ("COMPLETED", "APPROVED") and not (d["answers"] and d["dpo_opinion"]):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "أكمل الإجابات ورأي مسؤول حماية البيانات قبل الإنهاء")
+    if body.status == "APPROVED":
+        t.require("ORG_ADMIN")
+        if d["status"] != "COMPLETED":
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "يُعتمد التقييم بعد إنهائه")
+        if d["residual_level"] == "CRITICAL":
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                "الخطر المتبقي حرج: نفّذ المعالجات أو استشر الجهة المختصة قبل الاعتماد")
+    t.conn.execute(text("""
+        UPDATE dpia_assessments SET status = :s,
+            completed_at = CASE WHEN :s = 'IN_PROGRESS' THEN NULL ELSE COALESCE(completed_at, now()) END,
+            approved_by = CASE WHEN :s = 'APPROVED' THEN CAST(:u AS uuid) END,
+            approved_at = CASE WHEN :s = 'APPROVED' THEN now() END, updated_at = now()
+        WHERE id = :id"""), {"s": body.status, "u": t.principal.user_id, "id": dpia_id})
+    _audit(t.conn, t, "DPIA_STATUS", "dpia", dpia_id, {"status": body.status})
+    return _dpia_row(t, dpia_id)
+
+
+@router.delete("/dpia/{dpia_id}", status_code=204)
+def dpia_delete(dpia_id: UUID, t: Tenant = Depends(get_tenant)):
+    _write(t)
+    n = t.conn.execute(text("DELETE FROM dpia_assessments WHERE id = :id AND status <> 'APPROVED'"), {"id": dpia_id}).rowcount
+    if not n:
+        raise HTTPException(status.HTTP_409_CONFLICT, "لا يُحذف تقييم معتمد أو غير موجود")
+    _audit(t.conn, t, "DPIA_DELETE", "dpia", dpia_id)
+    return Response(status_code=204)
+
+
 # ------------------------------------------------------------------ ملخص
 @router.get("/summary")
 def summary(t: Tenant = Depends(get_tenant)):
@@ -292,5 +435,10 @@ def summary(t: Tenant = Depends(get_tenant)):
         count(*) FILTER (WHERE harm_likely AND authority_notified_at IS NULL AND status <> 'CLOSED'
                          AND now() > discovered_at + interval '{NOTIFY_HOURS} hours') AS notify_overdue
         FROM pdpl_incidents""")).mappings().one()
-    return {"records": dict(rec), "requests": dict(req), "incidents": dict(inc),
+    dpia = c.execute(text("""SELECT count(*) AS n,
+        count(*) FILTER (WHERE status = 'APPROVED') AS approved,
+        count(*) FILTER (WHERE status <> 'APPROVED') AS open,
+        count(*) FILTER (WHERE residual_level IN ('HIGH','CRITICAL') AND status <> 'APPROVED') AS high_residual
+        FROM dpia_assessments""")).mappings().one()
+    return {"records": dict(rec), "requests": dict(req), "incidents": dict(inc), "dpia": dict(dpia),
             "notify_hours": NOTIFY_HOURS, "request_days": REQUEST_DAYS}

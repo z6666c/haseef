@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LegalFooter } from "@/components/LegalDoc";
 import { Logo } from "@/components/Logo";
 import { api, setSession } from "@/lib/session";
 
@@ -112,6 +113,8 @@ export default function LoginPage() {
         <button className="btn" type="submit" disabled={busy || !email || password.length < 8}>
           {busy ? "جارٍ الدخول…" : "ادخل"}
         </button>
+        <p className="small muted login-legal-note">باستخدامك المنصة فإنك توافق على شروط الاستخدام وسياسة الخصوصية.</p>
+        <LegalFooter withLogin={false} />
       </form>
     </main>
   );

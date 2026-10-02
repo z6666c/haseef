@@ -102,6 +102,30 @@ export function createApi(
     updateIncident: (id: string, b: Record<string, unknown>) =>
       req<{ updated: boolean }>(`/pdpl/incidents/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
 
+    // ---------- تقييم الأثر (DPIA)
+    dpiaQuestionnaire: () => req<DpiaQuestionnaire>("/pdpl/dpia/questionnaire"),
+    dpiaList: () => req<Dpia[]>("/pdpl/dpia"),
+    dpia: (id: string) => req<Dpia>(`/pdpl/dpia/${id}`),
+    addDpia: (b: DpiaInput) => req<Dpia>("/pdpl/dpia", { method: "POST", body: JSON.stringify(b) }),
+    updateDpia: (id: string, b: DpiaInput) => req<Dpia>(`/pdpl/dpia/${id}`, { method: "PUT", body: JSON.stringify(b) }),
+    dpiaStatus: (id: string, status: Dpia["status"]) =>
+      req<Dpia>(`/pdpl/dpia/${id}/status`, { method: "POST", body: JSON.stringify({ status }) }),
+    deleteDpia: (id: string) => req<void>(`/pdpl/dpia/${id}`, { method: "DELETE" }),
+
+    // ---------- المنشآت المتعددة وتقرير المجلس
+    group: () => req<GroupOverview>("/group"),
+    addGroupEntity: (b: GroupEntityInput) => req<{ id: string }>("/group/entities", { method: "POST", body: JSON.stringify(b) }),
+    boardReport: (year: number) => req<BoardReportResponse>(`/reports/board?year=${year}`),
+    saveBoardReport: (year: number, notes: string | null) =>
+      req<{ saved: boolean }>(`/reports/board/${year}`, { method: "PUT", body: JSON.stringify({ notes }) }),
+
+    // ---------- التنبيهات
+    alertsOverview: () => req<AlertsOverview>("/alerts/overview"),
+    setAlertRule: (b: { target_type: "COMPLIANCE_ITEM" | "POLICY"; target_id: null; days_before: number[]; channels: string[]; is_enabled: boolean }) =>
+      req<{ id: string }>("/alert-rules", { method: "PUT", body: JSON.stringify(b) }),
+    setRecipient: (membershipId: string, b: { receives_alerts: boolean; alert_channels: ("WHATSAPP" | "EMAIL")[] }) =>
+      req<{ updated: boolean }>(`/alerts/recipients/${membershipId}`, { method: "PATCH", body: JSON.stringify(b) }),
+
     // ---------- الاستشارات القانونية
     legalRates: () => req<LegalRatesInfo>("/legal/rates"),
     legalQuote: (b: { topic: string; duration_minutes: number; urgent: boolean }) =>
@@ -370,6 +394,7 @@ export interface PdplOverview {
   records: { n: number; no_owner: number; cross_border: number; sensitive: number; review_overdue: number };
   requests: { open: number; overdue: number };
   incidents: { open: number; notify_overdue: number };
+  dpia?: { n: number; approved: number; open: number; high_residual: number };
   notify_hours: number; request_days: number;
 }
 
@@ -399,4 +424,80 @@ export interface AdminConsultation extends Consultation {
 export interface Lawyer {
   id: string; full_name: string; license_number: string; specialties: string[]; bio: string | null;
   email: string | null; phone_number: string | null; is_active: boolean;
+}
+
+// ---------- تقييم الأثر (DPIA)
+export type RiskLevel4 = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+export interface DpiaQuestion { key: string; section: string; q: string; weight: number; trigger: boolean; mitigation: string }
+export interface DpiaQuestionnaire { version: string; levels: Record<RiskLevel4, string>; questions: DpiaQuestion[] }
+export interface DpiaMitigation { code: string; text: string; owner: string | null; due_on?: string | null; status: "PLANNED" | "IN_PROGRESS" | "DONE" }
+export interface DpiaInput {
+  project_name: string; description: string | null; related_record_id: string | null;
+  answers: Record<string, boolean>; mitigations: DpiaMitigation[] | null; dpo_opinion: string | null;
+}
+export interface Dpia {
+  id: string; project_name: string; description: string | null; related_record_id: string | null; related_activity: string | null;
+  questionnaire_version: string; answers: Record<string, boolean>; risk_score: number; risk_level: RiskLevel4;
+  residual_score: number; residual_level: RiskLevel4; mitigations: DpiaMitigation[]; dpo_opinion: string | null;
+  status: "IN_PROGRESS" | "COMPLETED" | "APPROVED"; completed_at: string | null; approved_at: string | null;
+  approved_by_name: string | null; created_by_name: string | null; created_at: string; updated_at: string;
+  required: boolean; triggers: string[]; open_mitigations: number;
+}
+
+// ---------- المنشآت المتعددة
+export interface GroupEntity {
+  id: string; name: string; cr_number: string; entity_legal_type: string; entity_relation: "SUBSIDIARY" | "BRANCH" | "AFFILIATE" | null;
+  commercial_size: string | null; haseef_score: number | null; score_computed_at: string | null; role: string; plan_tier: string | null;
+  items: { expired: number; expiring: number; total: number }; policies_due: number;
+  obligations: { pending: number; total: number }; open_incidents: number; structure_score: number | null;
+}
+export interface GroupOverview {
+  available: boolean; root_id: string; entities: GroupEntity[]; can_manage: boolean; max_entities: number; hidden_entities?: number;
+  totals?: { entities: number; avg_score: number | null; expired: number; expiring: number; policies_due: number; obligations_pending: number; open_incidents: number };
+}
+export interface GroupEntityInput {
+  name: string; cr_number: string; entity_legal_type: string; entity_relation: "SUBSIDIARY" | "BRANCH" | "AFFILIATE";
+  industry_type: string | null; commercial_size: "MICRO" | "SMALL" | "MEDIUM" | null;
+}
+
+// ---------- تقرير مجلس الإدارة
+export interface BoardReport {
+  year: number; generated_on: string;
+  org: { name: string; cr_number: string; entity_legal_type: string; industry_type: string | null; commercial_size: string | null };
+  plan: { tier: string | null; name: string | null };
+  score: { value: number | null; pillars: Record<string, number | null>; reasons: { pillar: string; severity: string; text: string }[]; computed_at: string | null };
+  structure: { name: string; body_type: string; meetings_per_year: number | null;
+    members: { full_name: string; position: string; is_independent: boolean; is_executive: boolean; term_ends_on: string | null }[] }[];
+  governance_check: { structure_score: number | null; passed: number; failed: number; run_at: string | null;
+    failed_items: { code: string; title: string; message: string; severity: string; level: string }[] };
+  resolutions: { total: number; by_type: Record<string, number>; list: { title: string; resolution_type: string; meeting_date: string; status: string }[] };
+  meetings: { body: string; body_type: string; required: number; held: number | null }[];
+  compliance: { active: number; expiring: number; expired: number; total: number; renewed_in_year: number;
+    attention: { title: string; expiry_date: string; risk_level: string }[] };
+  policies: { active: number; overdue: number; needs_review: number; drafts: number; approved_in_year: number };
+  obligations: { counts: Record<string, number>; pending: { title: string; risk_level: string; authority: string | null }[] };
+  pdpl: { records: number; requests: { total: number; on_time: number; open: number };
+    incidents: { total: number; notified_in_time: number; harm_likely: number; open: number };
+    dpia: { total: number; approved: number; high_residual: number } };
+  legal: { completed: number; open: number };
+  recommendations: { priority: string; area: string; text: string }[];
+}
+export interface BoardReportResponse {
+  live: BoardReport; saved: { snapshot: BoardReport; notes: string | null; saved_at: string; saved_by_name: string | null } | null;
+  saved_years: number[];
+}
+
+// ---------- التنبيهات
+export interface AlertRuleView { target_type: string; days_before: number[]; channels: string[]; is_enabled: boolean; is_default: boolean }
+export interface AlertsOverview {
+  plan: { tier: string | null; name: string | null; active: boolean };
+  whatsapp: { provider: string; live: boolean; limit: number | null; used: number; remaining: number | null };
+  send_hour: number;
+  rules: Record<"COMPLIANCE_ITEM" | "POLICY", AlertRuleView>; custom_rules: number;
+  recipients: { membership_id: string; full_name: string; email: string | null; phone: string | null; role: string;
+    receives_alerts: boolean; alert_channels: string[]; is_me: boolean }[];
+  upcoming: { target_type: string; target_id: string; title: string; due_date: string; alert_on: string; threshold_days: number; channels: string[] }[];
+  log: { id: string; target_type: string; title: string | null; due_date: string; threshold_days: number; channel: string; status: string;
+    skip_reason: string | null; scheduled_for: string; sent_at: string | null; delivered_at: string | null; recipient_name: string | null }[];
+  can_manage: boolean;
 }

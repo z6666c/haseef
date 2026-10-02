@@ -52,13 +52,20 @@ export default function PdplPage() {
           <div><dt>طلبات مفتوحة</dt><dd>{ov.requests.open}{ov.requests.overdue > 0 && <small className="late"> ({ov.requests.overdue} متأخر)</small>}</dd></div>
           <div><dt>حوادث مفتوحة</dt><dd data-s={ov.incidents.notify_overdue ? "LATE" : undefined}>{ov.incidents.open}
             {ov.incidents.notify_overdue > 0 && <small className="late"> (تجاوزت مهلة الإبلاغ)</small>}</dd></div>
+          {ov.dpia && (
+            <div><dt>تقييمات الأثر المفتوحة</dt><dd data-s={ov.dpia.high_residual ? "LATE" : undefined}>{ov.dpia.open}
+              {ov.dpia.high_residual > 0 && <small className="late"> ({ov.dpia.high_residual} عالية الخطر)</small>}</dd></div>
+          )}
         </dl>
       )}
 
-      <div className="filters" role="tablist">
-        {([["ropa", "سجل أنشطة المعالجة"], ["requests", "طلبات أصحاب البيانات"], ["incidents", "حوادث التسرب"]] as [Tab, string][]).map(([k, l]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>
-        ))}
+      <div className="tabs-row">
+        <div className="filters" role="tablist">
+          {([["ropa", "سجل أنشطة المعالجة"], ["requests", "طلبات أصحاب البيانات"], ["incidents", "حوادث التسرب"]] as [Tab, string][]).map(([k, l]) => (
+            <button key={k} type="button" role="tab" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>
+          ))}
+        </div>
+        <Link className="btn btn-quiet tabs-row-link" href="/pdpl/dpia">تقييم الأثر (DPIA){ov?.dpia ? ` · ${ov.dpia.n}` : ""} ←</Link>
       </div>
       {notice && <p className="notice" role="status">{notice}</p>}
       {error && <p className="error" role="alert">{error}</p>}

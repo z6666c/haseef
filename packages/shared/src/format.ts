@@ -113,6 +113,9 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   ADMIN_INVITE_MEMBER: "دعوة عضو", ADMIN_UPDATE_MEMBERSHIP: "تعديل عضوية",
   ADMIN_RESET_PASSWORD: "إعادة تعيين كلمة المرور", ADMIN_DISABLE_USER: "تعطيل مستخدم", ADMIN_ENABLE_USER: "تفعيل مستخدم",
   ADMIN_TEAM_ADD: "إضافة عضو للفريق", ADMIN_TEAM_ROLE: "تغيير دور في الفريق",
+  DPIA_ADD: "تقييم أثر جديد", DPIA_EDIT: "تعديل تقييم أثر", DPIA_STATUS: "تغيير حالة تقييم أثر", DPIA_DELETE: "حذف تقييم أثر",
+  GROUP_ENTITY_ADD: "إضافة منشأة للمجموعة", GROUP_ENTITY_CREATED: "إنشاء منشأة تابعة",
+  BOARD_REPORT_SAVE: "حفظ تقرير المجلس", ALERT_RECIPIENT: "ضبط مستلم التنبيهات",
 };
 
 const AUDIT_KEY_LABEL: Record<string, string> = {
@@ -251,3 +254,19 @@ export function minutesLabel(m: number): string {
   return `${m} دقيقة`;
 }
 export const sarFmt = (n: number) => `${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ريال`;
+
+// ---------- تقييم الأثر، المجموعات، التقارير، التنبيهات
+export const RISK4_LABEL: Record<string, string> = { LOW: "منخفض", MEDIUM: "متوسط", HIGH: "عالٍ", CRITICAL: "حرج" };
+export const DPIA_STATUS_LABEL: Record<string, string> = { IN_PROGRESS: "قيد الإعداد", COMPLETED: "مكتمل — بانتظار الاعتماد", APPROVED: "معتمد" };
+export const MITIGATION_STATUS_LABEL: Record<string, string> = { PLANNED: "مخطط", IN_PROGRESS: "قيد التنفيذ", DONE: "منفّذ" };
+export const ENTITY_RELATION_LABEL: Record<string, string> = { SUBSIDIARY: "شركة تابعة", BRANCH: "فرع", AFFILIATE: "شركة شقيقة" };
+export const RESOLUTION_TYPE_LABEL: Record<string, string> = {
+  ORDINARY_ASSEMBLY: "جمعية عامة عادية", EXTRAORDINARY_ASSEMBLY: "جمعية عامة غير عادية", BOARD_DECISION: "قرار مجلس الإدارة",
+  PARTNERS_DECISION: "قرار الشركاء", MANAGER_DECISION: "قرار المدير",
+};
+export const DISPATCH_STATUS_LABEL: Record<string, string> = {
+  QUEUED: "مجدول", SENDING: "قيد الإرسال", SENT: "أُرسل", DELIVERED: "وصل", READ: "قُرئ", FAILED: "فشل",
+  SKIPPED: "تُخطّي", CANCELED: "أُلغي",
+};
+export const ALERT_CHANNEL_LABEL: Record<string, string> = { WHATSAPP: "واتساب", EMAIL: "بريد إلكتروني" };
+export const PRIORITY_LABEL: Record<string, string> = { CRITICAL: "حرجة", HIGH: "عالية", MEDIUM: "متوسطة", LOW: "منخفضة" };

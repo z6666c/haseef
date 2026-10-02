@@ -5,6 +5,8 @@
 import type { ComplianceItem, Dashboard, Me, ScoreReason } from "./types.ts";
 import CONTENT from "./demo-content.json" with { type: "json" };
 import { runCheck, type CkStandard } from "./governanceCheck.ts";
+import { dpiaAssess, dpiaSuggest } from "./dpia.ts";
+import type { DpiaMitigation, DpiaQuestion } from "./api.ts";
 
 
 /** بيانات الدخول لنسخة العرض فقط. ليست حسابات حقيقية ولا تفتح أي نظام فعلي. */
@@ -100,7 +102,7 @@ const CLIENT_ME: Me = {
 const ADMIN_ME: Me = { id: "0a1f5c1e-0000-4000-8000-0000000000b1", email: "admin@haseef.sa", full_name: "فريق عمليات حصيف", is_platform_admin: true, memberships: [] };
 
 // ---------- بيانات لوحة التحكم ----------
-const PRICES: Record<string, [number, number]> = { ESSENTIAL: [149, 1490], PROFESSIONAL_GRC: [499, 4990], ENTERPRISE: [1490, 14900] };
+const PRICES: Record<string, [number, number]> = { ESSENTIAL: [199, 1990], PROFESSIONAL_GRC: [499, 4990], ENTERPRISE: [1299, 12990] };
 type Org = {
   id: string; name: string; cr: string; legal: string; industry: string; size: string; score: number | null;
   suspended_at: string | null; reason: string | null; created_at: string;
@@ -133,7 +135,7 @@ const orgs: Org[] = [
       { membership_id: uid(), role: "ORG_ADMIN", user_id: uid(), full_name: "سارة القحطاني", email: "sara@waha.example", phone: "+966500000002", active: true, last: ago(60 * 5) },
       { membership_id: uid(), role: "DPO", user_id: uid(), full_name: "فهد الشمري", email: "fahad@waha.example", phone: null, active: true, last: null },
     ],
-    billing: [{ event_type: "PAYMENT", plan_tier: "ESSENTIAL", amount_sar: 1490, period_months: 12, reference: "INV-2026-0003", note: null, created_at: ts(-60), actor: "المحاسبة" }],
+    billing: [{ event_type: "PAYMENT", plan_tier: "ESSENTIAL", amount_sar: 1990, period_months: 12, reference: "INV-2026-0003", note: null, created_at: ts(-60), actor: "المحاسبة" }],
     counts: { items: 5, expired: 0, policies: 4 },
   },
   {
@@ -154,7 +156,7 @@ let auditSeq = 50;
 const audit: { id: number; created_at: string; action: string; entity_type: string; entity_id: string | null; changes: Record<string, unknown> | null; ip: string | null; actor: string | null; actor_role: string | null; org_name: string | null; org_id: string | null }[] = [
   { id: 3, created_at: ts(-3), action: "ADMIN_CREATE_ORG", entity_type: "organization", entity_id: ORG_C, changes: { name: "شركة الأفق للتجارة", cr_number: "4030111222", plan: "PROFESSIONAL_GRC" }, ip: "10.0.0.4", actor: "الدعم الفني", actor_role: "SUPPORT", org_name: "شركة الأفق للتجارة", org_id: ORG_C },
   { id: 2, created_at: ts(-10), action: "ADMIN_RECORD_PAYMENT", entity_type: "subscription", entity_id: null, changes: { amount_sar: 499, cycle: "MONTHLY", reference: "INV-2026-0007" }, ip: "10.0.0.4", actor: "فريق عمليات حصيف", actor_role: "SUPER_ADMIN", org_name: "مؤسسة النخبة للمقاولات", org_id: ORG_A },
-  { id: 1, created_at: ts(-60), action: "ADMIN_RECORD_PAYMENT", entity_type: "subscription", entity_id: null, changes: { amount_sar: 1490, cycle: "YEARLY", reference: "INV-2026-0003" }, ip: "10.0.0.7", actor: "المحاسبة", actor_role: "BILLING", org_name: "شركة واحة التقنية", org_id: ORG_B },
+  { id: 1, created_at: ts(-60), action: "ADMIN_RECORD_PAYMENT", entity_type: "subscription", entity_id: null, changes: { amount_sar: 1990, cycle: "YEARLY", reference: "INV-2026-0003" }, ip: "10.0.0.7", actor: "المحاسبة", actor_role: "BILLING", org_name: "شركة واحة التقنية", org_id: ORG_B },
 ];
 function log(action: string, org: Org | null, changes: Record<string, unknown> | null) {
   audit.unshift({ id: ++auditSeq, created_at: new Date().toISOString(), action, entity_type: org ? "organization" : "user", entity_id: org?.id ?? null,
@@ -432,6 +434,151 @@ class DemoError extends Error {
   status: number;
   constructor(status: number, msg: string) { super(msg); this.status = status; }
 }
+
+// ---------- تقييم الأثر، المنشآت المتعددة، تقرير المجلس، التنبيهات (نسخة العرض) ----------
+const DPIA_Q = CONTENT.dpia.questions as DpiaQuestion[];
+type DemoDpia = { id: string; project_name: string; description: string | null; related_record_id: string | null;
+  answers: Record<string, boolean>; mitigations: DpiaMitigation[]; dpo_opinion: string | null;
+  status: "IN_PROGRESS" | "COMPLETED" | "APPROVED"; completed_at: string | null; approved_at: string | null; created_at: string; updated_at: string };
+const dpias: DemoDpia[] = [(() => {
+  const answers = { sensitive: true, monitoring: true, new_tech: true, processors: true, weak_security: true };
+  const mitigations = dpiaSuggest(DPIA_Q, answers).map((x) => ["processors", "weak_security"].includes(x.code) ? { ...x, status: "DONE" as const } : x);
+  return { id: uid(), project_name: "نظام الحضور ببصمة الوجه في المواقع",
+    description: "استبدال بطاقات الحضور بأجهزة تعرّف على الوجه في 4 مواقع عمل، يديرها مزوّد خارجي.", related_record_id: null,
+    answers, mitigations, status: "IN_PROGRESS" as const, completed_at: null, approved_at: null, created_at: ago(60 * 24 * 6), updated_at: ago(60 * 24),
+    dpo_opinion: "المعالجة مقبولة بشرط بقاء البيانات داخل المملكة، وإتاحة بديل (بطاقة) لمن يعترض، وحذف القوالب فور انتهاء العلاقة." };
+})()];
+function dpiaView(d: DemoDpia) {
+  const a = dpiaAssess(DPIA_Q, d.answers, d.mitigations);
+  const rec = ropa.find((r) => r.id === d.related_record_id);
+  return { ...d, questionnaire_version: CONTENT.dpia.version, risk_score: a.score, risk_level: a.level,
+           residual_score: a.residual_score, residual_level: a.residual_level, required: a.required, triggers: a.triggers,
+           open_mitigations: a.open_mitigations, related_activity: rec?.activity_name ?? null,
+           approved_by_name: d.approved_at ? "أحمد العتيبي" : null, created_by_name: "أحمد العتيبي" };
+}
+function dpiaFromBody(d: DemoDpia, body: Record<string, unknown>) {
+  const answers = (body.answers ?? {}) as Record<string, boolean>;
+  const unknown = Object.keys(answers).filter((k) => !DPIA_Q.some((q) => q.key === k));
+  if (unknown.length) throw new DemoError(422, `أسئلة غير معروفة: ${unknown.join("، ")}`);
+  Object.assign(d, { project_name: String(body.project_name ?? d.project_name), description: (body.description as string) ?? null,
+    related_record_id: (body.related_record_id as string) ?? null, answers, dpo_opinion: (body.dpo_opinion as string) ?? null,
+    mitigations: Array.isArray(body.mitigations) ? body.mitigations as DpiaMitigation[] : dpiaSuggest(DPIA_Q, answers),
+    updated_at: new Date().toISOString() });
+}
+
+const groupKids = [
+  { id: "grp-kid-1", name: "النخبة للتشغيل والصيانة", cr_number: "1010777002", entity_legal_type: "LLC", entity_relation: "SUBSIDIARY" as const,
+    commercial_size: "SMALL", haseef_score: 58, items: { expired: 1, expiring: 1, total: 4 }, policies_due: 0,
+    obligations: { pending: 9, total: 18 }, open_incidents: 0, structure_score: 71.4 },
+  { id: "grp-kid-2", name: "مؤسسة النخبة — فرع جدة", cr_number: "4030777003", entity_legal_type: "SOLE_PROPRIETORSHIP", entity_relation: "BRANCH" as const,
+    commercial_size: "SMALL", haseef_score: 81, items: { expired: 0, expiring: 1, total: 3 }, policies_due: 0,
+    obligations: { pending: 4, total: 14 }, open_incidents: 0, structure_score: 100 },
+];
+function groupView() {
+  const d = dashboard();
+  const chk = gov.latest_check as { structure_score: number | null } | null;
+  const obl = obligationsView();
+  const main = { id: ORG_A, name: d.org_name, cr_number: d.cr_number, entity_legal_type: gov.legal_type, entity_relation: null,
+    commercial_size: "SMALL", haseef_score: d.score.score, score_computed_at: d.score.computed_at, role: "ORG_ADMIN", plan_tier: "ENTERPRISE",
+    items: { expired: d.counts.expired, expiring: d.counts.expiring_soon, total: items.length },
+    policies_due: policies.map(policyView).filter((x) => x.effective_status === "NEEDS_REVIEW" || x.effective_status === "OVERDUE_REVIEW").length,
+    obligations: { pending: obl.filter((o) => o.effective_status === "PENDING").length, total: obl.length },
+    open_incidents: incidents.filter((i) => i.status !== "CLOSED").length, structure_score: chk?.structure_score ?? null };
+  const entities = [main, ...groupKids.map((k) => ({ ...k, role: "ORG_ADMIN", plan_tier: "ENTERPRISE", score_computed_at: ago(60) }))];
+  const scores = entities.map((e) => e.haseef_score).filter((x): x is number => x !== null);
+  const sum = (f: (e: typeof entities[number]) => number) => entities.reduce((s, e) => s + f(e), 0);
+  return { available: true, root_id: ORG_A, entities, can_manage: true, max_entities: 25, hidden_entities: 0,
+    totals: { entities: entities.length, avg_score: scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+      expired: sum((e) => e.items.expired), expiring: sum((e) => e.items.expiring), policies_due: sum((e) => e.policies_due),
+      obligations_pending: sum((e) => e.obligations.pending), open_incidents: sum((e) => e.open_incidents) } };
+}
+
+const SEV: Record<string, number> = { critical: 0, high: 1, medium: 2, CRITICAL: 0, HIGH: 1, MEDIUM: 2 };
+function boardReport(year: number) {
+  const d = dashboard();
+  const chk = gov.latest_check as { structure_score: number | null; passed: number; failed: number; created_at: string;
+    results: { code: string; title: string; message: string; severity: string; level: string; status: string }[] };
+  const failed = chk.results.filter((r) => r.status === "FAIL")
+    .sort((a, b) => Number(a.level !== "MANDATORY") - Number(b.level !== "MANDATORY") || (SEV[a.severity] ?? 9) - (SEV[b.severity] ?? 9));
+  const pol = policies.map(policyView);
+  const obl = obligationsView();
+  const counts: Record<string, number> = { total: obl.length };
+  for (const o of obl) counts[o.effective_status] = (counts[o.effective_status] ?? 0) + 1;
+  const pending = obl.filter((o) => o.effective_status === "PENDING" || o.effective_status === "AT_RISK")
+    .sort((a, b) => (SEV[String(a.risk_level)] ?? 9) - (SEV[String(b.risk_level)] ?? 9)).slice(0, 10);
+  const attention = itemViews().filter((i) => i.status !== "ACTIVE").slice(0, 10).map((i) => ({ title: i.title, expiry_date: i.expiry_date, risk_level: i.risk_level }));
+  const inYear = (x: string) => x.slice(0, 4) === String(year);
+  const recs: { priority: string; area: string; text: string }[] = [
+    ...failed.slice(0, 6).map((r) => ({ priority: r.severity.toUpperCase(), area: "الحوكمة", text: `${r.title}: ${r.message}` })),
+    ...pending.slice(0, 4).map((x) => ({ priority: String(x.risk_level), area: "الالتزامات", text: `استكمال: ${x.title}` })),
+    ...attention.filter((x) => x.risk_level !== "MEDIUM").map((x) => ({ priority: x.risk_level, area: "التراخيص", text: `تجديد ${x.title} (ينتهي/انتهى ${x.expiry_date})` })),
+  ].sort((a, b) => (SEV[a.priority] ?? 9) - (SEV[b.priority] ?? 9));
+  const dv = dpias.map(dpiaView);
+  return {
+    year, generated_on: inDays(0),
+    org: { name: d.org_name, cr_number: d.cr_number, entity_legal_type: gov.legal_type, industry_type: "المقاولات", commercial_size: "SMALL" },
+    plan: { tier: "ENTERPRISE", name: "باقة كبار العملاء" },
+    score: { value: d.score.score, pillars: d.score.pillars, reasons: d.score.reasons.slice(0, 8), computed_at: d.score.computed_at },
+    structure: gov.bodies.map((b) => ({ name: b.name, body_type: b.body_type, meetings_per_year: b.meetings_per_year,
+      members: b.members.map((x) => ({ full_name: x.full_name, position: x.position, is_independent: x.is_independent, is_executive: x.is_executive, term_ends_on: x.term_ends_on })) })),
+    governance_check: { structure_score: chk.structure_score, passed: chk.passed, failed: chk.failed, run_at: chk.created_at,
+      failed_items: failed.slice(0, 12).map((r) => ({ code: r.code, title: r.title, message: r.message, severity: r.severity, level: r.level })) },
+    resolutions: { total: 3, by_type: { PARTNERS_DECISION: 2, MANAGER_DECISION: 1 }, list: [
+      { title: "اعتماد القوائم المالية وتعيين المراجع الخارجي", resolution_type: "PARTNERS_DECISION", meeting_date: `${year}-04-20`, status: "SIGNED" },
+      { title: "اعتماد مصفوفة الصلاحيات المحدثة", resolution_type: "MANAGER_DECISION", meeting_date: `${year}-06-02`, status: "SIGNED" },
+      { title: "الموافقة على فتح فرع جدة", resolution_type: "PARTNERS_DECISION", meeting_date: `${year}-08-15`, status: "CIRCULATED" } ] },
+    meetings: gov.bodies.filter((b) => b.meetings_per_year).map((b) => ({ body: b.name, body_type: b.body_type, required: b.meetings_per_year!,
+      held: b.body_type === "PARTNERS_ASSEMBLY" ? 2 : null })),
+    compliance: { active: d.counts.active, expiring: d.counts.expiring_soon, expired: d.counts.expired, total: items.length, renewed_in_year: 2, attention },
+    policies: { active: pol.filter((x) => x.status === "ACTIVE").length, overdue: pol.filter((x) => x.effective_status === "OVERDUE_REVIEW").length,
+      needs_review: pol.filter((x) => x.effective_status === "NEEDS_REVIEW").length, drafts: pol.filter((x) => x.status === "DRAFT").length,
+      approved_in_year: pol.filter((x) => x.approval_date && inYear(x.approval_date)).length },
+    obligations: { counts, pending: pending.map((x) => ({ title: String(x.title), risk_level: String(x.risk_level), authority: (x.authority as string) ?? null })) },
+    pdpl: { records: ropa.length,
+      requests: { total: dsr.filter((r) => inYear(r.received_on)).length, on_time: dsr.filter((r) => r.status === "COMPLETED").length,
+        open: dsr.filter((r) => r.status === "OPEN" || r.status === "IN_PROGRESS").length },
+      incidents: { total: incidents.filter((i) => inYear(i.discovered_at)).length, notified_in_time: incidents.filter((i) => i.authority_notified_at).length,
+        harm_likely: incidents.filter((i) => i.harm_likely).length, open: incidents.filter((i) => i.status !== "CLOSED").length },
+      dpia: { total: dv.length, approved: dv.filter((x) => x.status === "APPROVED").length, high_residual: dv.filter((x) => x.residual_level === "HIGH" || x.residual_level === "CRITICAL").length } },
+    legal: { completed: consults.filter((c) => c.status === "COMPLETED").length, open: consults.filter((c) => c.status === "REQUESTED" || c.status === "CONFIRMED").length },
+    recommendations: recs.slice(0, 12),
+  };
+}
+const savedReports = new Map<number, { snapshot: ReturnType<typeof boardReport>; notes: string | null; saved_at: string; saved_by_name: string }>();
+
+const alertRules: Record<"COMPLIANCE_ITEM" | "POLICY", { target_type: string; days_before: number[]; channels: string[]; is_enabled: boolean; is_default: boolean }> = {
+  COMPLIANCE_ITEM: { target_type: "COMPLIANCE_ITEM", days_before: [60, 30, 14, 7, 3, 1, 0], channels: ["WHATSAPP", "EMAIL"], is_enabled: true, is_default: true },
+  POLICY: { target_type: "POLICY", days_before: [30, 14, 7, 0], channels: ["EMAIL", "WHATSAPP"], is_enabled: true, is_default: true },
+};
+const recipients = [
+  { membership_id: "rcp-ahmad", full_name: "أحمد العتيبي", email: "demo@haseef.sa", phone: "+966500000001", role: "ORG_ADMIN", receives_alerts: true, alert_channels: ["EMAIL", "WHATSAPP"], is_me: true },
+  { membership_id: "rcp-reem", full_name: "ريم السبيعي", email: "reem@nukhba.example", phone: "+966500000011", role: "DPO", receives_alerts: true, alert_channels: ["EMAIL"], is_me: false },
+  { membership_id: "rcp-adv", full_name: "مكتب المستشار القانوني", email: "advisor@example.sa", phone: null, role: "EXTERNAL_ADVISOR", receives_alerts: false, alert_channels: [], is_me: false },
+];
+function alertsOverview() {
+  const today = riyadhToday().getTime();
+  const upcoming: { target_type: string; target_id: string; title: string; due_date: string; alert_on: string; threshold_days: number; channels: string[] }[] = [];
+  const add = (type: "COMPLIANCE_ITEM" | "POLICY", id: string, title: string, due: string) => {
+    const rule = alertRules[type];
+    if (!rule.is_enabled) return;
+    const left = daysLeft(due);
+    const t = [...rule.days_before].sort((a, b) => b - a).find((x) => x <= left);
+    if (t === undefined) return;
+    const on = iso(new Date(new Date(`${due}T00:00:00Z`).getTime() - t * DAY));
+    if (new Date(`${on}T00:00:00Z`).getTime() - today <= 60 * DAY) upcoming.push({ target_type: type, target_id: id, title, due_date: due, alert_on: on, threshold_days: t, channels: rule.channels });
+  };
+  for (const i of items) add("COMPLIANCE_ITEM", i.id, i.title, i.expiry_date);
+  for (const x of policies) if (x.status === "ACTIVE") add("POLICY", x.id, x.title, x.review_due_date);
+  upcoming.sort((a, b) => a.alert_on.localeCompare(b.alert_on));
+  const log = dispatches().items.filter((x) => x.org_name === "مؤسسة النخبة للمقاولات").map((x, k) => ({
+    id: x.id, target_type: x.target_type, title: items[k % items.length]?.title ?? null, due_date: x.due_date, threshold_days: x.threshold_days,
+    channel: x.channel, status: x.status, skip_reason: null, scheduled_for: x.scheduled_for, sent_at: x.sent_at, delivered_at: x.delivered_at,
+    recipient_name: x.channel === "WHATSAPP" || x.recipient_address === "demo@haseef.sa" ? "أحمد العتيبي" : "مكتب المستشار القانوني" }));
+  return { plan: { tier: "PROFESSIONAL_GRC", name: "باقة الحوكمة والنمو", active: true },
+    whatsapp: { provider: "console", live: false, limit: 1000, used: 37, remaining: 963 }, send_hour: 9,
+    rules: alertRules, custom_rules: 0, recipients, upcoming: upcoming.slice(0, 50), log, can_manage: true };
+}
+
 const findOrg = (id: string) => { const o = orgs.find((x) => x.id === id); if (!o) throw new DemoError(404, "المنشأة غير موجودة"); return o; };
 const TEMP_PW = "Demo-Temp-2026";
 
@@ -698,6 +845,74 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     Object.assign(c, { status: "CANCELED", cancel_reason: String(body.reason) }); return { status: "CANCELED" };
   }
 
+  // ---------- تقييم الأثر
+  if (p === "/pdpl/dpia/questionnaire") return { version: CONTENT.dpia.version, levels: CONTENT.dpia.levels, questions: DPIA_Q };
+  if (p === "/pdpl/dpia" && method === "GET") return dpias.map(dpiaView);
+  if (p === "/pdpl/dpia" && method === "POST") {
+    const d: DemoDpia = { id: uid(), project_name: "", description: null, related_record_id: null, answers: {}, mitigations: [], dpo_opinion: null,
+      status: "IN_PROGRESS", completed_at: null, approved_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    dpiaFromBody(d, body); dpias.unshift(d); return dpiaView(d);
+  }
+  if ((m = p.match(/^\/pdpl\/dpia\/([^/]+)\/status$/))) {
+    const d = dpias.find((x) => x.id === m![1]); if (!d) throw new DemoError(404, "التقييم غير موجود");
+    if (d.status === "APPROVED") throw new DemoError(409, "التقييم معتمد مسبقاً");
+    const st = String(body.status) as DemoDpia["status"];
+    if (st !== "IN_PROGRESS" && !(Object.keys(d.answers).length && d.dpo_opinion)) throw new DemoError(422, "أكمل الإجابات ورأي مسؤول حماية البيانات قبل الإنهاء");
+    if (st === "APPROVED") {
+      if (d.status !== "COMPLETED") throw new DemoError(422, "يُعتمد التقييم بعد إنهائه");
+      if (dpiaView(d).residual_level === "CRITICAL") throw new DemoError(422, "الخطر المتبقي حرج: نفّذ المعالجات أو استشر الجهة المختصة قبل الاعتماد");
+    }
+    d.status = st; d.completed_at = st === "IN_PROGRESS" ? null : (d.completed_at ?? new Date().toISOString());
+    d.approved_at = st === "APPROVED" ? new Date().toISOString() : null; return dpiaView(d);
+  }
+  if ((m = p.match(/^\/pdpl\/dpia\/([^/]+)$/))) {
+    const k = dpias.findIndex((x) => x.id === m![1]); if (k < 0) throw new DemoError(404, "التقييم غير موجود");
+    const d = dpias[k];
+    if (method === "GET") return dpiaView(d);
+    if (d.status === "APPROVED") throw new DemoError(409, "التقييم معتمد ولا يُعدَّل. أنشئ تقييماً جديداً للتغيير.");
+    if (method === "DELETE") { dpias.splice(k, 1); return undefined; }
+    dpiaFromBody(d, body); return dpiaView(d);
+  }
+
+  // ---------- المنشآت المتعددة وتقرير المجلس (نسخة العرض تعرضها كأن المنشأة على باقة كبار العملاء)
+  if (p === "/group") return groupView();
+  if (p === "/group/entities" && method === "POST") {
+    if (!/^\d{10}$/.test(String(body.cr_number ?? ""))) throw new DemoError(422, "رقم السجل التجاري 10 أرقام");
+    const id = uid();
+    groupKids.push({ id, name: String(body.name), cr_number: String(body.cr_number), entity_legal_type: String(body.entity_legal_type),
+      entity_relation: (body.entity_relation as "SUBSIDIARY") ?? "SUBSIDIARY", commercial_size: (body.commercial_size as string) ?? "SMALL",
+      haseef_score: null as unknown as number, items: { expired: 0, expiring: 0, total: 0 }, policies_due: 0,
+      obligations: { pending: 12, total: 12 }, open_incidents: 0, structure_score: null as unknown as number });
+    return { id };
+  }
+  if (p === "/reports/board" && method === "GET") {
+    const year = Number(q.get("year") ?? riyadhToday().getUTCFullYear());
+    const saved = savedReports.get(year) ?? null;
+    return { live: boardReport(year), saved, saved_years: [...savedReports.keys()].sort((a, b) => b - a) };
+  }
+  if ((m = p.match(/^\/reports\/board\/(\d{4})$/)) && method === "PUT") {
+    const year = Number(m[1]);
+    savedReports.set(year, { snapshot: boardReport(year), notes: (body.notes as string) ?? null, saved_at: new Date().toISOString(), saved_by_name: "أحمد العتيبي" });
+    return { saved: true };
+  }
+
+  // ---------- التنبيهات
+  if (p === "/alerts/overview") return alertsOverview();
+  if (p === "/alert-rules" && method === "PUT") {
+    const t = String(body.target_type) as "COMPLIANCE_ITEM" | "POLICY";
+    const days = (body.days_before as number[]).filter((x) => Number.isInteger(x) && x >= 0);
+    if (!days.length) throw new DemoError(422, "حدد موعداً واحداً على الأقل");
+    alertRules[t] = { target_type: t, days_before: [...new Set(days)].sort((a, b) => b - a), channels: body.channels as string[],
+      is_enabled: Boolean(body.is_enabled), is_default: false };
+    return { id: `rule-${t}` };
+  }
+  if ((m = p.match(/^\/alerts\/recipients\/([^/]+)$/))) {
+    const r = recipients.find((x) => x.membership_id === m![1]); if (!r) throw new DemoError(404, "العضو غير موجود");
+    const ch = (body.alert_channels as string[]) ?? [];
+    if (body.receives_alerts && !ch.length) throw new DemoError(422, "اختر قناة واحدة على الأقل");
+    r.receives_alerts = Boolean(body.receives_alerts); r.alert_channels = [...new Set(ch)].sort(); return { updated: true };
+  }
+
   // ---------- حماية البيانات
   if (p === "/pdpl/summary") {
     const open = (r: { status: string }) => r.status === "OPEN" || r.status === "IN_PROGRESS";
@@ -708,6 +923,9 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
              incidents: { open: incidents.filter((i) => i.status !== "CLOSED").length,
                           notify_overdue: incidents.filter((i) => i.harm_likely && !i.authority_notified_at && i.status !== "CLOSED"
                             && Date.now() > new Date(i.discovered_at).getTime() + 72 * 3600e3).length },
+             dpia: { n: dpias.length, approved: dpias.filter((d) => d.status === "APPROVED").length,
+                     open: dpias.filter((d) => d.status !== "APPROVED").length,
+                     high_residual: dpias.map(dpiaView).filter((d) => d.status !== "APPROVED" && (d.residual_level === "HIGH" || d.residual_level === "CRITICAL")).length },
              notify_hours: 72, request_days: 30 };
   }
   if (p === "/pdpl/owners") return [{ id: OWNER_ID, full_name: "أحمد العتيبي", role: "ORG_ADMIN" }, { id: "own-reem", full_name: "ريم السبيعي", role: "DPO" }];
