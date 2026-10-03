@@ -55,9 +55,19 @@ const itemViews = () => items.map(view).sort((a, b) => a.days_remaining - b.days
 
 function dashboard(): Dashboard {
   const all = itemViews();
-  const reasons: ScoreReason[] = [
-    { pillar: "GOVERNANCE_PDPL", severity: "medium", text: "فات موعد مراجعة سياسة الخصوصية", points: 25, points_label: "25 نقطة" },
-  ];
+  const reasons: ScoreReason[] = [];
+  // ركن الحوكمة من نتيجة فحص الهيكل الفعلية، ويُخصم للسياسات التي فات موعد مراجعتها
+  const chk = gov.latest_check as { structure_score: number | null } | null;
+  let governance = Math.round(chk?.structure_score ?? 50);
+  for (const x of policies.map(policyView).filter((x) => x.effective_status === "OVERDUE_REVIEW")) {
+    governance -= 25;
+    reasons.push({ pillar: "GOVERNANCE_PDPL", severity: "medium", text: `فات موعد مراجعة ${x.title}`, points: 25, points_label: "25 نقطة" });
+  }
+  if (!ropa.length) {
+    governance -= 10;
+    reasons.push({ pillar: "GOVERNANCE_PDPL", severity: "high", text: "سجل أنشطة معالجة البيانات الشخصية فارغ", points: 10, points_label: "10 نقاط" });
+  }
+  governance = Math.max(0, governance);
   let operational = 100;
   for (const i of all) {
     if (i.status === "EXPIRED") {
@@ -72,12 +82,12 @@ function dashboard(): Dashboard {
     }
   }
   operational = Math.max(0, operational);
-  const score = Math.round((operational + 50) / 2);
+  const score = Math.round((operational + governance) / 2);
   return {
     org_name: "مؤسسة النخبة للمقاولات", cr_number: "1010123456", greeting_name: "أحمد العتيبي",
     plan_tier: "PROFESSIONAL_GRC", automation_active: true,
     score: {
-      score, pillars: { OPERATIONAL: operational, GOVERNANCE_PDPL: 50, CONTRACTS: null },
+      score, pillars: { OPERATIONAL: operational, GOVERNANCE_PDPL: governance, CONTRACTS: null },
       weights_used: { OPERATIONAL: 50, GOVERNANCE_PDPL: 50 }, capped_by_critical_expiry: false,
       reasons: reasons.sort((a, b) => b.points - a.points), computed_at: ago(5),
     },
@@ -86,7 +96,7 @@ function dashboard(): Dashboard {
       active: all.filter((i) => i.status === "ACTIVE").length,
       expiring_soon: all.filter((i) => i.status === "EXPIRING_SOON").length,
       expired: all.filter((i) => i.status === "EXPIRED").length,
-      policies_due: 1,
+      policies_due: policies.map(policyView).filter((x) => x.effective_status === "NEEDS_REVIEW" || x.effective_status === "OVERDUE_REVIEW").length,
     },
     governance: { available: true, last_meeting_title: null, last_meeting_date: null, last_meeting_status: null, doa_rules: 0, doa_last_updated: null },
     pdpl: { available: true, records: ropa.length, complete_records: ropa.filter((r) => r.purpose && r.owner_membership_id).length,
