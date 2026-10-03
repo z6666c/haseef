@@ -144,3 +144,20 @@
 
 /* شريط نسخة العرض (GitHub Pages فقط) */
 .demo-ribbon { background: #B45309; color: #fff; text-align: center; font-size: 13px; padding: 6px 12px; line-height: 1.5; }
+
+/* ---------- الأدوار والصلاحيات ---------- */
+.roles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.role-card { padding: 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.role-card header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.role-card h2 { font-size: var(--t-md, 1rem); margin: 0; flex: 1 1 auto; }
+.perm-list { margin: 0; padding-inline-start: 18px; font-size: var(--t-sm); display: grid; gap: 2px; }
+.role-card .row-actions { display: flex; gap: 12px; margin-top: auto; }
+.perm-picker { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; margin: 0; max-height: 52vh; overflow: auto; }
+.perm-picker legend { font-weight: 700; padding: 0 4px; }
+.perm-group h3 { font-size: var(--t-sm); margin: 10px 0 4px; color: var(--muted); }
+.perm-option { display: flex; gap: 8px; align-items: flex-start; padding: 6px 4px; border-radius: 6px; cursor: pointer; }
+.perm-option:hover { background: var(--paper); }
+.perm-option input { margin-top: 4px; }
+.perm-option span { display: flex; flex-direction: column; }
+.perm-option small { color: var(--muted); font-size: var(--t-xs); }
+.perm-option[data-off] { opacity: .5; cursor: not-allowed; }

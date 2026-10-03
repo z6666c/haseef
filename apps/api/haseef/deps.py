@@ -19,6 +19,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import Connection, text
 
 from .db import platform_tx, tenant_tx
+from .permissions import ALL as PERM_ALL, LABEL as PERM_LABEL, SUPER
 from .security import decode_token
 
 _bearer = HTTPBearer(auto_error=False)
@@ -85,7 +86,7 @@ def get_tenant(
 
 
 def get_platform_admin(principal: Principal = Depends(get_principal)) -> Iterator[Connection]:
-    """أي عضو في فريق حصيف — للقراءة. الإجراءات تستخدم require_admin بدور محدد."""
+    """أي عضو في فريق حصيف — للقراءة. الإجراءات تستخدم require_perm بصلاحية محددة."""
     if not principal.is_platform_admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "هذه الواجهة لفريق حصيف فقط")
     with platform_tx() as conn:
@@ -99,16 +100,22 @@ def get_platform_admin(principal: Principal = Depends(get_principal)) -> Iterato
         yield conn
 
 
-PLATFORM_ROLES = ("SUPER_ADMIN", "SUPPORT", "BILLING")
-ROLE_LABEL_AR = {"SUPER_ADMIN": "المدير العام", "SUPPORT": "الدعم الفني", "BILLING": "المحاسبة"}
-
-
 @dataclass(frozen=True)
 class Admin:
     user_id: UUID
-    role: str
+    role: str                    # رمز الدور (SUPER_ADMIN أو SUPPORT أو BILLING أو دور مخصص)
+    role_name: str
+    perms: frozenset
     conn: Connection
     ip: str | None
+
+    @property
+    def is_super(self) -> bool:
+        return self.role == SUPER
+
+    def can(self, *perms: str) -> bool:
+        """يملك واحدة على الأقل من الصلاحيات المذكورة (المدير العام يملك الكل)."""
+        return self.is_super or any(p in self.perms for p in perms)
 
     def audit(self, action: str, entity_type: str, entity_id=None, org_id=None, changes: dict | None = None) -> None:
         import json
@@ -119,20 +126,28 @@ class Admin:
              "c": json.dumps(changes, default=str, ensure_ascii=False) if changes else None, "ip": self.ip})
 
 
-def require_admin(*roles: str):
-    """اعتمادية لإجراء إداري: المدير العام مسموح دائماً، وغيره حسب القائمة."""
-    allowed = set(roles) | {"SUPER_ADMIN"}
+def require_perm(*perms: str, any_member: bool = False):
+    """اعتمادية لإجراء إداري: يكفي امتلاك واحدة من الصلاحيات المذكورة. بلا صلاحيات = المدير العام فقط.
+    any_member=True: أي عضو فعّال في الفريق (لنقطة "من أنا")."""
+    unknown = set(perms) - PERM_ALL
+    if unknown:
+        raise RuntimeError(f"صلاحيات غير معرّفة: {unknown}")
 
     def dep(request: Request, principal: Principal = Depends(get_principal)) -> Iterator[Admin]:
         with platform_tx() as conn:
-            row = conn.execute(text("SELECT platform_role, is_active FROM users WHERE id = :u"),
-                               {"u": principal.user_id}).mappings().one_or_none()
+            row = conn.execute(text("""
+                SELECT u.platform_role, u.is_active, r.name AS role_name, COALESCE(r.permissions, '{}') AS permissions
+                FROM users u LEFT JOIN admin_roles r ON r.code = u.platform_role WHERE u.id = :u"""),
+                {"u": principal.user_id}).mappings().one_or_none()
             if not row or not row["is_active"] or row["platform_role"] is None:
                 raise HTTPException(status.HTTP_403_FORBIDDEN, "هذه الواجهة لفريق حصيف فقط")
-            if row["platform_role"] not in allowed:
-                names = "، ".join(ROLE_LABEL_AR[r] for r in PLATFORM_ROLES if r in allowed)
-                raise HTTPException(status.HTTP_403_FORBIDDEN, f"هذا الإجراء متاح لـ: {names}")
-            yield Admin(principal.user_id, row["platform_role"], conn,
+            granted = PERM_ALL if row["platform_role"] == SUPER else frozenset(row["permissions"]) & PERM_ALL
+            if perms and not (granted & set(perms)):
+                names = "، ".join(PERM_LABEL[p] for p in perms)
+                raise HTTPException(status.HTTP_403_FORBIDDEN, f"هذا الإجراء يتطلب صلاحية: {names}")
+            if not perms and not any_member and row["platform_role"] != SUPER:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "هذا الإجراء متاح للمدير العام فقط")
+            yield Admin(principal.user_id, row["platform_role"], row["role_name"] or row["platform_role"], granted, conn,
                         request.client.host if request.client else None)
 
     return dep

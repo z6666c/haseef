@@ -26,7 +26,7 @@ export default function Organizations() {
             <label htmlFor="q" className="sr-only">ابحث</label>
             <input id="q" type="search" placeholder="الاسم أو رقم السجل" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
-          {can("SUPPORT") && <Link className="btn btn-action" href="/organizations/new">منشأة جديدة</Link>}
+          {can("orgs.manage") && <Link className="btn btn-action" href="/organizations/new">منشأة جديدة</Link>}
         </div>
       </div>
       <table className="table table-click">

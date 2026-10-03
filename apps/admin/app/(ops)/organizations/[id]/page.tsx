@@ -63,7 +63,7 @@ export default function OrgDetail() {
           </p>
           {suspended && <p className="suspend-note">سبب التعليق: {o.suspension_reason} ({fmtDateTime(o.suspended_at)})</p>}
         </div>
-        {can() && (suspended
+        {can("orgs.suspend") && (suspended
           ? <button className="btn" type="button" onClick={() => setPending({ kind: "reactivate" })}>إعادة التفعيل</button>
           : <button className="btn btn-danger-quiet" type="button" onClick={() => setPending({ kind: "suspend" })}>تعليق المنشأة</button>)}
       </header>
@@ -78,7 +78,7 @@ export default function OrgDetail() {
           <div><dt>السياسات</dt><dd>{d.counts.policies}</dd></div>
         </dl>
       ) : (
-        <p className="hint">تعرض صلاحية المحاسبة بيانات الاشتراك والفوترة فقط. بيانات الامتثال والمستخدمين متاحة للدعم الفني والمدير العام.</p>
+        <p className="hint">يعرض دورك بيانات الاشتراك والفوترة فقط. بيانات الامتثال والمستخدمين تتطلب صلاحية عرض بيانات المنشآت.</p>
       )}
 
       {/* ---------------- الاشتراك ---------------- */}
@@ -86,10 +86,10 @@ export default function OrgDetail() {
         <div className="block-head">
           <h2>الاشتراك</h2>
           <div className="block-actions">
-            {can("BILLING") && <button className="btn btn-action" type="button" onClick={() => setDialog("payment")}>تسجيل دفعة</button>}
-            {can("BILLING") && s && <button className="btn btn-quiet" type="button" onClick={() => setDialog("plan")}>تغيير الباقة</button>}
-            {can("BILLING", "SUPPORT") && s?.billing_status === "TRIAL" && <button className="btn btn-quiet" type="button" onClick={() => setDialog("trial")}>تمديد التجربة</button>}
-            {can("BILLING") && s && <button className="btn btn-danger-quiet" type="button" onClick={() => setPending({ kind: "cancel" })}>إلغاء الاشتراك</button>}
+            {can("billing.manage") && <button className="btn btn-action" type="button" onClick={() => setDialog("payment")}>تسجيل دفعة</button>}
+            {can("billing.manage") && s && <button className="btn btn-quiet" type="button" onClick={() => setDialog("plan")}>تغيير الباقة</button>}
+            {can("billing.manage", "orgs.manage") && s?.billing_status === "TRIAL" && <button className="btn btn-quiet" type="button" onClick={() => setDialog("trial")}>تمديد التجربة</button>}
+            {can("billing.manage") && s && <button className="btn btn-danger-quiet" type="button" onClick={() => setPending({ kind: "cancel" })}>إلغاء الاشتراك</button>}
           </div>
         </div>
         {s ? (
@@ -136,7 +136,7 @@ export default function OrgDetail() {
       <section className="block">
         <div className="block-head">
           <h2>المستخدمون <span className="muted">({d.members.length})</span></h2>
-          {can("SUPPORT") && <button className="btn btn-action" type="button" onClick={() => setDialog("invite")}>دعوة مستخدم</button>}
+          {can("orgs.manage") && <button className="btn btn-action" type="button" onClick={() => setDialog("invite")}>دعوة مستخدم</button>}
         </div>
         <table className="table">
           <thead><tr><th>الاسم</th><th>الدور في المنشأة</th><th>آخر دخول</th><th>الحالة</th><th><span className="sr-only">إجراءات</span></th></tr></thead>
@@ -145,7 +145,7 @@ export default function OrgDetail() {
               <tr key={m.membership_id}>
                 <td>{m.full_name}<div className="muted small"><bdi dir="ltr">{m.email}</bdi>{m.phone_number && <> · <bdi dir="ltr">{m.phone_number}</bdi></>}</div></td>
                 <td>
-                  {can("SUPPORT") ? (
+                  {can("orgs.manage") ? (
                     <select aria-label={`دور ${m.full_name}`} value={m.role} onChange={(e) =>
                       act(() => api.admin.updateMembership(m.membership_id, { role: e.target.value }), `تغيّر دور ${m.full_name}`)
                         .catch((err: Error) => setNotice(err.message))}>
@@ -161,7 +161,7 @@ export default function OrgDetail() {
                     : <span className="pill" data-tone="good">فعّال</span>}
                 </td>
                 <td className="row-actions-cell">
-                  {can("SUPPORT") && !m.is_team_member && (
+                  {can("orgs.manage") && !m.is_team_member && (
                     <>
                       <button className="link-btn" type="button" onClick={() =>
                         act(() => api.admin.resetPassword(m.user_id), `أُعيد تعيين كلمة مرور ${m.full_name}`)

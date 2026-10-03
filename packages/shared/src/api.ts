@@ -162,7 +162,7 @@ export function createApi(
         req<AdminDispatches>(`/admin/dispatches${status ? `?status=${encodeURIComponent(status)}` : ""}`, { org: false }),
       aiUsage: () => req<AdminUsage[]>("/admin/ai-usage", { org: false }),
 
-      me: () => req<{ user_id: string; role: PlatformRole }>("/admin/me", { org: false }),
+      me: () => req<AdminMe>("/admin/me", { org: false }),
       orgDetail: (id: string) => req<AdminOrgDetail>(`/admin/organizations/${id}`, { org: false }),
       createOrg: (b: CreateOrgInput) => post<CreateOrgResult>("/admin/organizations", b),
       updateOrg: (id: string, b: Partial<Pick<AdminOrg, "name" | "industry_type">> & { entity_legal_type?: string; commercial_size?: string }) =>
@@ -182,9 +182,14 @@ export function createApi(
       disableUser: (uid: string, reason: string) => post(`/admin/users/${uid}/disable`, { reason }),
       enableUser: (uid: string) => post(`/admin/users/${uid}/enable`, {}),
       team: () => req<TeamMember[]>("/admin/team", { org: false }),
-      teamAdd: (b: { email: string; full_name: string; role: PlatformRole }) => post<{ temporary_password: string | null }>("/admin/team", b),
-      teamRole: (uid: string, role: PlatformRole | null) =>
-        req<{ role: PlatformRole | null }>(`/admin/team/${uid}`, { method: "PATCH", org: false, body: JSON.stringify({ role }) }),
+      teamAdd: (b: { email: string; full_name: string; role: string }) => post<{ temporary_password: string | null }>("/admin/team", b),
+      teamRole: (uid: string, role: string | null) =>
+        req<{ role: string | null }>(`/admin/team/${uid}`, { method: "PATCH", org: false, body: JSON.stringify({ role }) }),
+      roles: () => req<AdminRolesResponse>("/admin/roles", { org: false }),
+      createRole: (b: AdminRoleInput & { code?: string }) => post<{ code: string }>("/admin/roles", b),
+      updateRole: (code: string, b: AdminRoleInput) =>
+        req<{ updated: boolean }>(`/admin/roles/${code}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
+      deleteRole: (code: string) => req<{ deleted: boolean }>(`/admin/roles/${code}`, { method: "DELETE", org: false }),
       audit: (orgId?: string) => req<AuditEntry[]>(`/admin/audit${orgId ? `?org_id=${orgId}` : ""}`, { org: false }),
 
       // المحتوى المرجعي
@@ -231,7 +236,15 @@ export interface AdminOverview {
   by_plan: { plan_tier: string; n: number }[];
   by_industry: { industry: string; n: number }[];
 }
-export type PlatformRole = "SUPER_ADMIN" | "SUPPORT" | "BILLING";
+/** رمز دور فريق حصيف: الأدوار الأساسية الثلاثة أو أي دور مخصص ينشئه المدير. */
+export type PlatformRole = "SUPER_ADMIN" | "SUPPORT" | "BILLING" | (string & {});
+export interface AdminMe { user_id: string; role: PlatformRole; role_name: string; permissions: string[] }
+export interface AdminPermission { code: string; name: string; group: string; description: string }
+export interface AdminRole {
+  code: string; name: string; description: string | null; permissions: string[]; is_system: boolean; members: number; updated_at: string;
+}
+export interface AdminRolesResponse { roles: AdminRole[]; permissions: AdminPermission[] }
+export interface AdminRoleInput { name: string; description?: string | null; permissions: string[] }
 
 export interface AdminOrg {
   id: string; name: string; cr_number: string; industry_type: string | null; haseef_score: number | null;
@@ -281,7 +294,7 @@ export interface CreateOrgInput {
 }
 export interface CreateOrgResult { id: string; temporary_password: string | null; admin_existing_user: boolean }
 export interface TeamMember {
-  id: string; full_name: string; email: string; platform_role: PlatformRole; is_active: boolean;
+  id: string; full_name: string; email: string; platform_role: PlatformRole; role_name?: string | null; is_active: boolean;
   last_login_at: string | null; must_change_password: boolean;
 }
 export interface AuditEntry {

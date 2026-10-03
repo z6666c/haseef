@@ -1,15 +1,17 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import type { PlatformRole } from "@haseef/shared";
+import type { AdminMe } from "@haseef/shared";
 
 /* ---------- دور المستخدم الحالي في فريق حصيف ---------- */
-export const RoleContext = createContext<PlatformRole | null>(null);
+export const RoleContext = createContext<AdminMe | null>(null);
 
-/** هل يملك الدور الحالي هذا الإجراء؟ المدير العام يملك كل شيء. الخادم يفرض ذلك على أي حال. */
+export function useAdminMe() { return useContext(RoleContext); }
+
+/** هل يملك المستخدم الحالي واحدة من هذه الصلاحيات؟ بلا صلاحيات = المدير العام فقط. الخادم يفرض ذلك على أي حال. */
 export function useCan() {
-  const role = useContext(RoleContext);
-  return (...roles: PlatformRole[]) => role === "SUPER_ADMIN" || (role !== null && roles.includes(role));
+  const me = useContext(RoleContext);
+  return (...perms: string[]) => me?.role === "SUPER_ADMIN" || (!!me && perms.some((p) => me.permissions.includes(p)));
 }
 
 /* ---------- نافذة حوار ---------- */

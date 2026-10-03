@@ -20,7 +20,7 @@ export default function NewOrganization() {
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ id: string; pw: string | null } | null>(null);
 
-  if (!can("SUPPORT")) return <p className="error">إنشاء المنشآت متاح للدعم الفني والمدير العام.</p>;
+  if (!can("orgs.manage")) return <p className="error">إنشاء المنشآت يتطلب صلاحية إدارة المنشآت.</p>;
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF({ ...f, [k]: k === "trial_days" ? Number(e.target.value) : e.target.value });
 

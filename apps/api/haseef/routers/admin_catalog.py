@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import Connection, text
 
 from ..config import get_settings
-from ..deps import Admin, require_admin
+from ..deps import Admin, require_perm
 from ..services import governance_service as gs
 from .governance import file_response
 
@@ -46,7 +46,7 @@ ALLOWED_MIME = {
 
 
 def _require_approver(a: Admin, review_status: str | None) -> None:
-    if review_status is not None and a.role != "SUPER_ADMIN":
+    if review_status is not None and not a.can("content.approve"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "اعتماد المحتوى أو إعادته لمسودة للمدير العام فقط")
 
 
@@ -85,7 +85,7 @@ class StandardPatch(BaseModel):
 
 
 @router.get("/catalog/standards")
-def standards(a: Admin = Depends(require_admin("SUPPORT"))):
+def standards(a: Admin = Depends(require_perm("content.manage", "content.approve"))):
     c = a.conn
     return [dict(r) for r in c.execute(text("""
         SELECT code, domain, title, description, legal_reference, source_url, level, severity, applies_legal_types,
@@ -93,7 +93,7 @@ def standards(a: Admin = Depends(require_admin("SUPPORT"))):
 
 
 @router.patch("/catalog/standards/{code}")
-def patch_standard(code: str, body: StandardPatch, a: Admin = Depends(require_admin("SUPPORT"))):
+def patch_standard(code: str, body: StandardPatch, a: Admin = Depends(require_perm("content.manage", "content.approve"))):
     _require_approver(a, body.review_status)
     return _patch(a, "gov_standards", "code", code, body.model_dump(exclude_unset=True), "ADMIN_CATALOG_STANDARD")
 
@@ -141,7 +141,7 @@ class ObligationCreate(BaseModel):
 
 
 @router.get("/catalog/obligations")
-def obligations(a: Admin = Depends(require_admin("SUPPORT"))):
+def obligations(a: Admin = Depends(require_perm("content.manage", "content.approve"))):
     c = a.conn
     rows = c.execute(text("""
         SELECT c.code, c.kind, c.domain, c.title, c.description, c.authority, c.legal_reference, c.source_url, c.frequency,
@@ -152,7 +152,7 @@ def obligations(a: Admin = Depends(require_admin("SUPPORT"))):
 
 
 @router.post("/catalog/obligations", status_code=201)
-def create_obligation(body: ObligationCreate, a: Admin = Depends(require_admin("SUPPORT"))):
+def create_obligation(body: ObligationCreate, a: Admin = Depends(require_perm("content.manage"))):
     if a.conn.execute(text("SELECT 1 FROM obligation_catalog WHERE code = :c"), {"c": body.code}).scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, "الرمز مستخدم")
     a.conn.execute(text("""
@@ -166,7 +166,7 @@ def create_obligation(body: ObligationCreate, a: Admin = Depends(require_admin("
 
 
 @router.patch("/catalog/obligations/{code}")
-def patch_obligation(code: str, body: ObligationPatch, a: Admin = Depends(require_admin("SUPPORT"))):
+def patch_obligation(code: str, body: ObligationPatch, a: Admin = Depends(require_perm("content.manage", "content.approve"))):
     _require_approver(a, body.review_status)
     data = body.model_dump(exclude_unset=True, exclude={"applies"})
     if body.applies is not None:
@@ -239,7 +239,7 @@ def _safe_name(name: str) -> str:
 
 
 @router.get("/library")
-def library(a: Admin = Depends(require_admin("SUPPORT"))):
+def library(a: Admin = Depends(require_perm("content.manage", "content.approve"))):
     c = a.conn
     rows = c.execute(text(f"""SELECT {_LIB_ADMIN_COLS} FROM library_documents d
                               LEFT JOIN users cu ON cu.id = d.created_by LEFT JOIN users uu ON uu.id = d.updated_by
@@ -248,7 +248,7 @@ def library(a: Admin = Depends(require_admin("SUPPORT"))):
 
 
 @router.get("/library/{doc_id}")
-def library_doc(doc_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
+def library_doc(doc_id: UUID, a: Admin = Depends(require_perm("content.manage", "content.approve"))):
     c = a.conn
     r = c.execute(text(f"""SELECT {_LIB_ADMIN_COLS}, d.body_md FROM library_documents d
                            LEFT JOIN users cu ON cu.id = d.created_by LEFT JOIN users uu ON uu.id = d.updated_by
@@ -259,7 +259,7 @@ def library_doc(doc_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
 
 
 @router.get("/library/{doc_id}/file")
-def library_file(doc_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
+def library_file(doc_id: UUID, a: Admin = Depends(require_perm("content.manage", "content.approve"))):
     c = a.conn
     r = c.execute(text("SELECT file_key, file_name, file_mime FROM library_documents WHERE id = :id"), {"id": doc_id}).mappings().one_or_none()
     if not r or not r["file_key"]:
@@ -268,7 +268,7 @@ def library_file(doc_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
 
 
 @router.post("/library", status_code=201)
-def create_doc(body: LibraryCreate, a: Admin = Depends(require_admin("SUPPORT"))):
+def create_doc(body: LibraryCreate, a: Admin = Depends(require_perm("content.manage"))):
     key = size = mime = None
     name = None
     if body.kind == "FILE":
@@ -293,13 +293,13 @@ def create_doc(body: LibraryCreate, a: Admin = Depends(require_admin("SUPPORT"))
 
 
 @router.patch("/library/{doc_id}")
-def patch_doc(doc_id: UUID, body: LibraryPatch, a: Admin = Depends(require_admin("SUPPORT"))):
+def patch_doc(doc_id: UUID, body: LibraryPatch, a: Admin = Depends(require_perm("content.manage", "content.approve"))):
     _require_approver(a, body.review_status)
     return _patch(a, "library_documents", "id", doc_id, body.model_dump(exclude_unset=True), "ADMIN_LIBRARY_EDIT")
 
 
 @router.delete("/library/{doc_id}", status_code=204)
-def delete_doc(doc_id: UUID, a: Admin = Depends(require_admin())):
+def delete_doc(doc_id: UUID, a: Admin = Depends(require_perm("content.approve"))):
     """الحذف للمدير العام فقط؛ الإخفاء متاح للدعم الفني ويكفي في أغلب الحالات."""
     r = a.conn.execute(text("DELETE FROM library_documents WHERE id = :id RETURNING title, file_key"), {"id": doc_id}).one_or_none()
     if not r:
@@ -313,7 +313,7 @@ def delete_doc(doc_id: UUID, a: Admin = Depends(require_admin())):
 
 # ------------------------------------------------------------------ نظرة على حوكمة منشأة
 @router.get("/organizations/{org_id}/governance")
-def org_governance(org_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
+def org_governance(org_id: UUID, a: Admin = Depends(require_perm("orgs.view"))):
     c = a.conn
     if not c.execute(text("SELECT 1 FROM organizations WHERE id = :o"), {"o": org_id}).scalar_one_or_none():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "لم يُعثر على المنشأة")

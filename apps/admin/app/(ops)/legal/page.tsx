@@ -23,12 +23,12 @@ export default function LegalAdmin() {
   const tabs: [Tab, string, boolean][] = [
     ["requests", "طلبات الاستشارة", true],
     ["rates", "التسعيرة", true],
-    ["lawyers", "المحامون", can("SUPPORT")],
+    ["lawyers", "المحامون", can("legal.cases", "legal.lawyers")],
   ];
   return (
     <>
       <h1>الاستشارات القانونية</h1>
-      <p className="muted">الدعم الفني يعيّن المحامي ويؤكد الموعد. المحاسبة تسجّل الدفع وتعدّل الأسعار. المدير العام يدير قائمة المحامين.</p>
+      <p className="muted">تعيين المحامي وتأكيد الموعد، وتسجيل الدفع والأسعار، وقائمة المحامين: كلٌّ بحسب صلاحيات دورك.</p>
       <div className="filters" role="tablist">
         {tabs.filter(([, , ok]) => ok).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>
@@ -52,7 +52,7 @@ function Requests({ act }: { act: Act }) {
   const [assign, setAssign] = useState<AdminConsultation | null>(null);
   const [pay, setPay] = useState<AdminConsultation | null>(null);
   const load = useCallback(() => { api.admin.legalConsultations().then(setRows).catch(() => setRows([])); }, []);
-  useEffect(() => { load(); if (can("SUPPORT")) api.admin.lawyers().then(setLawyers).catch(() => {}); }, [load]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); if (can("legal.cases", "legal.lawyers")) api.admin.lawyers().then(setLawyers).catch(() => {}); }, [load]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!rows) return null;
   return (
     <>
@@ -75,13 +75,13 @@ function Requests({ act }: { act: Act }) {
                 {c.payment_reference && <div className="muted small">{c.payment_reference}</div>}
               </td>
               <td className="row-actions-cell">
-                {can("SUPPORT") && (c.status === "REQUESTED" || c.status === "CONFIRMED") && <button className="link-btn" type="button" onClick={() => setAssign(c)}>{c.status === "REQUESTED" ? "تأكيد وتعيين" : "تعديل الموعد"}</button>}
-                {can("SUPPORT") && c.status === "CONFIRMED" && <button className="link-btn" type="button"
+                {can("legal.cases") && (c.status === "REQUESTED" || c.status === "CONFIRMED") && <button className="link-btn" type="button" onClick={() => setAssign(c)}>{c.status === "REQUESTED" ? "تأكيد وتعيين" : "تعديل الموعد"}</button>}
+                {can("legal.cases") && c.status === "CONFIRMED" && <button className="link-btn" type="button"
                   onClick={() => act(() => api.admin.legalComplete(c.id, window.prompt("ملخص المحامي للعميل (اختياري):") || null), "اكتملت الاستشارة", load)}>إكمال</button>}
-                {can("SUPPORT") && (c.status === "REQUESTED" || c.status === "CONFIRMED") && <button className="link-btn danger" type="button"
+                {can("legal.cases") && (c.status === "REQUESTED" || c.status === "CONFIRMED") && <button className="link-btn danger" type="button"
                   onClick={() => { const r = window.prompt("سبب الإلغاء:"); if (r && r.trim().length >= 3) act(() => api.admin.legalCancel(c.id, r.trim()), "أُلغي الطلب", load); }}>إلغاء</button>}
-                {can("BILLING") && c.status !== "CANCELED" && c.payment_status !== "PAID" && <button className="link-btn" type="button" onClick={() => setPay(c)}>تسجيل الدفع</button>}
-                {can("BILLING") && c.payment_status === "PAID" && c.status === "CANCELED" && <button className="link-btn" type="button"
+                {can("legal.billing") && c.status !== "CANCELED" && c.payment_status !== "PAID" && <button className="link-btn" type="button" onClick={() => setPay(c)}>تسجيل الدفع</button>}
+                {can("legal.billing") && c.payment_status === "PAID" && c.status === "CANCELED" && <button className="link-btn" type="button"
                   onClick={() => { const r = window.prompt("مرجع الاسترداد:"); if (r && r.trim().length >= 2) act(() => api.admin.legalPayment(c.id, "REFUNDED", r.trim()), "سُجّل الاسترداد", load); }}>تسجيل استرداد</button>}
               </td>
             </tr>
@@ -140,7 +140,7 @@ function Rates({ act }: { act: Act }) {
   const load = useCallback(() => { api.admin.legalRates().then(setRows).catch(() => setRows([])); }, []);
   useEffect(load, [load]);
   if (!rows) return null;
-  const editor = can("BILLING");
+  const editor = can("legal.billing");
   return (
     <>
       {!editor && <p className="hint">تعديل الأسعار للمحاسبة والمدير العام.</p>}
@@ -180,12 +180,12 @@ function Lawyers({ act }: { act: Act }) {
   const load = useCallback(() => { api.admin.lawyers().then(setRows).catch(() => setRows([])); }, []);
   useEffect(load, [load]);
   if (!rows) return null;
-  const admin = can();
+  const admin = can("legal.lawyers");
   const blank: Lawyer = { id: "", full_name: "", license_number: "", specialties: [], bio: null, email: null, phone_number: null, is_active: true };
   return (
     <>
       {admin ? <div className="head-row"><span /><button className="btn btn-action" type="button" onClick={() => setEdit(blank)}>إضافة محامٍ</button></div>
-        : <p className="hint">إضافة المحامين وتعديلهم للمدير العام.</p>}
+        : <p className="hint">إضافة المحامين وتعديلهم تتطلب صلاحية إدارة المحامين.</p>}
       <table className="table">
         <thead><tr><th>المحامي</th><th>الترخيص</th><th>التخصصات</th><th>الحالة</th><th><span className="sr-only">إجراءات</span></th></tr></thead>
         <tbody>
