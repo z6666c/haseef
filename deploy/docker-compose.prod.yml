@@ -38,7 +38,7 @@ services:
       POSTGRES_USER: haseef_owner
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?اضبط POSTGRES_PASSWORD في deploy/.env}
       TZ: Asia/Riyadh
-    volumes: [pgdata:/var/lib/postgresql/data, ./backups:/backups]
+    volumes: [pgdata:/var/lib/postgresql/data]
     networks: [internal]
     restart: unless-stopped
     shm_size: 256m

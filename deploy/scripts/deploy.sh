@@ -3,6 +3,7 @@
 #   1) يسحب آخر نسخة من main   2) يبني الصور   3) نسخة احتياطية قبل التحديث
 #   4) خطوة الإصدار (المخطط والمحتوى)   5) يشغّل الخدمات   6) يتحقق من الصحة
 set -euo pipefail
+[ -n "${GITHUB_ACTIONS:-}" ] && trap 'echo "::error::${BASH_SOURCE[0]}:$LINENO: $BASH_COMMAND"' ERR
 cd "$(dirname "$0")/.."                     # مجلد deploy
 [ -f .env ] || { echo "deploy/.env غير موجود. أنشئه: scripts/gen-secrets.sh > .env"; exit 1; }
 chmod 600 .env

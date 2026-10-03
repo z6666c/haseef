@@ -2,6 +2,7 @@
 # استعادة قاعدة البيانات من نسخة:  deploy/scripts/restore.sh backups/haseef-db-YYYYMMDD-HHMM.dump
 # يوقف الخدمات، يستبدل البيانات الحالية بالكامل، ثم يعيد التشغيل.
 set -euo pipefail
+[ -n "${GITHUB_ACTIONS:-}" ] && trap 'echo "::error::${BASH_SOURCE[0]}:$LINENO: $BASH_COMMAND"' ERR
 cd "$(dirname "$0")/.."
 f="${1:?حدد ملف النسخة}"; [ -f "$f" ] || { echo "الملف غير موجود: $f"; exit 1; }
 read -r -p "ستُستبدل كل بيانات الإنتاج الحالية بـ $f. اكتب «استعادة» للمتابعة: " ok

@@ -2,6 +2,7 @@
 # نسخة احتياطية مضغوطة لقاعدة البيانات وملفات المكتبة، مع حذف ما تجاوز BACKUP_KEEP_DAYS.
 # يُجدول يومياً عبر cron (انظر docs/DEPLOY.md). الاستعادة: scripts/restore.sh <الملف>
 set -euo pipefail
+[ -n "${GITHUB_ACTIONS:-}" ] && trap 'echo "::error::${BASH_SOURCE[0]}:$LINENO: $BASH_COMMAND"' ERR
 cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
 C="docker compose -f docker-compose.prod.yml"
