@@ -1,0 +1,55 @@
+name: فحص التشغيل الحقيقي
+
+# يبني صور الإنتاج ويشغّل المنصة كاملة كما على الخادم (Caddy + الخادم + العمّال + قاعدة البيانات)
+# على النطاق localhost، ثم يتحقق من الصحة والدخول والنسخ الاحتياطي.
+on:
+  pull_request:
+    paths: ["deploy/**", "apps/api/Dockerfile", "apps/api/pyproject.toml", "apps/api/scripts/**",
+            "apps/*/next.config.mjs", "package.json", "db/migrations/**", ".github/workflows/deploy-check.yml"]
+  push:
+    branches: [main]
+    paths: ["deploy/**", "apps/api/Dockerfile", "apps/api/pyproject.toml", "db/migrations/**"]
+  workflow_dispatch:
+
+jobs:
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults: { run: { working-directory: deploy, shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - name: أسرار مؤقتة ونطاق محلي
+        run: |
+          scripts/gen-secrets.sh > .env
+          sed -i -e 's/^HASEEF_DOMAIN=.*/HASEEF_DOMAIN=localhost/' -e 's/^ACME_EMAIL=.*/ACME_EMAIL=ci@example.com/' .env
+      - name: النشر الأول
+        run: SKIP_PULL=1 scripts/deploy.sh
+      - name: الصحة عبر Caddy
+        run: |
+          R="--resolve app.localhost:443:127.0.0.1 --resolve admin.localhost:443:127.0.0.1"
+          curl -skf $R https://app.localhost/api/health
+          curl -sk $R -o /dev/null -w "%{http_code}\n" https://app.localhost/login | grep -q 200
+          curl -sk $R -o /dev/null -w "%{http_code}\n" https://admin.localhost/login | grep -q 200
+          curl -skI $R https://app.localhost/login | grep -qi "strict-transport-security"
+      - name: أول مدير عام وتسجيل الدخول
+        run: |
+          out=$(scripts/create-admin.sh ci@haseef.sa "CI Admin")
+          pw=$(echo "$out" | tail -1 | awk '{print $NF}')
+          R="--resolve admin.localhost:443:127.0.0.1"
+          curl -skf $R https://admin.localhost/api/v1/auth/login -H 'Content-Type: application/json' \
+            -d "{\"email\":\"ci@haseef.sa\",\"password\":\"$pw\"}" | grep -q '"must_change_password":true'
+          # يرفض إنشاء مدير ثانٍ بلا --force
+          if scripts/create-admin.sh other@haseef.sa "X"; then echo "سُمح بمدير ثانٍ"; exit 1; fi
+      - name: الحماية من تخمين كلمات المرور
+        run: |
+          R="--resolve app.localhost:443:127.0.0.1"
+          for i in $(seq 1 10); do curl -sk $R -o /dev/null https://app.localhost/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"ci@haseef.sa","password":"wrong-password"}'; done
+          code=$(curl -sk $R -o /dev/null -w "%{http_code}" https://app.localhost/api/v1/auth/login -H 'Content-Type: application/json' -d '{"email":"ci@haseef.sa","password":"wrong-password"}')
+          test "$code" = 429
+      - name: النسخ الاحتياطي ونشر ثانٍ (تحديث بلا تغييرات)
+        run: |
+          scripts/backup.sh && ls -la backups && test -s "$(ls backups/haseef-db-*.dump | head -1)"
+          SKIP_PULL=1 scripts/deploy.sh
+      - name: السجلات عند الفشل
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs --tail 120

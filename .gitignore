@@ -10,3 +10,7 @@ node_modules/
 logs/
 storage/
 *.tsbuildinfo
+
+# أسرار ونسخ الإنتاج
+deploy/.env
+deploy/backups/

@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 /** @type {import('next').NextConfig} */
 // نسخة العرض الثابتة (GitHub Pages): DEMO_EXPORT=1 مع NEXT_PUBLIC_DEMO=1 و NEXT_PUBLIC_BASE_PATH.
 const demoExport = process.env.DEMO_EXPORT === "1";
@@ -29,5 +31,9 @@ if (demoExport) {
   Object.assign(nextConfig, { output: "export", basePath, trailingSlash: true, images: { unoptimized: true } });
   delete nextConfig.rewrites; // لا خادم في الصفحات الثابتة؛ الطلبات تُخدم من demo.ts
   delete nextConfig.headers;
+}
+// صورة الإنتاج (deploy/web.Dockerfile): خادم مستقل صغير يضم ما يلزمه فقط من المستودع.
+if (process.env.NEXT_STANDALONE === "1") {
+  Object.assign(nextConfig, { output: "standalone", outputFileTracingRoot: fileURLToPath(new URL("../..", import.meta.url)) });
 }
 export default nextConfig;

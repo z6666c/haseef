@@ -1,0 +1,60 @@
+# حصيف — البوابة الأمامية: HTTPS تلقائي (Let's Encrypt) وترويسات أمان وتوجيه /api للخادم.
+{
+	email {$ACME_EMAIL}
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+(security) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# الخطوط من Google مؤقتاً (انظر docs/DEPLOY.md: استضافتها محلياً قبل الإطلاق)
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+	encode zstd gzip
+	log {
+		output stdout
+		format json
+	}
+}
+
+(api) {
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+	request_body /api/* {
+		max_size 20MB
+	}
+}
+
+app.{$HASEEF_DOMAIN} {
+	import security
+	import api
+	handle {
+		reverse_proxy client:3000
+	}
+}
+
+admin.{$HASEEF_DOMAIN} {
+	import security
+	# حصر غرفة العمليات في عناوين المكتب/الشبكة الخاصة إن ضُبط ADMIN_ALLOW_IPS
+	@blocked not remote_ip {$ADMIN_ALLOW_IPS}
+	respond @blocked "غير مسموح" 403
+	import api
+	handle {
+		reverse_proxy admin:3000
+	}
+}
+
+{$HASEEF_DOMAIN}, www.{$HASEEF_DOMAIN} {
+	import security
+	@root path /
+	redir @root https://app.{$HASEEF_DOMAIN}/welcome 302
+	redir https://app.{$HASEEF_DOMAIN}{uri} 302
+}

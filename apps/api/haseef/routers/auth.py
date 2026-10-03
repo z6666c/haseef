@@ -12,6 +12,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # تجزئة ثابتة لمقارنة وهمية عند عدم وجود المستخدم، حتى لا يكشف زمن الاستجابة وجود البريد.
 _DUMMY_HASH = hash_password("timing-equaliser-not-a-real-password")
+MAX_FAILED_LOGINS = 10
 
 
 @router.post("/login", response_model=TokenOut)
@@ -22,9 +23,24 @@ def login(body: LoginIn) -> TokenOut:
             text("SELECT id, password_hash, is_platform_admin, is_active, must_change_password FROM users WHERE email = :e"),
             {"e": body.email},
         ).mappings().one_or_none()
+        # حماية من تخمين كلمات المرور: بعد 10 محاولات فاشلة للبريد خلال 15 دقيقة يُوقف الدخول مؤقتاً
+        failed = conn.execute(text("""SELECT count(*) FROM audit_log WHERE action = 'LOGIN_FAILED'
+                                      AND changes->>'email' = :e AND created_at > now() - interval '15 minutes'"""),
+                              {"e": body.email}).scalar_one()
+        if failed >= MAX_FAILED_LOGINS:
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "محاولات دخول كثيرة. حاول بعد 15 دقيقة.")
         ok = verify_password(user["password_hash"] if user else _DUMMY_HASH, body.password)
         if not (user and ok and user["is_active"]):
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "البريد أو كلمة المرور غير صحيحة")
+            failed_login = (user["id"] if user else None, body.email)
+        else:
+            failed_login = None
+    if failed_login:                    # تُسجَّل في معاملة مستقلة لأن الخطأ يلغي المعاملة السابقة
+        with platform_tx() as conn:
+            conn.execute(text("""INSERT INTO audit_log (actor_user_id, action, entity_type, entity_id, changes)
+                                 VALUES (NULL, 'LOGIN_FAILED', 'user', :u, jsonb_build_object('email', CAST(:e AS text)))"""),
+                         {"u": failed_login[0], "e": failed_login[1]})
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "البريد أو كلمة المرور غير صحيحة")
+    with platform_tx() as conn:
         if needs_rehash(user["password_hash"]):
             conn.execute(text("UPDATE users SET password_hash=:h WHERE id=:id"),
                          {"h": hash_password(body.password), "id": user["id"]})

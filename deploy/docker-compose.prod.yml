@@ -1,0 +1,110 @@
+# حصيف — التشغيل الحقيقي على خادم واحد داخل المملكة.
+# التشغيل والتحديث عبر deploy/scripts/deploy.sh، والتفاصيل في docs/DEPLOY.md.
+#
+#   الإنترنت ─► caddy (443، شهادات تلقائية)
+#                 ├─ app.haseef.sa    ─► client   (/api/* ─► api)
+#                 ├─ admin.haseef.sa  ─► admin    (/api/* ─► api)
+#                 └─ haseef.sa        ─► تحويل للصفحة التعريفية
+#               api ─► db (PostgreSQL + RLS) و redis ◄─ worker و beat
+#
+# لا منفذ مفتوح للعالم غير 80 و443؛ قاعدة البيانات وRedis على شبكة داخلية فقط.
+name: haseef
+
+x-api: &api
+  image: haseef-api:${HASEEF_VERSION:-latest}
+  build: { context: .., dockerfile: apps/api/Dockerfile }
+  env_file: .env
+  environment:
+    HASEEF_ENV: production
+    HASEEF_AUTO_MIGRATE: "false"
+    HASEEF_DATABASE_URL_APP: postgresql+psycopg://haseef_app:${HASEEF_DB_APP_PASSWORD}@db:5432/haseef
+    HASEEF_DATABASE_URL_PLATFORM: postgresql+psycopg://haseef_platform:${HASEEF_DB_PLATFORM_PASSWORD}@db:5432/haseef
+    HASEEF_DATABASE_URL_MIGRATE: postgresql+psycopg://haseef_owner:${POSTGRES_PASSWORD}@db:5432/haseef
+    HASEEF_REDIS_URL: redis://redis:6379/0
+    HASEEF_CORS_ORIGINS: '["https://app.${HASEEF_DOMAIN}","https://admin.${HASEEF_DOMAIN}"]'
+    HASEEF_CLIENT_BASE_URL: https://app.${HASEEF_DOMAIN}
+  volumes: [storage:/app/storage]
+  networks: [internal, public]        # public: للخروج إلى مزوّد الواتساب والبريد فقط، لا منافذ مفتوحة
+  restart: unless-stopped
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_started }
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: haseef
+      POSTGRES_USER: haseef_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?اضبط POSTGRES_PASSWORD في deploy/.env}
+      TZ: Asia/Riyadh
+    volumes: [pgdata:/var/lib/postgresql/data, ./backups:/backups]
+    networks: [internal]
+    restart: unless-stopped
+    shm_size: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haseef_owner -d haseef"]
+      interval: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    volumes: [redisdata:/data]
+    networks: [internal]
+    restart: unless-stopped
+
+  # خطوة النشر: تحديث المخطط وكلمات مرور الأدوار والمحتوى المرجعي، ثم تخرج.
+  release:
+    <<: *api
+    command: ["python", "-m", "scripts.release"]
+    restart: "no"
+    profiles: [release]
+
+  api:
+    <<: *api
+
+  worker:
+    <<: *api
+    command: ["celery", "-A", "haseef.worker", "worker", "-l", "info", "--concurrency", "2"]
+    healthcheck: { disable: true }
+
+  beat:
+    <<: *api
+    command: ["celery", "-A", "haseef.worker", "beat", "-l", "info", "-s", "/tmp/celerybeat-schedule"]
+    healthcheck: { disable: true }
+
+  client:
+    image: haseef-client:${HASEEF_VERSION:-latest}
+    build: { context: .., dockerfile: deploy/web.Dockerfile, args: { APP: client } }
+    networks: [internal]
+    restart: unless-stopped
+
+  admin:
+    image: haseef-admin:${HASEEF_VERSION:-latest}
+    build: { context: .., dockerfile: deploy/web.Dockerfile, args: { APP: admin } }
+    networks: [internal]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      HASEEF_DOMAIN: ${HASEEF_DOMAIN:?اضبط HASEEF_DOMAIN في deploy/.env}
+      ACME_EMAIL: ${ACME_EMAIL}
+      ADMIN_ALLOW_IPS: ${ADMIN_ALLOW_IPS:-0.0.0.0/0 ::/0}
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile:ro, caddydata:/data, caddyconfig:/config]
+    networks: [internal, public]
+    restart: unless-stopped
+    depends_on: [api, client, admin]
+
+networks:
+  internal: { internal: true }
+  public: {}
+
+volumes:
+  pgdata: {}
+  redisdata: {}
+  storage: {}
+  caddydata: {}
+  caddyconfig: {}
