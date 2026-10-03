@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LegalFooter } from "@/components/LegalDoc";
@@ -114,6 +115,7 @@ export default function LoginPage() {
           {busy ? "جارٍ الدخول…" : "ادخل"}
         </button>
         <p className="small muted login-legal-note">باستخدامك المنصة فإنك توافق على شروط الاستخدام وسياسة الخصوصية.</p>
+        <p className="small muted login-legal-note"><Link href="/welcome">تعرّف على حصيف واطلب تجربة ←</Link></p>
         <LegalFooter withLogin={false} />
       </form>
     </main>

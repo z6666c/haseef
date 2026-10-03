@@ -115,7 +115,7 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   ADMIN_TEAM_ADD: "إضافة عضو للفريق", ADMIN_TEAM_ROLE: "تغيير دور في الفريق",
   DPIA_ADD: "تقييم أثر جديد", DPIA_EDIT: "تعديل تقييم أثر", DPIA_STATUS: "تغيير حالة تقييم أثر", DPIA_DELETE: "حذف تقييم أثر",
   GROUP_ENTITY_ADD: "إضافة منشأة للمجموعة", GROUP_ENTITY_CREATED: "إنشاء منشأة تابعة",
-  BOARD_REPORT_SAVE: "حفظ تقرير المجلس", ALERT_RECIPIENT: "ضبط مستلم التنبيهات",
+  BOARD_REPORT_SAVE: "حفظ تقرير المجلس", ALERT_RECIPIENT: "ضبط مستلم التنبيهات", ADMIN_TRIAL_STATUS: "متابعة طلب تجربة",
 };
 
 const AUDIT_KEY_LABEL: Record<string, string> = {
@@ -270,3 +270,8 @@ export const DISPATCH_STATUS_LABEL: Record<string, string> = {
 };
 export const ALERT_CHANNEL_LABEL: Record<string, string> = { WHATSAPP: "واتساب", EMAIL: "بريد إلكتروني" };
 export const PRIORITY_LABEL: Record<string, string> = { CRITICAL: "حرجة", HIGH: "عالية", MEDIUM: "متوسطة", LOW: "منخفضة" };
+export const TRIAL_STATUS_LABEL: Record<string, string> = { NEW: "جديد", CONTACTED: "تم التواصل", CONVERTED: "أصبح عميلاً", REJECTED: "غير مناسب" };
+export const INTEREST_LABEL: Record<string, string> = {
+  LICENSES: "التراخيص والتنبيهات", GOVERNANCE: "الحوكمة والهيكل", PDPL: "حماية البيانات", POLICIES: "السياسات والنماذج",
+  LEGAL: "استشارة محامٍ", GROUP: "عدة منشآت أو فروع",
+};

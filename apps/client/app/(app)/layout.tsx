@@ -36,7 +36,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const s = getSession();
     if (!s?.token) {
-      router.replace("/login");
+      router.replace("/welcome");
       return;
     }
     setOrgId(s.orgId);

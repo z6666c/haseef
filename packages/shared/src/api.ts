@@ -102,6 +102,9 @@ export function createApi(
     updateIncident: (id: string, b: Record<string, unknown>) =>
       req<{ updated: boolean }>(`/pdpl/incidents/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
 
+    // ---------- طلب تجربة (عام، بلا دخول)
+    submitTrial: (b: TrialInput) => req<{ received: boolean }>("/public/trial-requests", { method: "POST", org: false, body: JSON.stringify(b) }),
+
     // ---------- تقييم الأثر (DPIA)
     dpiaQuestionnaire: () => req<DpiaQuestionnaire>("/pdpl/dpia/questionnaire"),
     dpiaList: () => req<Dpia[]>("/pdpl/dpia"),
@@ -200,6 +203,9 @@ export function createApi(
         req<{ updated: boolean }>(`/admin/library/${id}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
       deleteDoc: (id: string) => req<void>(`/admin/library/${id}`, { method: "DELETE", org: false }),
       legalConsultations: () => req<AdminConsultation[]>("/admin/legal/consultations", { org: false }),
+      trials: () => req<TrialRequest[]>("/admin/trial-requests", { org: false }),
+      updateTrial: (id: string, b: { status: TrialRequest["status"]; notes: string | null }) =>
+        req<{ updated: boolean }>(`/admin/trial-requests/${id}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
       legalAssign: (id: string, b: { lawyer_id: string; scheduled_at: string; meeting_link: string | null }) =>
         post(`/admin/legal/consultations/${id}/assign`, b),
       legalComplete: (id: string, lawyer_summary: string | null) => post(`/admin/legal/consultations/${id}/complete`, { lawyer_summary }),
@@ -500,4 +506,15 @@ export interface AlertsOverview {
   log: { id: string; target_type: string; title: string | null; due_date: string; threshold_days: number; channel: string; status: string;
     skip_reason: string | null; scheduled_for: string; sent_at: string | null; delivered_at: string | null; recipient_name: string | null }[];
   can_manage: boolean;
+}
+
+// ---------- طلبات التجربة
+export interface TrialInput {
+  full_name: string; company_name: string; email: string; phone_number: string | null; legal_type: string | null;
+  employees_range: "1-9" | "10-49" | "50-249" | "250+" | null; plan_interest: "ESSENTIAL" | "PROFESSIONAL_GRC" | "ENTERPRISE" | "UNSURE";
+  interests: string[]; message: string | null; source: string | null; consent: boolean; website?: string;
+}
+export interface TrialRequest extends Omit<TrialInput, "consent" | "website"> {
+  id: string; status: "NEW" | "CONTACTED" | "CONVERTED" | "REJECTED"; notes: string | null; created_at: string; updated_at: string;
+  handled_by_name: string | null;
 }
