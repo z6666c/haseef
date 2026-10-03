@@ -147,6 +147,8 @@ function sentences(text: string): string[] {
   return text.split(/(?<=[.!؟?؛;:])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
 }
 const find = (ss: string[], re: RegExp) => ss.find((s) => re.test(s)) ?? null;
+/** «10 ساعات» و«3 سنوات» و«12 ساعة» */
+const plural = (n: number, few: string, many: string) => `${n} ${n >= 3 && n <= 10 ? few : many}`;
 const clip = (s: string | null) => (s && s.length > 260 ? `${s.slice(0, 257)}…` : s);
 
 const LABOR = "نظام العمل";
@@ -179,7 +181,7 @@ function laborChecks(ss: string[], text: string, F: ContractFinding[], P: string
       const { max, weekly } = over;
       hoursBad = true;
       F.push({ id: "hours", severity: "VIOLATION", title: "ساعات العمل تتجاوز الحد النظامي", excerpt: clip(s), law: `${LABOR} — المادة 98`,
-        explanation: `ساعات العمل المذكورة ${max} ساعة ${weekly ? "أسبوعياً" : "يومياً"}، والحد ثماني ساعات يومياً أو ثمان وأربعون ساعة أسبوعياً، وتخفض في رمضان للمسلمين.`,
+        explanation: `ساعات العمل المذكورة ${plural(max, "ساعات", "ساعة")} ${weekly ? "أسبوعياً" : "يومياً"}، والحد ثماني ساعات يومياً أو ثمان وأربعون ساعة أسبوعياً، وتخفض في رمضان للمسلمين.`,
         suggestion: "ساعات العمل ثماني ساعات يومياً بحد أقصى ثمان وأربعين ساعة أسبوعياً، وما زاد عليها يُعد عملاً إضافياً بأجر إضافي." });
       break;
     }
@@ -212,7 +214,7 @@ function laborChecks(ss: string[], text: string, F: ContractFinding[], P: string
   if (nc) {
     const years = Math.max(0, ...parseDurations(nc).filter((d) => d.unit !== "hour").map((d) => d.days / 365));
     if (years > 2) F.push({ id: "noncompete-time", severity: "VIOLATION", title: "مدة عدم المنافسة تتجاوز سنتين", excerpt: clip(nc), law: `${LABOR} — المادة 83`,
-      explanation: `المدة المذكورة نحو ${Math.round(years * 10) / 10} سنة، والنظام يشترط ألا تزيد على سنتين من تاريخ انتهاء العلاقة، وأن تكون محددة زماناً ومكاناً ونوع عمل.`,
+      explanation: `المدة المذكورة ${Number.isInteger(years) ? plural(years, "سنوات", "سنة") : `نحو ${Math.round(years * 10) / 10} سنة`}، والنظام يشترط ألا تزيد على سنتين من تاريخ انتهاء العلاقة، وأن تكون محددة زماناً ومكاناً ونوع عمل.`,
       suggestion: "يلتزم العامل بعد انتهاء العقد ولمدة سنة واحدة بعدم العمل لدى منافس مباشر في مجال [نوع النشاط] داخل مدينة [المدينة]، ولا يتجاوز ذلك ما يلزم لحماية مصالح صاحب العمل المشروعة." });
     else if (!years) F.push({ id: "noncompete-nodur", severity: "WARNING", title: "شرط عدم منافسة دون مدة محددة", excerpt: clip(nc), law: `${LABOR} — المادة 83`,
       explanation: "شرط عدم المنافسة يجب أن يكون مكتوباً ومحدداً بالزمان (سنتان حداً أقصى) والمكان ونوع العمل، وإلا كان عرضة للبطلان.",
@@ -300,7 +302,7 @@ export function checkContract(text: string, kind: ContractKind): ContractCheckRe
   findings.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "VIOLATION" ? -1 : 1));
   const v = findings.filter((f) => f.severity === "VIOLATION").length;
   const w = findings.length - v;
-  const percentage = Math.max(0, Math.min(100, 100 - v * 18 - w * 6));
+  const percentage = Math.max(0, Math.min(100, 100 - v * 12 - w * 4));
   const verdict: ContractVerdict = v >= 3 || percentage < 50 ? "HIGH_RISK" : v > 0 ? "CONTAINS_VIOLATIONS" : "COMPLIANT";
   return { kind, verdict, percentage, findings, passed, redaction: { text: red.text, counts: red.counts } };
 }
