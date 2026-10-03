@@ -25,7 +25,7 @@ const DISPATCH_TONE: Record<string, string> = {
 const fmtTime = (d: string | null) => d
   ? new Intl.DateTimeFormat("ar-SA-u-nu-latn-ca-gregory", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(d))
   : "—";
-const threshold = (n: number) => (n === 0 ? "يوم الانتهاء" : `قبل ${countDays(n)}`);
+const threshold = (n: number) => (n === 0 ? "يوم الانتهاء" : n < 0 ? `بعد الانتهاء بـ${countDays(-n)}` : `قبل ${countDays(n)}`);
 const hourLabel = (h: number) => {
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:00 ${h < 12 ? "صباحاً" : "مساءً"}`;
