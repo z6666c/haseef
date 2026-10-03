@@ -6,3 +6,4 @@ export * from "./markdown.ts";
 export * from "./dpia.ts";
 export * from "./platformLegal.ts";
 export * from "./whatsappTemplates.ts";
+export * from "./contractCheck.ts";

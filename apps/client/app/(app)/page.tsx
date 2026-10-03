@@ -44,9 +44,7 @@ export default function RadarPage() {
         </div>
         <div className="head-actions">
           <Link className="btn btn-action" href="/licenses?new=1"><Plus size={18} /> إضافة ترخيص</Link>
-          <span className="btn btn-quiet" aria-disabled="true" title="يُفعَّل بعد اعتماد مزوّد ذكاء اصطناعي داخل المملكة">
-            <FileSparkle size={18} /> تدقيق عقد جديد
-          </span>
+          <Link className="btn btn-quiet" href="/contracts"><FileSparkle size={18} /> فحص عقد</Link>
         </div>
       </header>
 
