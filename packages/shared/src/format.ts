@@ -104,7 +104,7 @@ export const BILLING_EVENT_LABEL: Record<string, string> = {
 };
 
 export const AUDIT_ACTION_LABEL: Record<string, string> = {
-  LOGIN: "تسجيل دخول", CHANGE_PASSWORD: "تغيير كلمة المرور",
+  LOGIN: "تسجيل دخول", LOGIN_FAILED: "محاولة دخول فاشلة", CHANGE_PASSWORD: "تغيير كلمة المرور",
   CREATE: "إنشاء", UPDATE: "تعديل", ARCHIVE: "أرشفة", RENEW: "تجديد", REMIND: "تذكير يدوي", UPSERT: "ضبط قاعدة",
   ADMIN_CREATE_ORG: "إنشاء منشأة", ADMIN_UPDATE_ORG: "تعديل منشأة",
   ADMIN_SUSPEND_ORG: "تعليق منشأة", ADMIN_REACTIVATE_ORG: "إعادة تفعيل منشأة",
