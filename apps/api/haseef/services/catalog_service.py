@@ -1,7 +1,7 @@
 """مزامنة المحتوى الأولي (المعايير، الالتزامات، المكتبة) مع قاعدة البيانات.
 
-تُضيف الرموز الجديدة فقط (ON CONFLICT DO NOTHING): أي تعديل أو إخفاء أو اعتماد قام به
-فريق حصيف من لوحة التحكم لا يُمس عند إعادة التشغيل أو التحديث.
+تُضيف الرموز الجديدة (ON CONFLICT DO NOTHING). نصوص المكتبة التي لم يلمسها فريق حصيف من لوحة التحكم
+(updated_by فارغ) تُحدَّث إلى أحدث إصدار؛ أي تعديل أو إخفاء أو اعتماد يدوي لا يُمس.
 """
 
 from __future__ import annotations
@@ -34,9 +34,17 @@ _LIB = text("""
     ON CONFLICT (slug) DO NOTHING""")
 
 
+_LIB_UPGRADE = text("""
+    UPDATE library_documents
+       SET category = :category, title = :title, summary = :summary, body_md = :body, policy_type = :policy_type,
+           applies_legal_types = :applies, related_codes = :related, sort = :sort, updated_at = now()
+     WHERE slug = :slug AND updated_by IS NULL
+       AND (body_md IS DISTINCT FROM :body OR title IS DISTINCT FROM :title OR sort IS DISTINCT FROM :sort)""")
+
+
 def sync_catalog(conn: Connection) -> dict[str, int]:
     """يُستدعى باتصال المنصة. يرجع عدد العناصر المضافة لكل كتالوج."""
-    added = {"standards": 0, "obligations": 0, "library": 0}
+    added = {"standards": 0, "obligations": 0, "library": 0, "library_updated": 0}
     for s in STANDARDS:
         added["standards"] += conn.execute(_STD, {**s, "rule": json.dumps(s["rule"])}).rowcount
     for o in OBLIGATIONS:
@@ -44,11 +52,15 @@ def sync_catalog(conn: Connection) -> dict[str, int]:
     sort = 10
     for kind, docs in (("TEMPLATE", TEMPLATES), ("GUIDE", GUIDES), ("LAW", LAWS)):
         for d in docs:
-            added["library"] += conn.execute(_LIB, {
+            params = {
                 "slug": d["slug"], "kind": kind, "category": d["category"], "title": d["title"],
                 "summary": d.get("summary"), "body": d.get("body"), "url": d.get("url"),
                 "policy_type": d.get("policy_type"), "applies": d.get("applies", []),
                 "related": d.get("related", []), "sort": sort,
-            }).rowcount
+            }
+            n = conn.execute(_LIB, params).rowcount
+            added["library"] += n
+            if not n and kind != "LAW":
+                added["library_updated"] += conn.execute(_LIB_UPGRADE, params).rowcount
             sort += 10
     return added

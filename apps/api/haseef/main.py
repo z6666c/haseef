@@ -6,7 +6,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import admin, admin_catalog, admin_ops, auth, compliance, dashboard, governance, legal, pdpl, reminders
+from .routers import (admin, admin_catalog, admin_ops, alerts, auth, compliance, dashboard, governance, group, legal, pdpl,
+                      reminders, reports)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -38,7 +39,7 @@ def create_app() -> FastAPI:
     app.add_middleware(CORSMiddleware, allow_origins=s.cors_origins, allow_credentials=True,
                        allow_methods=["*"], allow_headers=["Authorization", "Content-Type", "X-Org-Id"])
     for r in (auth.router, compliance.router, reminders.router, dashboard.router, governance.router, pdpl.router, legal.router,
-              admin.router, admin_ops.router, admin_catalog.router):
+              group.router, reports.router, alerts.router, admin.router, admin_ops.router, admin_catalog.router):
         app.include_router(r, prefix="/v1")
 
     @app.get("/health")

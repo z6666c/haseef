@@ -91,7 +91,19 @@ admin_obligations = [{"code": o["code"], "kind": o["kind"], "domain": o["domain"
 templates = {lt: _bodies([(bt, n, m, mp, []) for bt, n, m, mp in tpl]) for lt, tpl in STRUCTURE_TEMPLATES.items()}
 examples = {lt: {"title": ex["title"], "bodies": _bodies(ex["bodies"])} for lt, ex in EXAMPLES.items()}
 
-json.dump({"library": library, "structure": {"legal_type": LEGAL, "size": "SMALL", "profile": profile, "bodies": bodies,
+from haseef.domain import dpia as _dp  # noqa: E402
+
+_cases = [{}, {k: True for k in _dp.KEYS}, {"sensitive": True, "monitoring": True, "new_tech": True, "processors": True, "weak_security": True}]
+dpia_cases = []
+for ans in _cases:
+    mits = _dp.suggested_mitigations(ans)
+    for m in mits[:2]:
+        m["status"] = "DONE"
+    dpia_cases.append({"answers": ans, "mitigations": mits, "expected": _dp.assess(ans, mits).as_dict()})
+dpia = {"version": _dp.VERSION, "levels": _dp.LEVEL_LABEL, "cases": dpia_cases,
+        "questions": [{k: q[k] for k in ("key", "section", "q", "weight", "trigger", "mitigation")} for q in _dp.QUESTIONS]}
+
+json.dump({"library": library, "dpia": dpia, "structure": {"legal_type": LEGAL, "size": "SMALL", "profile": profile, "bodies": bodies,
                                              "latest_check": check, "example_title": EXAMPLES[LEGAL]["title"]},
            "templates": templates, "examples": examples, "check_today": "2026-10-02", "ropa_templates": ROPA_TEMPLATES,
            "obligations": obligations, "admin_standards": admin_standards, "admin_obligations": admin_obligations},

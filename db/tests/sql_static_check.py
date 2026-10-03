@@ -12,6 +12,9 @@ import subprocess
 import sys
 
 FRAGMENTS = {
+    "_DPIA_COLS": "d.id, d.project_name, r.activity_name AS related_activity, ua.full_name, uc.full_name",
+    "_DPIA_FROM": "FROM dpia_assessments d LEFT JOIN pdpl_data_records r ON r.id = d.related_record_id "
+                  "LEFT JOIN users ua ON ua.id = d.approved_by LEFT JOIN users uc ON uc.id = d.created_by",
     "_ITEM_COLS": "id, category, title, reference_number, issue_date, expiry_date, risk_level, "
                   "renewal_url, metadata, status, days_remaining, action_required, created_at",
     "_POLICY_COLS": "id, policy_type, title, version, approval_date, review_due_date, status, "

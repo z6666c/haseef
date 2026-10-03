@@ -156,6 +156,67 @@ def run() -> None:
                      {"o": nukhba, "pref": datetime.now(timezone.utc) + timedelta(days=2, hours=3), "price": json.dumps(q1.as_dict()),
                       "total": q1.total, "l": lawyers[2]})
 
+        # تقييم أثر تجريبي (النخبة): نظام بصمة الوجه للحضور — بيانات حيوية حساسة
+        from haseef.domain import dpia as dp
+        conn.execute(text("DELETE FROM dpia_assessments WHERE org_id = :o"), {"o": nukhba})
+        ans = {"sensitive": True, "monitoring": True, "new_tech": True, "processors": True, "weak_security": True}
+        mits = dp.suggested_mitigations(ans)
+        for m in mits:
+            if m["code"] in ("processors", "weak_security"):
+                m["status"] = "DONE"
+        a = dp.assess(ans, mits)
+        conn.execute(text("""INSERT INTO dpia_assessments (org_id, project_name, description, questionnaire_version, answers,
+                                 risk_score, risk_level, residual_score, residual_level, mitigations, dpo_opinion, status, created_by)
+                             VALUES (:o, 'نظام الحضور ببصمة الوجه في المواقع', 'استبدال بطاقات الحضور بأجهزة تعرّف على الوجه في 4 مواقع عمل، يديرها مزوّد خارجي.',
+                                     :v, CAST(:ans AS jsonb), :s, :l, :rs, :rl, CAST(:m AS jsonb),
+                                     'المعالجة مقبولة بشرط بقاء البيانات داخل المملكة، وإتاحة بديل (بطاقة) لمن يعترض، وحذف القوالب فور انتهاء العلاقة.',
+                                     'IN_PROGRESS', :u)"""),
+                     {"o": nukhba, "v": dp.VERSION, "ans": json.dumps(ans), "s": a.score, "l": a.level, "rs": a.residual_score,
+                      "rl": a.residual_level, "m": json.dumps(mits, ensure_ascii=False), "u": ahmad})
+
+        # باقة كبار العملاء: شركة قابضة وتابعتان (المنشآت المتعددة + تقرير المجلس)
+        hold = conn.execute(text("""
+            INSERT INTO organizations (cr_number, name, entity_legal_type, industry_type, commercial_size)
+            VALUES ('1010777001', 'شركة النخبة القابضة', 'CLOSED_JOINT_STOCK', 'الاستثمار', 'MEDIUM')
+            ON CONFLICT (cr_number) DO UPDATE SET name = EXCLUDED.name RETURNING id""")).scalar_one()
+        kids = []
+        for cr, name, lt, rel, ind in [("1010777002", "النخبة للتشغيل والصيانة", "LLC", "SUBSIDIARY", "التشغيل والصيانة"),
+                                       ("4030777003", "شركة النخبة القابضة — فرع جدة", "CLOSED_JOINT_STOCK", "BRANCH", "الاستثمار")]:
+            kids.append(conn.execute(text("""
+                INSERT INTO organizations (cr_number, name, entity_legal_type, industry_type, commercial_size, parent_org_id, entity_relation)
+                VALUES (:cr, :n, :lt, :i, 'SMALL', :p, :r)
+                ON CONFLICT (cr_number) DO UPDATE SET name = EXCLUDED.name, parent_org_id = EXCLUDED.parent_org_id,
+                    entity_relation = EXCLUDED.entity_relation RETURNING id"""),
+                {"cr": cr, "n": name, "lt": lt, "i": ind, "p": hold, "r": rel}).scalar_one())
+        group_ids = [hold, *kids]
+        for oid in group_ids:
+            conn.execute(text("DELETE FROM subscriptions WHERE org_id = :o"), {"o": oid})
+            conn.execute(text("""INSERT INTO subscriptions (org_id, plan_tier, billing_cycle, starts_at, ends_at)
+                                 VALUES (:o, 'ENTERPRISE', 'YEARLY', :s, :e)"""),
+                         {"o": oid, "s": datetime.now(timezone.utc) - timedelta(days=90), "e": datetime.now(timezone.utc) + timedelta(days=275)})
+            conn.execute(text("""INSERT INTO memberships (org_id, user_id, role) VALUES (:o, :u, 'ORG_ADMIN')
+                                 ON CONFLICT (org_id, user_id) DO NOTHING"""), {"o": oid, "u": ahmad})
+            for tbl in ("compliance_items", "org_bodies", "org_obligations"):
+                conn.execute(text(f"DELETE FROM {tbl} WHERE org_id = :o"), {"o": oid})
+            gs.apply_template(conn, oid)
+            gs.sync_obligations(conn, oid)
+        for org, cat, title, days, risk in [
+            (hold, "COMMERCIAL_REG", "السجل التجاري — القابضة", 200, "CRITICAL"),
+            (hold, "ZATCA", "شهادة الزكاة", 45, "HIGH"),
+            (kids[0], "COMMERCIAL_REG", "السجل التجاري", 9, "CRITICAL"),
+            (kids[0], "GOSI", "شهادة التأمينات", -4, "HIGH"),
+            (kids[1], "BALADY", "رخصة بلدي — فرع جدة", 31, "CRITICAL"),
+        ]:
+            conn.execute(text("""INSERT INTO compliance_items (org_id, category, title, expiry_date, risk_level)
+                                 VALUES (:o, :c, :t, :d, :r)"""), {"o": org, "c": cat, "t": title, "d": TODAY + timedelta(days=days), "r": risk})
+        conn.execute(text("DELETE FROM governance_resolutions WHERE org_id = :o"), {"o": hold})
+        for title, rtype, days, st in [("اعتماد القوائم المالية لعام 2025 وتعيين المراجع", "ORDINARY_ASSEMBLY", -150, "SIGNED"),
+                                       ("اعتماد الميزانية التقديرية وخطة التوسع", "BOARD_DECISION", -200, "SIGNED"),
+                                       ("الموافقة على تأسيس شركة النخبة للتشغيل والصيانة", "BOARD_DECISION", -120, "SIGNED"),
+                                       ("مراجعة تقرير لجنة المراجعة نصف السنوي", "BOARD_DECISION", -60, "SIGNED")]:
+            conn.execute(text("""INSERT INTO governance_resolutions (org_id, title, resolution_type, meeting_date, status)
+                                 VALUES (:o, :t, :r, :d, :s)"""), {"o": hold, "t": title, "r": rtype, "d": TODAY + timedelta(days=days), "s": st})
+
         disc = datetime.now(timezone.utc) - timedelta(days=60)
         conn.execute(text("""INSERT INTO pdpl_incidents (org_id, title, description, discovered_at, occurred_at, data_categories,
                                  subjects_affected, severity, harm_likely, status, authority_notified_at, subjects_notified_at,
@@ -167,7 +228,7 @@ def run() -> None:
                      {"o": nukhba, "disc": disc, "occ": disc - timedelta(hours=3), "cats": '["الاسم", "الراتب", "الآيبان"]',
                       "notif": disc + timedelta(hours=30), "subj": disc + timedelta(hours=40)})
 
-    for org in (nukhba, waha):
+    for org in (nukhba, waha, *group_ids):
         with platform_tx() as conn:
             gs.run_and_save(conn, org, None)        # يعيد احتساب المؤشر أيضاً
 
