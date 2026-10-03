@@ -30,7 +30,14 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -e ".[dev]"
-      - run: pytest -q
+      - name: pytest
+        shell: bash
+        run: |
+          set +e
+          pytest -q --tb=short 2>&1 | tee pytest.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then grep -E "Error|FAILED|assert|line [0-9]+" pytest.log | head -25 | sed 's/^/::error::/'; fi
+          exit $status
 
   web:
     runs-on: ubuntu-latest

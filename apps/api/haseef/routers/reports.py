@@ -143,9 +143,9 @@ def build_board_report(c: Connection, org_id, year: int) -> dict:
 
 
 @router.get("/board")
-def board_report(year: int = Query(default_factory=lambda: gs.riyadh_today().year, ge=2020, le=2100),
-                 t: Tenant = Depends(get_tenant)):
+def board_report(year: int | None = Query(default=None, ge=2020, le=2100), t: Tenant = Depends(get_tenant)):
     require_feature(t.conn, t.org_id, "BOARD_REPORTS")
+    year = year or gs.riyadh_today().year
     saved = t.conn.execute(text("""SELECT b.snapshot, b.notes, b.saved_at, u.full_name AS saved_by_name
                                    FROM board_reports b LEFT JOIN users u ON u.id = b.saved_by
                                    WHERE b.year = :y"""), {"y": year}).mappings().one_or_none()
