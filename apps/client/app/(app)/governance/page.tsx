@@ -6,6 +6,7 @@ import {
   type BodyInput, type BodyType, type CheckResult, type GovBody, type GovernanceProfile, type GovernanceStructure,
   type MemberInput, type MemberPosition,
 } from "@haseef/shared";
+import { OrgChart } from "@/components/OrgChart";
 import { api } from "@/lib/session";
 
 const EMPTY_MEMBER: MemberInput = { full_name: "", position: "MEMBER", is_independent: false, is_executive: false,
@@ -20,6 +21,7 @@ export default function GovernancePage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<"list" | "chart">("list");
 
   const load = useCallback(() => {
     api.governance().then(setData).catch((e: Error) => setError(e.message));
@@ -60,6 +62,13 @@ export default function GovernancePage() {
         <div className="section-head">
           <h2>الهيكل التنظيمي</h2>
           <p className="muted">بدأ من القالب الأساسي لكيانك. أضف أو عدّل أو احذف ما يلزم.</p>
+          {data.bodies.length > 0 && (
+            <div className="filters view-toggle" role="tablist" aria-label="طريقة العرض">
+              <button type="button" role="tab" aria-selected={view === "list"} aria-pressed={view === "list"} onClick={() => setView("list")}>قائمة وتعديل</button>
+              <button type="button" role="tab" aria-selected={view === "chart"} aria-pressed={view === "chart"} onClick={() => setView("chart")}>رسم هيكلي</button>
+              {view === "chart" && <button type="button" className="link-btn" onClick={() => window.print()}>طباعة الرسم</button>}
+            </div>
+          )}
         </div>
         {data.bodies.length === 0 ? (
           <div className="ledger-empty">
@@ -67,12 +76,14 @@ export default function GovernancePage() {
             <button className="btn btn-action" type="button" disabled={busy}
                     onClick={() => act(() => api.applyTemplate(), "أُضيف الهيكل الأساسي")}>أنشئ الهيكل الأساسي</button>
           </div>
+        ) : view === "chart" ? (
+          <OrgChart bodies={data.bodies} title="الرسم الهيكلي للحوكمة" />
         ) : (
           <div className="bodies">
             {data.bodies.map((b) => <BodyCard key={b.id} body={b} busy={busy} act={act} />)}
           </div>
         )}
-        <AddBody busy={busy} onAdd={(b) => act(() => api.addBody(b), `أُضيف: ${b.name}`)} />
+        {view === "list" && <AddBody busy={busy} onAdd={(b) => act(() => api.addBody(b), `أُضيف: ${b.name}`)} />}
         {data.example_title && (
           <div className="example-box">
             <div>

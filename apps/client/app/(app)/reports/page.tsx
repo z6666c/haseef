@@ -6,6 +6,7 @@ import {
   PRIORITY_LABEL, RESOLUTION_STATUS_LABEL, RESOLUTION_TYPE_LABEL, RISK4_LABEL, SIZE_LABEL, scoreTone,
   type BoardReport, type BoardReportResponse,
 } from "@haseef/shared";
+import { OrgChart } from "@/components/OrgChart";
 import { api } from "@/lib/session";
 
 const fmt = (d: string | null, time = false) => d
@@ -196,6 +197,7 @@ function Report({ r, notes, savedAt }: { r: BoardReport; notes: string | null; s
       <section className="report-sec">
         <h2><span>{sec()}</span> هيكل الحوكمة</h2>
         <p className="small muted">{r.structure.length} جهة حوكمة و{membersTotal} عضواً.</p>
+        {r.structure.length > 0 && <OrgChart bodies={r.structure} title="الرسم الهيكلي" />}
         {r.structure.length === 0 ? <p className="empty">لم يُوثّق هيكل الحوكمة بعد.</p> : (
           <div className="report-bodies">
             {r.structure.map((b, i) => (

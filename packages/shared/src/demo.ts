@@ -373,7 +373,7 @@ function requireRole(role: keyof typeof ROLE_NAME, method: string, p: string, bo
   if (role === "SUPER_ADMIN") return;
   if (method === "GET") {
     // المحاسبة: الفوترة فقط — لا تنبيهات (بيانات تواصل العملاء)، لا فريق، لا محتوى، لا حوكمة المنشآت
-    if (role === "BILLING" && (/^\/admin\/(dispatches|team|catalog|library|legal\/lawyers)/.test(p) || /\/governance$/.test(p)))
+    if (role === "BILLING" && (/^\/admin\/(dispatches|team|catalog|library|legal\/lawyers|trial-requests)/.test(p) || /\/governance$/.test(p)))
       throw new DemoError(403, "هذا القسم غير متاح لصلاحية المحاسبة");
     return;
   }
@@ -388,6 +388,21 @@ function requireRole(role: keyof typeof ROLE_NAME, method: string, p: string, bo
   if (/\/subscription\//.test(p)) return deny(["BILLING"]);
   return deny(["SUPPORT"]);
 }
+
+// ---------- طلبات التجربة (نسخة العرض) ----------
+type DemoTrial = { id: string; full_name: string; company_name: string; email: string; phone_number: string | null; legal_type: string | null;
+  employees_range: string | null; plan_interest: string; interests: string[]; message: string | null; source: string | null;
+  status: string; notes: string | null; created_at: string; updated_at: string; handled_by_name: string | null };
+const trials: DemoTrial[] = [
+  { id: uid(), full_name: "نورة الدوسري", company_name: "شركة مدار للتقنية", email: "noura@madar.example", phone_number: "+966500000031",
+    legal_type: "LLC", employees_range: "10-49", plan_interest: "PROFESSIONAL_GRC", interests: ["PDPL", "GOVERNANCE"],
+    message: "نحتاج سجل معالجة وسياسة خصوصية قبل إطلاق تطبيقنا.", source: "landing", status: "NEW", notes: null,
+    created_at: ago(60 * 3), updated_at: ago(60 * 3), handled_by_name: null },
+  { id: uid(), full_name: "فيصل العنزي", company_name: "مؤسسة الإنشاء الحديث", email: "faisal@inshaa.example", phone_number: "+966500000032",
+    legal_type: "SOLE_PROPRIETORSHIP", employees_range: "10-49", plan_interest: "ESSENTIAL", interests: ["LICENSES"],
+    message: null, source: "landing", status: "CONTACTED", notes: "عرض توضيحي يوم الأحد", created_at: ago(60 * 30), updated_at: ago(60 * 20),
+    handled_by_name: "الدعم الفني" },
+];
 
 // ---------- الاستشارات القانونية (نسخة العرض) ----------
 const LEGAL_RATES = [
@@ -592,6 +607,16 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     if (!u || u.password !== body.password) throw new DemoError(401, "البريد أو كلمة المرور غير صحيحة");
     return { access_token: u.token, token_type: "bearer", must_change_password: false };
   }
+  if (method === "POST" && p === "/public/trial-requests") {
+    if (!body.consent) throw new DemoError(422, "يلزم الموافقة على التواصل ومعالجة البيانات");
+    if (!/^\S+@\S+\.\S+$/.test(String(body.email ?? ""))) throw new DemoError(422, "البريد الإلكتروني غير صحيح");
+    if (String(body.full_name ?? "").trim().length < 2 || String(body.company_name ?? "").trim().length < 2) throw new DemoError(422, "أكمل الاسم واسم المنشأة");
+    if (!body.website) trials.unshift({ id: uid(), full_name: String(body.full_name), company_name: String(body.company_name), email: String(body.email),
+      phone_number: (body.phone_number as string) ?? null, legal_type: (body.legal_type as string) ?? null, employees_range: (body.employees_range as string) ?? null,
+      plan_interest: String(body.plan_interest ?? "UNSURE"), interests: (body.interests as string[]) ?? [], message: (body.message as string) ?? null,
+      source: (body.source as string) ?? "landing", status: "NEW", notes: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), handled_by_name: null });
+    return { received: true };
+  }
   if (!token) throw new DemoError(401, "سجّل الدخول أولاً");
   const role = TEAM_ROLE[token];
   const isAdmin = !!role;
@@ -766,6 +791,12 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
         .map((a) => role === "SUPPORT" && a.changes ? { ...a, changes: Object.fromEntries(Object.entries(a.changes).filter(([k]) => k !== "amount_sar" && k !== "reference")) } : a);
     }
     if (p === "/admin/dispatches") return dispatches();
+    if (p === "/admin/trial-requests") return trials;
+    if ((m = p.match(/^\/admin\/trial-requests\/([^/]+)$/))) {
+      const t = trials.find((x) => x.id === m![1]); if (!t) throw new DemoError(404, "الطلب غير موجود");
+      Object.assign(t, { status: String(body.status), notes: (body.notes as string) ?? null, updated_at: new Date().toISOString(),
+        handled_by_name: ROLE_NAME[role] }); return { updated: true };
+    }
     if (p === "/admin/ai-usage") return orgs.map((o) => ({ org_id: o.id, name: o.name, plan_tier: o.sub?.plan_tier ?? null,
       quota: o.sub?.plan_tier === "ESSENTIAL" ? 3 : 15, audits_this_month: o.id === ORG_A ? 4 : 0, tokens: o.id === ORG_A ? 48_200 : 0, cost_sar: role === "SUPPORT" ? null : o.id === ORG_A ? 3.6 : 0 }));
     throw new DemoError(404, "غير متاح في نسخة العرض");

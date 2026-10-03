@@ -11,7 +11,7 @@ class AppImports(unittest.TestCase):
         os.environ["HASEEF_AUTO_MIGRATE"] = "false"      # لا قاعدة بيانات في هذا الاختبار
         from haseef.main import app
         paths = set(app.openapi()["paths"])
-        for p in ("/pdpl/dpia", "/group", "/reports/board", "/alerts/overview", "/legal/rates"):
+        for p in ("/pdpl/dpia", "/group", "/reports/board", "/alerts/overview", "/legal/rates", "/public/trial-requests", "/admin/trial-requests"):
             self.assertIn("/v1" + p, paths)
 
 
