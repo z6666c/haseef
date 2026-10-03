@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CONTRACT_KIND_LABEL, CONTRACT_VERDICT_LABEL, PII_LABEL, SAMPLE_CONTRACTS, checkContract, guessContractKind,
   type ContractCheckResult, type ContractKind,
@@ -29,6 +29,8 @@ export default function ContractsPage() {
     setText(t); setKind(guessContractKind(t)); setSample(""); setRes(null);
   }
   const run = () => { alertMsg(null); setRes(checkContract(text, kind)); setShowRedacted(false); };
+  const out = useRef<HTMLElement>(null);
+  useEffect(() => { if (res) out.current?.scrollIntoView({ behavior: "smooth", block: "start" }); }, [res]);
 
   const counts = useMemo(() => res ? {
     v: res.findings.filter((f) => f.severity === "VIOLATION").length,
@@ -79,7 +81,7 @@ export default function ContractsPage() {
       </section>
 
       {res && counts && (
-        <section className="check-panel" aria-live="polite">
+        <section className="check-panel" aria-live="polite" ref={out}>
           <div className="check-summary" data-tone={TONE[res.verdict]}>
             <div className="check-score"><b>{res.percentage}</b><span>%</span><small>نسبة الامتثال</small></div>
             <div>

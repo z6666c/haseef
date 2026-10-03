@@ -691,6 +691,8 @@ fieldset.checks { display: flex; gap: 18px; flex-wrap: wrap; }
 /* فاحص العقود */
 .contract-input { display: grid; gap: 14px; margin-bottom: 24px; }
 .contract-tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+.contract-tools .field { min-width: 0; }
+.contract-tools input[type="file"] { width: 100%; max-width: 100%; font-size: var(--t-sm); }
 .contract-input textarea { min-height: 260px; line-height: 1.9; resize: vertical; }
 .finding-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .finding-sev[data-tone="bad"] { background: var(--crimson-wash); color: var(--crimson); }
