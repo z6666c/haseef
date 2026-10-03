@@ -14,7 +14,7 @@ from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import text
 
 from ..db import platform_tx
-from ..deps import Admin, require_admin
+from ..deps import Admin, require_perm
 
 router = APIRouter(tags=["trials"])
 
@@ -64,7 +64,7 @@ def submit_trial(body: TrialIn, request: Request):
 
 
 @router.get("/admin/trial-requests")
-def list_trials(a: Admin = Depends(require_admin("SUPPORT"))):
+def list_trials(a: Admin = Depends(require_perm("trials.manage"))):
     rows = a.conn.execute(text("""
         SELECT t.id, t.full_name, t.company_name, t.email::text AS email, t.phone_number, t.legal_type, t.employees_range,
                t.plan_interest, t.interests, t.message, t.source, t.status, t.notes, t.created_at, t.updated_at,
@@ -80,7 +80,7 @@ class TrialUpdate(BaseModel):
 
 
 @router.patch("/admin/trial-requests/{trial_id}")
-def update_trial(trial_id: UUID, body: TrialUpdate, a: Admin = Depends(require_admin("SUPPORT"))):
+def update_trial(trial_id: UUID, body: TrialUpdate, a: Admin = Depends(require_perm("trials.manage"))):
     n = a.conn.execute(text("""UPDATE trial_requests SET status = :s, notes = :n, handled_by = :u, updated_at = now()
                                WHERE id = :id"""), {"s": body.status, "n": body.notes, "u": a.user_id, "id": trial_id}).rowcount
     if not n:

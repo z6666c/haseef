@@ -32,7 +32,7 @@ export default function Audit() {
               <tr key={r.id}>
                 <td className="nowrap">{fmtDateTime(r.created_at)}</td>
                 <td><strong>{AUDIT_ACTION_LABEL[r.action] ?? r.action}</strong></td>
-                <td>{r.actor ?? "النظام"}{r.actor_role && <div className="muted small">{PLATFORM_ROLE_LABEL[r.actor_role]}</div>}</td>
+                <td>{r.actor ?? "النظام"}{r.actor_role && <div className="muted small">{PLATFORM_ROLE_LABEL[r.actor_role] ?? r.actor_role}</div>}</td>
                 <td>{r.org_id ? <Link href={`/organizations/${r.org_id}`}>{r.org_name}</Link> : "—"}</td>
                 <td className="small audit-details">{auditSummary(r.action, r.changes)}</td>
                 <td><bdi dir="ltr" className="small">{r.ip ?? "—"}</bdi></td>

@@ -1,7 +1,7 @@
 """إجراءات فريق حصيف على المنشآت والاشتراكات والمستخدمين والفريق.
 
 كل إجراء:
-  * محصور بدور (require_admin) — المدير العام مسموح دائماً.
+  * محصور بصلاحية (require_perm) — المدير العام مسموح دائماً.
   * يُسجَّل في audit_log مع الفاعل وعنوانه.
   * الإجراءات الحساسة تتطلب سبباً مكتوباً.
 كلمة المرور المؤقتة تُرجَع مرة واحدة فقط ولا تُخزَّن إلا مُجزّأة، ويُجبَر صاحبها على تغييرها.
@@ -18,7 +18,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import Connection, text
 
-from ..deps import Admin, require_admin
+from ..deps import Admin, require_perm
+from ..permissions import ALL as PERM_ALL, FINANCE_AUDIT_ACTIONS, LABEL as PERM_LABEL, SUPER, catalog
 from ..security import hash_password
 from ..services import governance_service as gs
 from ..services.score_service import recompute
@@ -29,7 +30,7 @@ Tier = Literal["ESSENTIAL", "PROFESSIONAL_GRC", "ENTERPRISE"]
 OrgRole = Literal["ORG_ADMIN", "COMPLIANCE_OFFICER", "DPO", "VIEWER", "EXTERNAL_ADVISOR"]
 LegalType = Literal["LLC", "SOLE_PROPRIETORSHIP", "CLOSED_JOINT_STOCK", "SIMPLIFIED_JOINT_STOCK",
                     "PUBLIC_JOINT_STOCK", "BRANCH_OF_FOREIGN"]
-PlatformRole = Literal["SUPER_ADMIN", "SUPPORT", "BILLING"]
+RoleCode = Field(min_length=2, max_length=40, pattern=r"^[A-Z][A-Z0-9_]{1,39}$")
 
 
 def _temp_password() -> str:
@@ -81,8 +82,8 @@ def _find_or_create_user(c: Connection, email: str, full_name: str, phone: str |
 # من أنا (لإظهار الأزرار المناسبة في الواجهة؛ الخادم يفرض الصلاحية على أي حال)
 # =====================================================================
 @router.get("/me")
-def admin_me(a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
-    return {"user_id": a.user_id, "role": a.role}
+def admin_me(a: Admin = Depends(require_perm(any_member=True))):
+    return {"user_id": a.user_id, "role": a.role, "role_name": a.role_name, "permissions": sorted(a.perms)}
 
 
 # =====================================================================
@@ -113,7 +114,7 @@ class ReasonIn(BaseModel):
 
 
 @router.post("/organizations", status_code=201)
-def create_org(body: OrgCreateIn, a: Admin = Depends(require_admin("SUPPORT"))):
+def create_org(body: OrgCreateIn, a: Admin = Depends(require_perm("orgs.manage"))):
     c = a.conn
     if c.execute(text("SELECT 1 FROM organizations WHERE cr_number = :cr"), {"cr": body.cr_number}).first():
         raise HTTPException(status.HTTP_409_CONFLICT, "يوجد منشأة مسجلة بهذا السجل التجاري")
@@ -144,7 +145,7 @@ def create_org(body: OrgCreateIn, a: Admin = Depends(require_admin("SUPPORT"))):
 
 
 @router.get("/organizations/{org_id}")
-def org_detail(org_id: UUID, a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
+def org_detail(org_id: UUID, a: Admin = Depends(require_perm("orgs.view", "billing.manage", "finance.view"))):
     c = a.conn
     org = c.execute(text("""
         SELECT id, name, cr_number, entity_legal_type, industry_type, commercial_size, haseef_score,
@@ -168,7 +169,7 @@ def org_detail(org_id: UUID, a: Admin = Depends(require_admin("SUPPORT", "BILLIN
         SELECT (SELECT count(*) FROM v_compliance_items WHERE org_id = :o) AS items,
                (SELECT count(*) FROM v_compliance_items WHERE org_id = :o AND status = 'EXPIRED') AS expired,
                (SELECT count(*) FROM internal_policies WHERE org_id = :o) AS policies"""), {"o": org_id}).mappings().one()
-    if a.role == "BILLING":
+    if not a.can("orgs.view"):
         # المحاسبة ترى ما يخص الفوترة فقط: بيانات المنشأة الأساسية، الاشتراك، الدفعات، وجهة الفوترة (مدير المنشأة).
         org_d = {k: v for k, v in dict(org).items() if k not in ("haseef_score", "score_breakdown", "suspension_reason")}
         billing_contact = [{"membership_id": m["membership_id"], "role": m["role"], "full_name": m["full_name"], "email": m["email"],
@@ -177,7 +178,7 @@ def org_detail(org_id: UUID, a: Admin = Depends(require_admin("SUPPORT", "BILLIN
         return {"organization": org_d, "subscription": sub, "members": billing_contact,
                 "billing": [dict(b) for b in billing], "counts": None, "restricted": True}
     bills = [dict(b) for b in billing]
-    if a.role == "SUPPORT":
+    if not a.can("finance.view"):
         # الدعم الفني يرى أحداث الاشتراك (للمساعدة) دون المبالغ ومراجع الفواتير
         for b in bills:
             b["amount_sar"] = None
@@ -189,7 +190,7 @@ def org_detail(org_id: UUID, a: Admin = Depends(require_admin("SUPPORT", "BILLIN
 
 
 @router.patch("/organizations/{org_id}")
-def update_org(org_id: UUID, body: OrgUpdateIn, a: Admin = Depends(require_admin("SUPPORT"))):
+def update_org(org_id: UUID, body: OrgUpdateIn, a: Admin = Depends(require_perm("orgs.manage"))):
     _org_exists(a.conn, org_id)
     changes = body.model_dump(exclude_unset=True)
     if not changes:
@@ -201,7 +202,7 @@ def update_org(org_id: UUID, body: OrgUpdateIn, a: Admin = Depends(require_admin
 
 
 @router.post("/organizations/{org_id}/suspend")
-def suspend_org(org_id: UUID, body: ReasonIn, a: Admin = Depends(require_admin())):   # المدير العام فقط
+def suspend_org(org_id: UUID, body: ReasonIn, a: Admin = Depends(require_perm("orgs.suspend"))):
     org = _org_exists(a.conn, org_id)
     if org["suspended_at"]:
         raise HTTPException(status.HTTP_409_CONFLICT, "المنشأة معلّقة مسبقاً")
@@ -215,7 +216,7 @@ def suspend_org(org_id: UUID, body: ReasonIn, a: Admin = Depends(require_admin()
 
 
 @router.post("/organizations/{org_id}/reactivate")
-def reactivate_org(org_id: UUID, body: ReasonIn, a: Admin = Depends(require_admin())):
+def reactivate_org(org_id: UUID, body: ReasonIn, a: Admin = Depends(require_perm("orgs.suspend"))):
     org = _org_exists(a.conn, org_id)
     if not org["suspended_at"]:
         raise HTTPException(status.HTTP_409_CONFLICT, "المنشأة غير معلّقة")
@@ -245,7 +246,7 @@ class PaymentIn(BaseModel):
 
 
 @router.post("/organizations/{org_id}/subscription/change-plan")
-def change_plan(org_id: UUID, body: ChangePlanIn, a: Admin = Depends(require_admin("BILLING"))):
+def change_plan(org_id: UUID, body: ChangePlanIn, a: Admin = Depends(require_perm("billing.manage"))):
     _org_exists(a.conn, org_id)
     sub = _live_sub(a.conn, org_id)
     if sub is None:
@@ -261,7 +262,7 @@ def change_plan(org_id: UUID, body: ChangePlanIn, a: Admin = Depends(require_adm
 
 
 @router.post("/organizations/{org_id}/subscription/extend-trial")
-def extend_trial(org_id: UUID, body: ExtendTrialIn, a: Admin = Depends(require_admin("BILLING", "SUPPORT"))):
+def extend_trial(org_id: UUID, body: ExtendTrialIn, a: Admin = Depends(require_perm("billing.manage", "orgs.manage"))):
     _org_exists(a.conn, org_id)
     sub = _live_sub(a.conn, org_id)
     if sub is None or sub["billing_status"] != "TRIAL":
@@ -274,7 +275,7 @@ def extend_trial(org_id: UUID, body: ExtendTrialIn, a: Admin = Depends(require_a
 
 
 @router.post("/organizations/{org_id}/subscription/payment")
-def record_payment(org_id: UUID, body: PaymentIn, a: Admin = Depends(require_admin("BILLING"))):
+def record_payment(org_id: UUID, body: PaymentIn, a: Admin = Depends(require_perm("billing.manage"))):
     _org_exists(a.conn, org_id)
     months = 12 if body.billing_cycle == "YEARLY" else 1
     sub = _live_sub(a.conn, org_id)
@@ -305,7 +306,7 @@ def record_payment(org_id: UUID, body: PaymentIn, a: Admin = Depends(require_adm
 
 
 @router.post("/organizations/{org_id}/subscription/cancel")
-def cancel_subscription(org_id: UUID, body: ReasonIn, a: Admin = Depends(require_admin("BILLING"))):
+def cancel_subscription(org_id: UUID, body: ReasonIn, a: Admin = Depends(require_perm("billing.manage"))):
     _org_exists(a.conn, org_id)
     sub = _live_sub(a.conn, org_id)
     if sub is None:
@@ -332,18 +333,20 @@ class MembershipUpdateIn(BaseModel):
 
 
 def _guard_team_target(a: Admin, user_id: UUID) -> dict:
-    """الدعم الفني لا يمس حسابات فريق حصيف (يمنع تصعيد الصلاحيات)."""
+    """حسابات فريق حصيف لا يمسها إلا من يملك إدارة الفريق، والمدير العام لا يمسه إلا مدير عام (يمنع تصعيد الصلاحيات)."""
     u = a.conn.execute(text("SELECT id, platform_role, email::text AS email FROM users WHERE id = :u"),
                        {"u": user_id}).mappings().one_or_none()
     if u is None:
         raise _404("المستخدم")
-    if u["platform_role"] and a.role != "SUPER_ADMIN":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "حسابات فريق حصيف يديرها المدير العام فقط")
+    if u["platform_role"] and not a.can("team.manage"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "حسابات فريق حصيف تتطلب صلاحية إدارة الفريق")
+    if u["platform_role"] == SUPER and not a.is_super:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "حساب المدير العام يديره مدير عام فقط")
     return dict(u)
 
 
 @router.post("/organizations/{org_id}/members", status_code=201)
-def invite_member(org_id: UUID, body: InviteIn, a: Admin = Depends(require_admin("SUPPORT"))):
+def invite_member(org_id: UUID, body: InviteIn, a: Admin = Depends(require_perm("orgs.manage"))):
     _org_exists(a.conn, org_id)
     uid, temp_pw = _find_or_create_user(a.conn, body.email, body.full_name, body.phone_number)
     if a.conn.execute(text("SELECT 1 FROM memberships WHERE org_id = :o AND user_id = :u"), {"o": org_id, "u": uid}).first():
@@ -355,7 +358,7 @@ def invite_member(org_id: UUID, body: InviteIn, a: Admin = Depends(require_admin
 
 
 @router.patch("/memberships/{membership_id}")
-def update_membership(membership_id: UUID, body: MembershipUpdateIn, a: Admin = Depends(require_admin("SUPPORT"))):
+def update_membership(membership_id: UUID, body: MembershipUpdateIn, a: Admin = Depends(require_perm("orgs.manage"))):
     m = a.conn.execute(text("SELECT org_id, user_id, role FROM memberships WHERE id = :m"), {"m": membership_id}).mappings().one_or_none()
     if m is None:
         raise _404("العضوية")
@@ -376,7 +379,7 @@ def update_membership(membership_id: UUID, body: MembershipUpdateIn, a: Admin = 
 
 
 @router.post("/users/{user_id}/reset-password")
-def reset_password(user_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
+def reset_password(user_id: UUID, a: Admin = Depends(require_perm("orgs.manage"))):
     u = _guard_team_target(a, user_id)
     pw = _temp_password()
     a.conn.execute(text("UPDATE users SET password_hash = :h, must_change_password = true WHERE id = :u"),
@@ -386,7 +389,7 @@ def reset_password(user_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
 
 
 @router.post("/users/{user_id}/disable")
-def disable_user(user_id: UUID, body: ReasonIn, a: Admin = Depends(require_admin("SUPPORT"))):
+def disable_user(user_id: UUID, body: ReasonIn, a: Admin = Depends(require_perm("orgs.manage"))):
     u = _guard_team_target(a, user_id)
     if user_id == a.user_id:
         raise HTTPException(status.HTTP_409_CONFLICT, "لا يمكنك تعطيل حسابك")
@@ -396,7 +399,7 @@ def disable_user(user_id: UUID, body: ReasonIn, a: Admin = Depends(require_admin
 
 
 @router.post("/users/{user_id}/enable")
-def enable_user(user_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
+def enable_user(user_id: UUID, a: Admin = Depends(require_perm("orgs.manage"))):
     u = _guard_team_target(a, user_id)
     a.conn.execute(text("UPDATE users SET is_active = true WHERE id = :u"), {"u": user_id})
     a.audit("ADMIN_ENABLE_USER", "user", user_id, None, {"email": u["email"]})
@@ -404,28 +407,51 @@ def enable_user(user_id: UUID, a: Admin = Depends(require_admin("SUPPORT"))):
 
 
 # =====================================================================
-# فريق حصيف (المدير العام فقط)
+# فريق حصيف وأدواره (صلاحية إدارة الفريق)
 # =====================================================================
+def _role(c: Connection, code: str) -> dict:
+    r = c.execute(text("SELECT code, name, permissions, is_system FROM admin_roles WHERE code = :c"),
+                  {"c": code}).mappings().one_or_none()
+    if r is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "الدور غير موجود")
+    return dict(r)
+
+
+def _guard_grant(a: Admin, role: dict) -> None:
+    """لا يمنح أحد دوراً أعلى من صلاحياته: المدير العام وحده يمنح دور المدير العام أو صلاحيات لا يملكها غيره."""
+    if a.is_super:
+        return
+    if role["code"] == SUPER:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "دور المدير العام يمنحه مدير عام فقط")
+    extra = set(role["permissions"]) - a.perms
+    if extra:
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "لا يمكنك منح صلاحيات لا تملكها: " + "، ".join(PERM_LABEL.get(p, p) for p in sorted(extra)))
+
+
 class TeamAddIn(BaseModel):
     email: EmailStr
     full_name: str = Field(min_length=2, max_length=100)
-    role: PlatformRole
+    role: str = RoleCode
 
 
 class TeamRoleIn(BaseModel):
-    role: PlatformRole | None          # None = إزالة من الفريق
+    role: str | None = Field(default=None, max_length=40)       # None = إزالة من الفريق
 
 
 @router.get("/team")
-def team(a: Admin = Depends(require_admin("SUPPORT"))):
+def team(a: Admin = Depends(require_perm("team.view", "team.manage"))):
     return [dict(r) for r in a.conn.execute(text("""
-        SELECT id, full_name, email::text AS email, platform_role, is_active, last_login_at, must_change_password
-        FROM users WHERE platform_role IS NOT NULL ORDER BY created_at""")).mappings()]
+        SELECT u.id, u.full_name, u.email::text AS email, u.platform_role, r.name AS role_name, u.is_active,
+               u.last_login_at, u.must_change_password
+        FROM users u LEFT JOIN admin_roles r ON r.code = u.platform_role
+        WHERE u.platform_role IS NOT NULL ORDER BY u.created_at""")).mappings()]
 
 
 @router.post("/team", status_code=201)
-def team_add(body: TeamAddIn, a: Admin = Depends(require_admin())):
+def team_add(body: TeamAddIn, a: Admin = Depends(require_perm("team.manage"))):
     c = a.conn
+    _guard_grant(a, _role(c, body.role))
     existing = c.execute(text("SELECT id, platform_role FROM users WHERE email = :e"), {"e": body.email}).mappings().one_or_none()
     if existing and existing["platform_role"]:
         raise HTTPException(status.HTTP_409_CONFLICT, "هذا الشخص عضو في الفريق أصلاً")
@@ -440,13 +466,19 @@ def team_add(body: TeamAddIn, a: Admin = Depends(require_admin())):
 
 
 @router.patch("/team/{user_id}")
-def team_role(user_id: UUID, body: TeamRoleIn, a: Admin = Depends(require_admin())):
+def team_role(user_id: UUID, body: TeamRoleIn, a: Admin = Depends(require_perm("team.manage"))):
     if user_id == a.user_id:
         raise HTTPException(status.HTTP_409_CONFLICT, "لا يمكنك تغيير دورك بنفسك")
     current = a.conn.execute(text("SELECT platform_role FROM users WHERE id = :u"), {"u": user_id}).scalar_one_or_none()
     if current is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "ليس عضواً في الفريق")
-    if current == "SUPER_ADMIN" and body.role != "SUPER_ADMIN":
+    if not a.is_super:
+        if current == SUPER:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "حساب المدير العام يديره مدير عام فقط")
+        _guard_grant(a, _role(a.conn, current))          # لا يُخفّض من يملك أكثر منك
+    if body.role is not None:
+        _guard_grant(a, _role(a.conn, body.role))
+    if current == SUPER and body.role != SUPER:
         left = a.conn.execute(text("""SELECT count(*) FROM users WHERE platform_role = 'SUPER_ADMIN'
                                       AND is_active AND id <> :u"""), {"u": user_id}).scalar_one()
         if left == 0:
@@ -457,18 +489,99 @@ def team_role(user_id: UUID, body: TeamRoleIn, a: Admin = Depends(require_admin(
     return {"role": body.role}
 
 
+class RoleIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    description: str | None = Field(default=None, max_length=500)
+    permissions: list[str] = Field(default_factory=list, max_length=40)
+
+
+class RoleCreateIn(RoleIn):
+    code: str | None = Field(default=None, max_length=40)        # يُولَّد تلقائياً إن لم يُرسل
+
+
+def _clean_perms(perms: list[str]) -> list[str]:
+    unknown = set(perms) - PERM_ALL
+    if unknown:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"صلاحيات غير معروفة: {', '.join(sorted(unknown))}")
+    if not perms:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "اختر صلاحية واحدة على الأقل")
+    return sorted(set(perms))
+
+
+@router.get("/roles")
+def roles(a: Admin = Depends(require_perm("team.view", "team.manage"))):
+    rows = a.conn.execute(text("""
+        SELECT r.code, r.name, r.description, r.permissions, r.is_system, r.updated_at,
+               (SELECT count(*) FROM users u WHERE u.platform_role = r.code) AS members
+        FROM admin_roles r ORDER BY r.is_system DESC, r.created_at""")).mappings()
+    out = []
+    for r in rows:
+        d = dict(r)
+        if d["code"] == SUPER:
+            d["permissions"] = sorted(PERM_ALL)
+        out.append(d)
+    return {"roles": out, "permissions": catalog()}
+
+
+@router.post("/roles", status_code=201)
+def create_role(body: RoleCreateIn, a: Admin = Depends(require_perm("team.manage"))):
+    import re
+    perms = _clean_perms(body.permissions)
+    _guard_grant(a, {"code": "", "permissions": perms})
+    code = (body.code or "").strip().upper()
+    if not code:
+        code = "ROLE_" + secrets.token_hex(3).upper()
+    if not re.fullmatch(r"[A-Z][A-Z0-9_]{1,39}", code):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "رمز الدور: أحرف إنجليزية كبيرة وأرقام و _ فقط")
+    if a.conn.execute(text("SELECT 1 FROM admin_roles WHERE code = :c OR name = :n"), {"c": code, "n": body.name}).first():
+        raise HTTPException(status.HTTP_409_CONFLICT, "يوجد دور بهذا الاسم أو الرمز")
+    a.conn.execute(text("""INSERT INTO admin_roles (code, name, description, permissions, updated_by)
+                           VALUES (:c, :n, :d, :p, :u)"""),
+                   {"c": code, "n": body.name, "d": body.description, "p": perms, "u": a.user_id})
+    a.audit("ADMIN_ROLE_CREATE", "admin_role", None, None, {"code": code, "name": body.name, "permissions": perms})
+    return {"code": code}
+
+
+@router.patch("/roles/{code}")
+def update_role(code: str, body: RoleIn, a: Admin = Depends(require_perm("team.manage"))):
+    role = _role(a.conn, code)
+    if role["code"] == SUPER:
+        raise HTTPException(status.HTTP_409_CONFLICT, "دور المدير العام ثابت ويملك كل الصلاحيات")
+    perms = _clean_perms(body.permissions)
+    _guard_grant(a, role)                                    # لا تعدّل دوراً أعلى منك
+    _guard_grant(a, {"code": code, "permissions": perms})
+    if a.conn.execute(text("SELECT 1 FROM admin_roles WHERE name = :n AND code <> :c"), {"n": body.name, "c": code}).first():
+        raise HTTPException(status.HTTP_409_CONFLICT, "يوجد دور بهذا الاسم")
+    a.conn.execute(text("""UPDATE admin_roles SET name = :n, description = :d, permissions = :p, updated_at = now(), updated_by = :u
+                           WHERE code = :c"""),
+                   {"c": code, "n": body.name, "d": body.description, "p": perms, "u": a.user_id})
+    a.audit("ADMIN_ROLE_UPDATE", "admin_role", None, None,
+            {"code": code, "from": sorted(role["permissions"]), "to": perms, "name": body.name})
+    return {"updated": True}
+
+
+@router.delete("/roles/{code}")
+def delete_role(code: str, a: Admin = Depends(require_perm("team.manage"))):
+    role = _role(a.conn, code)
+    if role["is_system"]:
+        raise HTTPException(status.HTTP_409_CONFLICT, "الأدوار الأساسية لا تُحذف، يمكنك تعديل صلاحياتها")
+    _guard_grant(a, role)
+    if a.conn.execute(text("SELECT count(*) FROM users WHERE platform_role = :c"), {"c": code}).scalar_one():
+        raise HTTPException(status.HTTP_409_CONFLICT, "الدور مسند لأعضاء؛ انقلهم لدور آخر أولاً")
+    a.conn.execute(text("DELETE FROM admin_roles WHERE code = :c"), {"c": code})
+    a.audit("ADMIN_ROLE_DELETE", "admin_role", None, None, {"code": code, "name": role["name"]})
+    return {"deleted": True}
+
+
 # =====================================================================
 # سجل التدقيق
 # =====================================================================
-BILLING_AUDIT_ACTIONS = ("ADMIN_RECORD_PAYMENT", "ADMIN_CHANGE_PLAN", "ADMIN_EXTEND_TRIAL", "ADMIN_CANCEL_SUBSCRIPTION",
-                         "ADMIN_CREATE_ORG", "ADMIN_SUSPEND_ORG", "ADMIN_REACTIVATE_ORG")
-
-
 @router.get("/audit")
-def audit(org_id: UUID | None = None, limit: int = 100, a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
-    """المحاسبة ترى أحداث الاشتراكات والفوترة فقط؛ لا دخول المستخدمين ولا تعديلات الحوكمة والبيانات."""
+def audit(org_id: UUID | None = None, limit: int = 100,
+          a: Admin = Depends(require_perm("audit.view"))):
+    """من لا يرى المنشآت يرى أحداث الاشتراكات والفوترة فقط، ومن لا يرى المالية لا يرى المبالغ ومراجع الفواتير."""
     c = a.conn
-    only = list(BILLING_AUDIT_ACTIONS) if a.role == "BILLING" else None
+    only = None if a.can("orgs.view") else list(FINANCE_AUDIT_ACTIONS)
     rows = c.execute(text("""
         SELECT l.id, l.created_at, l.action, l.entity_type, l.entity_id, l.changes, host(l.ip_address) AS ip,
                u.full_name AS actor, u.platform_role AS actor_role, o.name AS org_name, l.org_id
@@ -479,7 +592,7 @@ def audit(org_id: UUID | None = None, limit: int = 100, a: Admin = Depends(requi
           AND (CAST(:only AS text[]) IS NULL OR l.action = ANY(CAST(:only AS text[])))
         ORDER BY l.created_at DESC LIMIT :l"""), {"o": org_id, "l": min(limit, 500), "only": only}).mappings()
     out = [dict(r) for r in rows]
-    if a.role == "SUPPORT":                       # الدعم الفني: بلا مبالغ أو مراجع فواتير
+    if not a.can("finance.view"):
         for r in out:
             if r["changes"]:
                 r["changes"] = {k: v for k, v in r["changes"].items() if k not in ("amount_sar", "reference")}

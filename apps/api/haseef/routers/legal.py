@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from ..deps import WRITERS, Admin, Tenant, get_tenant, require_admin
+from ..deps import WRITERS, Admin, Tenant, get_tenant, require_perm
 from ..domain.legal_pricing import ALLOWED_MINUTES, PLAN_DISCOUNT_PCT, URGENT_PCT, VAT_PCT, quote
 from .compliance import _audit
 
@@ -127,14 +127,14 @@ def cancel_mine(cid: UUID, body: CancelIn, t: Tenant = Depends(get_tenant)):
 
 # ------------------------------------------------------------------ فريق حصيف
 @router.get("/admin/legal/consultations")
-def admin_list(a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
+def admin_list(a: Admin = Depends(require_perm("legal.cases", "legal.billing"))):
     rows = a.conn.execute(text(f"""SELECT {_C_COLS}, c.lawyer_id, c.payment_reference, o.name AS org_name, o.id AS org_id,
                                           u.full_name AS requested_by_name
                                    {_C_FROM} JOIN organizations o ON o.id = c.org_id
                                    LEFT JOIN users u ON u.id = c.requested_by
                                    ORDER BY (c.status IN ('COMPLETED','CANCELED')), c.preferred_at""")).mappings().all()
     out = [dict(r) for r in rows]
-    if a.role == "BILLING":                     # المحاسبة: بلا تفاصيل القضية
+    if not a.can("legal.cases"):                # بلا صلاحية القضايا: بلا تفاصيلها
         for r in out:
             r["details"] = None
             r["lawyer_summary"] = None
@@ -148,7 +148,7 @@ class AssignIn(BaseModel):
 
 
 @router.post("/admin/legal/consultations/{cid}/assign")
-def assign(cid: UUID, body: AssignIn, a: Admin = Depends(require_admin("SUPPORT"))):
+def assign(cid: UUID, body: AssignIn, a: Admin = Depends(require_perm("legal.cases"))):
     if not a.conn.execute(text("SELECT 1 FROM legal_lawyers WHERE id = :l AND is_active"), {"l": body.lawyer_id}).scalar_one_or_none():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "المحامي غير متاح")
     n = a.conn.execute(text("""UPDATE legal_consultations SET lawyer_id = :l, scheduled_at = :s, meeting_link = :m,
@@ -166,7 +166,7 @@ class CompleteIn(BaseModel):
 
 
 @router.post("/admin/legal/consultations/{cid}/complete")
-def complete(cid: UUID, body: CompleteIn, a: Admin = Depends(require_admin("SUPPORT"))):
+def complete(cid: UUID, body: CompleteIn, a: Admin = Depends(require_perm("legal.cases"))):
     n = a.conn.execute(text("""UPDATE legal_consultations SET status = 'COMPLETED', lawyer_summary = :s, updated_at = now()
                                WHERE id = :id AND status = 'CONFIRMED'"""), {"s": body.lawyer_summary, "id": cid}).rowcount
     if not n:
@@ -176,7 +176,7 @@ def complete(cid: UUID, body: CompleteIn, a: Admin = Depends(require_admin("SUPP
 
 
 @router.post("/admin/legal/consultations/{cid}/cancel")
-def admin_cancel(cid: UUID, body: CancelIn, a: Admin = Depends(require_admin("SUPPORT"))):
+def admin_cancel(cid: UUID, body: CancelIn, a: Admin = Depends(require_perm("legal.cases"))):
     n = a.conn.execute(text("""UPDATE legal_consultations SET status = 'CANCELED', cancel_reason = :r, updated_at = now()
                                WHERE id = :id AND status IN ('REQUESTED','CONFIRMED')"""), {"r": body.reason, "id": cid}).rowcount
     if not n:
@@ -191,7 +191,7 @@ class PaymentIn(BaseModel):
 
 
 @router.post("/admin/legal/consultations/{cid}/payment")
-def payment(cid: UUID, body: PaymentIn, a: Admin = Depends(require_admin("BILLING"))):
+def payment(cid: UUID, body: PaymentIn, a: Admin = Depends(require_perm("legal.billing"))):
     n = a.conn.execute(text("""UPDATE legal_consultations SET payment_status = :p, payment_reference = :r, updated_at = now()
                                WHERE id = :id"""), {"p": body.payment_status, "r": body.payment_reference, "id": cid}).rowcount
     if not n:
@@ -201,7 +201,7 @@ def payment(cid: UUID, body: PaymentIn, a: Admin = Depends(require_admin("BILLIN
 
 
 @router.get("/admin/legal/rates")
-def admin_rates(a: Admin = Depends(require_admin("SUPPORT", "BILLING"))):
+def admin_rates(a: Admin = Depends(require_perm("legal.cases", "legal.billing"))):
     return [dict(r) for r in a.conn.execute(text("""SELECT topic, title, description, tier, hourly_rate_sar, is_active, sort, updated_at
                                                      FROM legal_rates ORDER BY sort""")).mappings()]
 
@@ -212,7 +212,7 @@ class RateIn(BaseModel):
 
 
 @router.patch("/admin/legal/rates/{topic}")
-def patch_rate(topic: str, body: RateIn, a: Admin = Depends(require_admin("BILLING"))):
+def patch_rate(topic: str, body: RateIn, a: Admin = Depends(require_perm("legal.billing"))):
     n = a.conn.execute(text("""UPDATE legal_rates SET hourly_rate_sar = :r, is_active = :act, updated_by = :u, updated_at = now()
                                WHERE topic = :t"""), {"r": body.hourly_rate_sar, "act": body.is_active, "u": a.user_id, "t": topic}).rowcount
     if not n:
@@ -222,7 +222,7 @@ def patch_rate(topic: str, body: RateIn, a: Admin = Depends(require_admin("BILLI
 
 
 @router.get("/admin/legal/lawyers")
-def lawyers(a: Admin = Depends(require_admin("SUPPORT"))):
+def lawyers(a: Admin = Depends(require_perm("legal.cases", "legal.lawyers"))):
     return [dict(r) for r in a.conn.execute(text("""SELECT id, full_name, license_number, specialties, bio, email::text AS email,
                                                             phone_number, is_active FROM legal_lawyers ORDER BY full_name""")).mappings()]
 
@@ -238,7 +238,7 @@ class LawyerIn(BaseModel):
 
 
 @router.post("/admin/legal/lawyers", status_code=201)
-def add_lawyer(body: LawyerIn, a: Admin = Depends(require_admin())):
+def add_lawyer(body: LawyerIn, a: Admin = Depends(require_perm("legal.lawyers"))):
     if a.conn.execute(text("SELECT 1 FROM legal_lawyers WHERE license_number = :n"), {"n": body.license_number}).scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, "رقم الترخيص مسجل لمحامٍ آخر")
     lid = a.conn.execute(text("""INSERT INTO legal_lawyers (full_name, license_number, specialties, bio, email, phone_number, is_active)
@@ -249,7 +249,7 @@ def add_lawyer(body: LawyerIn, a: Admin = Depends(require_admin())):
 
 
 @router.patch("/admin/legal/lawyers/{lid}")
-def update_lawyer(lid: UUID, body: LawyerIn, a: Admin = Depends(require_admin())):
+def update_lawyer(lid: UUID, body: LawyerIn, a: Admin = Depends(require_perm("legal.lawyers"))):
     n = a.conn.execute(text("""UPDATE legal_lawyers SET full_name = :full_name, license_number = :license_number,
                                    specialties = :specialties, bio = :bio, email = :email, phone_number = :phone_number,
                                    is_active = :is_active WHERE id = :id"""), {**body.model_dump(), "id": lid}).rowcount

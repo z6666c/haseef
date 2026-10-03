@@ -373,34 +373,92 @@ const incidents: { id: string; title: string; description: string | null; discov
     actions_taken: "طُلب من المستلم الحذف وأكّد كتابياً، أُبلغت الجهة المختصة والموظفون، وعُطّل الإكمال التلقائي." },
 ];
 
-// ---------- أدوار فريق حصيف في نسخة العرض (تطابق صلاحيات الخادم) ----------
-const TEAM_ROLE: Record<string, "SUPER_ADMIN" | "SUPPORT" | "BILLING"> = {
-  "demo-admin": "SUPER_ADMIN", "demo-support": "SUPPORT", "demo-billing": "BILLING",
-};
+// ---------- أدوار فريق حصيف وصلاحياتها في نسخة العرض (تطابق apps/api/haseef/permissions.py) ----------
+const ADMIN_PERMISSIONS: { code: string; name: string; group: string; description: string }[] = [
+  { code: "overview.view", name: "النظرة العامة", group: "عام", description: "لوحة الأرقام الرئيسية وتوزيع الباقات والقطاعات" },
+  { code: "finance.view", name: "رؤية الأرقام المالية", group: "المالية", description: "الإيراد الشهري، مبالغ الدفعات ومراجعها، تكلفة الذكاء الاصطناعي" },
+  { code: "billing.manage", name: "إدارة الاشتراكات والدفعات", group: "المالية", description: "تسجيل الدفعات، تغيير الباقة، تمديد التجربة، إلغاء الاشتراك" },
+  { code: "orgs.view", name: "عرض بيانات المنشآت", group: "المنشآت", description: "تفاصيل المنشأة وأعضاؤها ومؤشرها وحوكمتها" },
+  { code: "orgs.manage", name: "إدارة المنشآت ومستخدميها", group: "المنشآت", description: "إنشاء المنشآت وتعديلها، دعوة المستخدمين، إعادة كلمات المرور والتعطيل" },
+  { code: "orgs.suspend", name: "تعليق المنشآت", group: "المنشآت", description: "تعليق حساب منشأة وإعادة تفعيله" },
+  { code: "trials.manage", name: "طلبات التجربة", group: "المبيعات", description: "عرض طلبات التجربة ومتابعتها" },
+  { code: "alerts.view", name: "مراقب التنبيهات", group: "التشغيل", description: "سجل إرسال التنبيهات وحالتها" },
+  { code: "legal.cases", name: "الاستشارات: المواعيد والإغلاق", group: "الاستشارات", description: "تعيين المحامي والموعد، الإكمال، الإلغاء، رؤية تفاصيل القضية" },
+  { code: "legal.billing", name: "الاستشارات: الدفع والتسعيرة", group: "الاستشارات", description: "تسجيل دفع الاستشارات واستردادها وتعديل الأسعار" },
+  { code: "legal.lawyers", name: "إدارة المحامين", group: "الاستشارات", description: "إضافة المحامين وتعديل بياناتهم وتراخيصهم" },
+  { code: "content.manage", name: "إدارة المحتوى المرجعي", group: "المحتوى", description: "المكتبة والمعايير والالتزامات: إضافة وتعديل وإخفاء" },
+  { code: "content.approve", name: "اعتماد المحتوى", group: "المحتوى", description: "اعتماد المحتوى أو إعادته لمسودة، وحذف المستندات" },
+  { code: "usage.view", name: "استهلاك الذكاء الاصطناعي", group: "التشغيل", description: "الاستهلاك مقابل حصة كل باقة" },
+  { code: "audit.view", name: "سجل التدقيق", group: "الرقابة", description: "سجل الإجراءات (يُقيَّد بحسب صلاحيات المنشآت والمالية)" },
+  { code: "team.view", name: "عرض الفريق", group: "الفريق", description: "قائمة أعضاء فريق حصيف وأدوارهم" },
+  { code: "team.manage", name: "إدارة الفريق والأدوار", group: "الفريق", description: "إضافة الأعضاء، تغيير أدوارهم، إنشاء الأدوار وتعديل صلاحياتها" },
+];
+const PERM_ALL = ADMIN_PERMISSIONS.map((x) => x.code);
+const PERM_LABEL = Object.fromEntries(ADMIN_PERMISSIONS.map((x) => [x.code, x.name]));
+type DemoRole = { code: string; name: string; description: string | null; permissions: string[]; is_system: boolean; created_at: string; updated_at: string };
+const adminRoles: DemoRole[] = [
+  { code: "SUPER_ADMIN", name: "المدير العام", description: "كل الصلاحيات، ولا تُعدَّل", permissions: [], is_system: true, created_at: ts(-200), updated_at: ts(-200) },
+  { code: "SUPPORT", name: "الدعم الفني", description: "إنشاء المنشآت وتعديلها وإدارة مستخدميها، والمحتوى، والاستشارات، دون الأرقام المالية",
+    permissions: ["overview.view", "orgs.view", "orgs.manage", "trials.manage", "alerts.view", "legal.cases", "content.manage", "usage.view", "team.view", "audit.view"],
+    is_system: true, created_at: ts(-200), updated_at: ts(-200) },
+  { code: "BILLING", name: "المحاسبة", description: "الاشتراكات والدفعات والباقات وتسعير الاستشارات، دون بيانات العملاء التشغيلية",
+    permissions: ["overview.view", "finance.view", "billing.manage", "legal.billing", "usage.view", "audit.view"], is_system: true, created_at: ts(-200), updated_at: ts(-200) },
+];
+const TEAM_ROLE: Record<string, string> = { "demo-admin": "SUPER_ADMIN", "demo-support": "SUPPORT", "demo-billing": "BILLING" };
 const TEAM_ME: Record<string, { id: string; email: string; full_name: string }> = {
   SUPER_ADMIN: { id: "0a1f5c1e-0000-4000-8000-0000000000b1", email: "admin@haseef.sa", full_name: "فريق عمليات حصيف" },
   SUPPORT: { id: "0a1f5c1e-0000-4000-8000-0000000000b2", email: "support@haseef.sa", full_name: "الدعم الفني" },
   BILLING: { id: "0a1f5c1e-0000-4000-8000-0000000000b3", email: "billing@haseef.sa", full_name: "المحاسبة" },
 };
-const ROLE_NAME = { SUPER_ADMIN: "المدير العام", SUPPORT: "الدعم الفني", BILLING: "المحاسبة" } as const;
-function requireRole(role: keyof typeof ROLE_NAME, method: string, p: string, body: Record<string, unknown>) {
+function permsOf(role: string): string[] {
+  if (role === "SUPER_ADMIN") return PERM_ALL;
+  return adminRoles.find((r) => r.code === role)?.permissions ?? [];
+}
+function canDo(role: string, ...perms: string[]): boolean {
+  if (role === "SUPER_ADMIN") return true;
+  const mine = permsOf(role);
+  return perms.some((x) => mine.includes(x));
+}
+// [طريقة، مسار، الصلاحيات المقبولة] — أول تطابق يُعتمد. قائمة فارغة = المدير العام فقط.
+const PERM_RULES: [RegExp, RegExp, string[]][] = [
+  [/GET/, /^\/admin\/overview$/, ["overview.view"]],
+  [/GET/, /^\/admin\/organizations$/, ["orgs.view", "billing.manage", "finance.view"]],
+  [/POST/, /^\/admin\/organizations$/, ["orgs.manage"]],
+  [/GET/, /^\/admin\/organizations\/[^/]+\/governance$/, ["orgs.view"]],
+  [/GET/, /^\/admin\/organizations\/[^/]+$/, ["orgs.view", "billing.manage", "finance.view"]],
+  [/POST/, /\/(suspend|reactivate)$/, ["orgs.suspend"]],
+  [/POST/, /\/subscription\/extend-trial$/, ["billing.manage", "orgs.manage"]],
+  [/POST/, /\/subscription\//, ["billing.manage"]],
+  [/./, /^\/admin\/(organizations|memberships|users)\//, ["orgs.manage"]],
+  [/GET/, /^\/admin\/dispatches/, ["alerts.view"]],
+  [/GET/, /^\/admin\/ai-usage/, ["usage.view"]],
+  [/./, /^\/admin\/trial-requests/, ["trials.manage"]],
+  [/DELETE/, /^\/admin\/library/, ["content.approve"]],
+  [/POST/, /^\/admin\/(library|catalog)/, ["content.manage"]],
+  [/./, /^\/admin\/(library|catalog)/, ["content.manage", "content.approve"]],
+  [/GET/, /^\/admin\/legal\/(consultations|rates)/, ["legal.cases", "legal.billing"]],
+  [/./, /^\/admin\/legal\/consultations\/[^/]+\/payment$/, ["legal.billing"]],
+  [/./, /^\/admin\/legal\/consultations/, ["legal.cases"]],
+  [/./, /^\/admin\/legal\/rates/, ["legal.billing"]],
+  [/GET/, /^\/admin\/legal\/lawyers/, ["legal.cases", "legal.lawyers"]],
+  [/./, /^\/admin\/legal\/lawyers/, ["legal.lawyers"]],
+  [/GET/, /^\/admin\/(team|roles)$/, ["team.view", "team.manage"]],
+  [/./, /^\/admin\/(team|roles)/, ["team.manage"]],
+  [/GET/, /^\/admin\/audit/, ["audit.view"]],
+];
+function requirePerm(role: string, method: string, p: string, body: Record<string, unknown>) {
   if (role === "SUPER_ADMIN") return;
-  if (method === "GET") {
-    // المحاسبة: الفوترة فقط — لا تنبيهات (بيانات تواصل العملاء)، لا فريق، لا محتوى، لا حوكمة المنشآت
-    if (role === "BILLING" && (/^\/admin\/(dispatches|team|catalog|library|legal\/lawyers|trial-requests)/.test(p) || /\/governance$/.test(p)))
-      throw new DemoError(403, "هذا القسم غير متاح لصلاحية المحاسبة");
-    return;
-  }
-  const deny = (allowed: (keyof typeof ROLE_NAME)[]) => {
-    if (!allowed.includes(role)) throw new DemoError(403, `هذا الإجراء متاح لـ: ${["المدير العام", ...allowed.map((r) => ROLE_NAME[r])].join("، ")}`);
-  };
-  if (/\/(suspend|reactivate)$/.test(p) || p.startsWith("/admin/team") || (method === "DELETE" && p.startsWith("/admin/library"))) return deny([]);
-  if ("review_status" in body) throw new DemoError(403, "اعتماد المحتوى أو إعادته لمسودة للمدير العام فقط");
-  if (/^\/admin\/legal\/consultations\/[^/]+\/payment$/.test(p) || /^\/admin\/legal\/rates\//.test(p)) return deny(["BILLING"]);
-  if (/^\/admin\/legal\/lawyers/.test(p)) return deny([]);
-  if (/\/subscription\/extend-trial$/.test(p)) return deny(["BILLING", "SUPPORT"]);
-  if (/\/subscription\//.test(p)) return deny(["BILLING"]);
-  return deny(["SUPPORT"]);
+  const rule = PERM_RULES.find(([mm, pp]) => mm.test(method) && pp.test(p));
+  const need = rule ? rule[2] : [];
+  if (!need.length) throw new DemoError(403, "هذا الإجراء متاح للمدير العام فقط");
+  if (!canDo(role, ...need)) throw new DemoError(403, `هذا الإجراء يتطلب صلاحية: ${need.map((x) => PERM_LABEL[x]).join("، ")}`);
+  if ("review_status" in body && !canDo(role, "content.approve")) throw new DemoError(403, "اعتماد المحتوى يتطلب صلاحية: اعتماد المحتوى");
+}
+function guardGrant(role: string, target: { code: string; permissions: string[] }) {
+  if (role === "SUPER_ADMIN") return;
+  if (target.code === "SUPER_ADMIN") throw new DemoError(403, "دور المدير العام يمنحه مدير عام فقط");
+  const extra = target.permissions.filter((x) => !permsOf(role).includes(x));
+  if (extra.length) throw new DemoError(403, `لا يمكنك منح صلاحيات لا تملكها: ${extra.map((x) => PERM_LABEL[x]).join("، ")}`);
 }
 
 // ---------- طلبات التجربة (نسخة العرض) ----------
@@ -639,9 +697,9 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
 
   if (p.startsWith("/admin")) {
     if (!isAdmin) throw new DemoError(403, "هذه الواجهة لفريق حصيف فقط");
-    if (p === "/admin/me") return { user_id: TEAM_ME[role].id, role };
-    requireRole(role, method, p, body);
-    if (p === "/admin/overview") { const ov = overview(); return role === "SUPPORT" ? { ...ov, kpis: { ...ov.kpis, mrr_sar: null } } : ov; }
+    if (p === "/admin/me") return { user_id: TEAM_ME[role].id, role, role_name: adminRoles.find((r) => r.code === role)?.name ?? role, permissions: permsOf(role) };
+    requirePerm(role, method, p, body);
+    if (p === "/admin/overview") { const ov = overview(); return canDo(role, "finance.view") ? ov : { ...ov, kpis: { ...ov.kpis, mrr_sar: null } }; }
     if (p === "/admin/organizations" && method === "GET") return orgs.map(orgRow);
     if (p === "/admin/organizations" && method === "POST") {
       const o: Org = { id: uid(), name: String(body.name), cr: String(body.cr_number), legal: String(body.entity_legal_type), industry: String(body.industry_type ?? "—"),
@@ -657,10 +715,10 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       const o = findOrg(m[1]);
       if (method === "GET") {
         const full = orgDetail(o);
-        if (role === "SUPPORT") return { ...full, restricted: false,
+        if (canDo(role, "orgs.view") && !canDo(role, "finance.view")) return { ...full, restricted: false,
           subscription: full.subscription && (({ monthly_price_sar: _m, yearly_price_sar: _y, ...rest }) => rest)(full.subscription),
           billing: full.billing.map((b) => ({ ...b, amount_sar: null, reference: null })) };
-        if (role !== "BILLING") return { ...full, restricted: false };
+        if (canDo(role, "orgs.view")) return { ...full, restricted: false };
         const { haseef_score: _s, suspension_reason: _r, ...org } = full.organization;
         return { ...full, organization: org, counts: null, restricted: true,
                  members: full.members.filter((x) => x.role === "ORG_ADMIN" && x.membership_active)
@@ -722,17 +780,65 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       log(m[2] === "reset-password" ? "ADMIN_RESET_PASSWORD" : m[2] === "disable" ? "ADMIN_DISABLE_USER" : "ADMIN_ENABLE_USER", null, body.reason ? { reason: body.reason } : null);
       return m[2] === "reset-password" ? { temporary_password: TEMP_PW } : { is_active: m[2] === "enable" };
     }
-    if (p === "/admin/team" && method === "GET") return team.filter((t) => t.platform_role);
+    if (p === "/admin/team" && method === "GET")
+      return team.filter((t) => t.platform_role).map((t) => ({ ...t, role_name: adminRoles.find((r) => r.code === t.platform_role)?.name ?? t.platform_role }));
     if (p === "/admin/team" && method === "POST") {
-      team.push({ id: uid(), full_name: String(body.full_name), email: String(body.email), platform_role: String(body.role), is_active: true, last_login_at: null, must_change_password: true });
-      log("ADMIN_TEAM_ADD", null, { email: body.email, role: body.role }); return { temporary_password: TEMP_PW };
+      const r = adminRoles.find((x) => x.code === body.role); if (!r) throw new DemoError(422, "الدور غير موجود");
+      guardGrant(role, r);
+      if (team.some((t) => t.email === String(body.email).toLowerCase())) throw new DemoError(409, "هذا الشخص عضو في الفريق أصلاً");
+      team.push({ id: uid(), full_name: String(body.full_name), email: String(body.email).toLowerCase(), platform_role: r.code, is_active: true, last_login_at: null, must_change_password: true });
+      log("ADMIN_TEAM_ADD", null, { email: body.email, role: r.code }); return { temporary_password: TEMP_PW };
     }
     if ((m = p.match(/^\/admin\/team\/([^/]+)$/))) {
-      if (m[1] === ADMIN_ME.id) throw new DemoError(409, "لا يمكنك تغيير دورك بنفسك");
+      if (m[1] === TEAM_ME[role]?.id) throw new DemoError(409, "لا يمكنك تغيير دورك بنفسك");
       const t = team.find((x) => x.id === m![1]); if (!t) throw new DemoError(404, "العضو غير موجود");
+      if (role !== "SUPER_ADMIN") {
+        if (t.platform_role === "SUPER_ADMIN") throw new DemoError(403, "حساب المدير العام يديره مدير عام فقط");
+        guardGrant(role, { code: t.platform_role, permissions: permsOf(t.platform_role) });
+      }
+      if (body.role) { const r = adminRoles.find((x) => x.code === body.role); if (!r) throw new DemoError(422, "الدور غير موجود"); guardGrant(role, r); }
+      if (t.platform_role === "SUPER_ADMIN" && body.role !== "SUPER_ADMIN"
+          && !team.some((x) => x !== t && x.platform_role === "SUPER_ADMIN" && x.is_active)) throw new DemoError(409, "لا يمكن: هذا آخر مدير عام");
       log("ADMIN_TEAM_ROLE", null, { from: t.platform_role, to: body.role });
       if (body.role) t.platform_role = String(body.role); else team.splice(team.indexOf(t), 1);
       return { role: body.role ?? null };
+    }
+    if (p === "/admin/roles" && method === "GET")
+      return { roles: adminRoles.map((r) => ({ ...r, permissions: r.code === "SUPER_ADMIN" ? PERM_ALL : r.permissions,
+        members: team.filter((t) => t.platform_role === r.code).length })), permissions: ADMIN_PERMISSIONS };
+    if (p === "/admin/roles" || (m = p.match(/^\/admin\/roles\/([^/]+)$/))) {
+      const perms = Array.isArray(body.permissions) ? [...new Set(body.permissions as string[])].sort() : [];
+      const name = String(body.name ?? "").trim();
+      const check = () => {
+        if (name.length < 2) throw new DemoError(422, "اكتب اسم الدور");
+        if (!perms.length) throw new DemoError(422, "اختر صلاحية واحدة على الأقل");
+        if (perms.some((x) => !PERM_ALL.includes(x))) throw new DemoError(422, "صلاحية غير معروفة");
+      };
+      if (method === "POST") {
+        check(); guardGrant(role, { code: "", permissions: perms });
+        let code = String(body.code ?? "").trim().toUpperCase() || `ROLE_${Math.random().toString(16).slice(2, 8).toUpperCase()}`;
+        if (!/^[A-Z][A-Z0-9_]{1,39}$/.test(code)) throw new DemoError(422, "رمز الدور: أحرف إنجليزية كبيرة وأرقام و _ فقط");
+        if (adminRoles.some((r) => r.code === code || r.name === name)) throw new DemoError(409, "يوجد دور بهذا الاسم أو الرمز");
+        adminRoles.push({ code, name, description: (body.description as string) || null, permissions: perms, is_system: false,
+          created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+        log("ADMIN_ROLE_CREATE", null, { code, name, permissions: perms }); return { code };
+      }
+      const r = adminRoles.find((x) => x.code === m![1]); if (!r) throw new DemoError(422, "الدور غير موجود");
+      if (method === "PATCH") {
+        if (r.code === "SUPER_ADMIN") throw new DemoError(409, "دور المدير العام ثابت ويملك كل الصلاحيات");
+        check(); guardGrant(role, r); guardGrant(role, { code: r.code, permissions: perms });
+        if (adminRoles.some((x) => x.name === name && x.code !== r.code)) throw new DemoError(409, "يوجد دور بهذا الاسم");
+        log("ADMIN_ROLE_UPDATE", null, { code: r.code, from: r.permissions, to: perms, name });
+        Object.assign(r, { name, description: (body.description as string) || null, permissions: perms, updated_at: new Date().toISOString() });
+        return { updated: true };
+      }
+      if (method === "DELETE") {
+        if (r.is_system) throw new DemoError(409, "الأدوار الأساسية لا تُحذف، يمكنك تعديل صلاحياتها");
+        guardGrant(role, r);
+        if (team.some((t) => t.platform_role === r.code)) throw new DemoError(409, "الدور مسند لأعضاء؛ انقلهم لدور آخر أولاً");
+        adminRoles.splice(adminRoles.indexOf(r), 1); log("ADMIN_ROLE_DELETE", null, { code: r.code, name: r.name });
+        return { deleted: true };
+      }
     }
     if (p === "/admin/catalog/standards") return standards;
     if (p === "/admin/catalog/obligations") return obligationCatalog.map((o) => ({ ...o, orgs: oblState.has(o.code) ? 1 : 0 }));
@@ -780,7 +886,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
                               pending: obl.filter((o) => o.effective_status === "PENDING" || o.effective_status === "AT_RISK").length } };
     }
     if (p === "/admin/legal/consultations") return consults.map((c) => ({ ...consultView(c), org_name: "مؤسسة النخبة للمقاولات", org_id: ORG_A,
-      requested_by_name: "أحمد العتيبي", details: role === "BILLING" ? null : c.details, lawyer_summary: role === "BILLING" ? null : c.lawyer_summary }))
+      requested_by_name: "أحمد العتيبي", details: canDo(role, "legal.cases") ? c.details : null, lawyer_summary: canDo(role, "legal.cases") ? c.lawyer_summary : null }))
       .sort((a, b) => Number(["COMPLETED", "CANCELED"].includes(a.status)) - Number(["COMPLETED", "CANCELED"].includes(b.status)));
     if ((m = p.match(/^\/admin\/legal\/consultations\/([^/]+)\/(assign|complete|cancel|payment)$/))) {
       const c = consults.find((x) => x.id === m![1]); if (!c) throw new DemoError(404, "الطلب غير موجود");
@@ -801,18 +907,18 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       const id = q.get("org_id");
       const billingOnly = ["ADMIN_RECORD_PAYMENT", "ADMIN_CHANGE_PLAN", "ADMIN_EXTEND_TRIAL", "ADMIN_CANCEL_SUBSCRIPTION",
                            "ADMIN_CREATE_ORG", "ADMIN_SUSPEND_ORG", "ADMIN_REACTIVATE_ORG"];
-      return audit.filter((a) => (!id || a.org_id === id) && (role !== "BILLING" || billingOnly.includes(a.action)))
-        .map((a) => role === "SUPPORT" && a.changes ? { ...a, changes: Object.fromEntries(Object.entries(a.changes).filter(([k]) => k !== "amount_sar" && k !== "reference")) } : a);
+      return audit.filter((a) => (!id || a.org_id === id) && (canDo(role, "orgs.view") || billingOnly.includes(a.action)))
+        .map((a) => !canDo(role, "finance.view") && a.changes ? { ...a, changes: Object.fromEntries(Object.entries(a.changes).filter(([k]) => k !== "amount_sar" && k !== "reference")) } : a);
     }
     if (p === "/admin/dispatches") return dispatches();
     if (p === "/admin/trial-requests") return trials;
     if ((m = p.match(/^\/admin\/trial-requests\/([^/]+)$/))) {
       const t = trials.find((x) => x.id === m![1]); if (!t) throw new DemoError(404, "الطلب غير موجود");
       Object.assign(t, { status: String(body.status), notes: (body.notes as string) ?? null, updated_at: new Date().toISOString(),
-        handled_by_name: ROLE_NAME[role] }); return { updated: true };
+        handled_by_name: TEAM_ME[role]?.full_name ?? role }); return { updated: true };
     }
     if (p === "/admin/ai-usage") return orgs.map((o) => ({ org_id: o.id, name: o.name, plan_tier: o.sub?.plan_tier ?? null,
-      quota: o.sub?.plan_tier === "ESSENTIAL" ? 3 : 15, audits_this_month: o.id === ORG_A ? 4 : 0, tokens: o.id === ORG_A ? 48_200 : 0, cost_sar: role === "SUPPORT" ? null : o.id === ORG_A ? 3.6 : 0 }));
+      quota: o.sub?.plan_tier === "ESSENTIAL" ? 3 : 15, audits_this_month: o.id === ORG_A ? 4 : 0, tokens: o.id === ORG_A ? 48_200 : 0, cost_sar: !canDo(role, "finance.view") ? null : o.id === ORG_A ? 3.6 : 0 }));
     throw new DemoError(404, "غير متاح في نسخة العرض");
   }
 

@@ -16,8 +16,8 @@ export default function ContentPage() {
   const [tab, setTab] = useState<Tab>("library");
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const editor = can("SUPPORT");
-  const approver = can();
+  const editor = can("content.manage");
+  const approver = can("content.approve");
 
   async function act(fn: () => Promise<unknown>, ok: string, reload: () => void) {
     setError(null); setNotice(null);
@@ -28,13 +28,13 @@ export default function ContentPage() {
   return (
     <>
       <h1>المحتوى المرجعي</h1>
-      <p className="muted">ما يراه العملاء من مكتبة ومعايير والتزامات. كل عنصر يظهر للعملاء افتراضياً بشارة «{REVIEW_BADGE}» حتى يعتمده المدير العام. الإخفاء لا يحذف.</p>
+      <p className="muted">ما يراه العملاء من مكتبة ومعايير والتزامات. كل عنصر يظهر للعملاء افتراضياً بشارة «{REVIEW_BADGE}» حتى يعتمده من يملك صلاحية الاعتماد. الإخفاء لا يحذف.</p>
       <div className="filters" role="tablist">
         {([["library", "المكتبة المرجعية"], ["obligations", "الالتزامات والسياسات المطلوبة"], ["standards", "معايير الحوكمة"]] as [Tab, string][]).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
-      {!editor && <p className="hint">التعديل متاح للدعم الفني والمدير العام.</p>}
+      {!editor && <p className="hint">التعديل يتطلب صلاحية إدارة المحتوى.</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {tab === "library" && <LibraryTab editor={editor} approver={approver} act={act} />}
