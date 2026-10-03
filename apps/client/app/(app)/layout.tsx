@@ -11,7 +11,7 @@ import { Logo } from "@/components/Logo";
 import { api, getSession, setSession } from "@/lib/session";
 
 // ترتيب القائمة وأيقوناتها من دليل الهوية §3.1. الأقسام غير المبنية تظهر معطّلة مع موعدها.
-const NAV = [
+const NAV: { href: string | null; label: string; Icon: typeof Radar; soon?: string }[] = [
   { href: "/", label: "الرادار العام", Icon: Radar },
   { href: "/licenses", label: "الامتثال والتراخيص", Icon: BuildingBadge },
   { href: "/obligations", label: "الالتزامات النظامية", Icon: ListCheck },
@@ -23,7 +23,7 @@ const NAV = [
   { href: "/alerts", label: "التنبيهات والواتساب", Icon: BellMessage },
   { href: "/group", label: "المجموعة والمنشآت", Icon: BuildingsGroup },
   { href: "/reports", label: "تقرير المجلس", Icon: ReportChart },
-  { href: null, label: "فاحص العقود بالذكاء الاصطناعي", Icon: FileSparkle, soon: "المرحلة 2" },
+  { href: "/contracts", label: "فاحص العقود", Icon: FileSparkle },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
