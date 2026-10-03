@@ -451,7 +451,8 @@ def team(a: Admin = Depends(require_perm("team.view", "team.manage"))):
 @router.post("/team", status_code=201)
 def team_add(body: TeamAddIn, a: Admin = Depends(require_perm("team.manage"))):
     c = a.conn
-    _guard_grant(a, _role(c, body.role))
+    role = _role(c, body.role)
+    _guard_grant(a, role)
     existing = c.execute(text("SELECT id, platform_role FROM users WHERE email = :e"), {"e": body.email}).mappings().one_or_none()
     if existing and existing["platform_role"]:
         raise HTTPException(status.HTTP_409_CONFLICT, "هذا الشخص عضو في الفريق أصلاً")
@@ -461,7 +462,7 @@ def team_add(body: TeamAddIn, a: Admin = Depends(require_perm("team.manage"))):
         uid, pw = existing["id"], None
     else:
         uid, pw = _find_or_create_user(c, body.email, body.full_name, None, platform_role=body.role)
-    a.audit("ADMIN_TEAM_ADD", "user", uid, None, {"email": body.email, "role": body.role})
+    a.audit("ADMIN_TEAM_ADD", "user", uid, None, {"email": body.email, "role": body.role, "role_name": role["name"]})
     return {"user_id": uid, "temporary_password": pw}
 
 
@@ -476,8 +477,10 @@ def team_role(user_id: UUID, body: TeamRoleIn, a: Admin = Depends(require_perm("
         if current == SUPER:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "حساب المدير العام يديره مدير عام فقط")
         _guard_grant(a, _role(a.conn, current))          # لا يُخفّض من يملك أكثر منك
-    if body.role is not None:
-        _guard_grant(a, _role(a.conn, body.role))
+    new = _role(a.conn, body.role) if body.role is not None else None
+    if new:
+        _guard_grant(a, new)
+    old_name = a.conn.execute(text("SELECT name FROM admin_roles WHERE code = :c"), {"c": current}).scalar_one_or_none()
     if current == SUPER and body.role != SUPER:
         left = a.conn.execute(text("""SELECT count(*) FROM users WHERE platform_role = 'SUPER_ADMIN'
                                       AND is_active AND id <> :u"""), {"u": user_id}).scalar_one()
@@ -485,7 +488,7 @@ def team_role(user_id: UUID, body: TeamRoleIn, a: Admin = Depends(require_perm("
             raise HTTPException(status.HTTP_409_CONFLICT, "لا يمكن: هذا آخر مدير عام")
     a.conn.execute(text("UPDATE users SET platform_role = :r, is_platform_admin = :a WHERE id = :u"),
                    {"r": body.role, "a": body.role is not None, "u": user_id})
-    a.audit("ADMIN_TEAM_ROLE", "user", user_id, None, {"from": current, "to": body.role})
+    a.audit("ADMIN_TEAM_ROLE", "user", user_id, None, {"from": old_name or current, "to": new["name"] if new else None})
     return {"role": body.role}
 
 
@@ -556,7 +559,7 @@ def update_role(code: str, body: RoleIn, a: Admin = Depends(require_perm("team.m
                            WHERE code = :c"""),
                    {"c": code, "n": body.name, "d": body.description, "p": perms, "u": a.user_id})
     a.audit("ADMIN_ROLE_UPDATE", "admin_role", None, None,
-            {"code": code, "from": sorted(role["permissions"]), "to": perms, "name": body.name})
+            {"code": code, "name": body.name, "permissions": perms, "before": sorted(role["permissions"])})
     return {"updated": True}
 
 

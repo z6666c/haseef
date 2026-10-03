@@ -787,7 +787,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       guardGrant(role, r);
       if (team.some((t) => t.email === String(body.email).toLowerCase())) throw new DemoError(409, "هذا الشخص عضو في الفريق أصلاً");
       team.push({ id: uid(), full_name: String(body.full_name), email: String(body.email).toLowerCase(), platform_role: r.code, is_active: true, last_login_at: null, must_change_password: true });
-      log("ADMIN_TEAM_ADD", null, { email: body.email, role: r.code }); return { temporary_password: TEMP_PW };
+      log("ADMIN_TEAM_ADD", null, { email: body.email, role: r.code, role_name: r.name }); return { temporary_password: TEMP_PW };
     }
     if ((m = p.match(/^\/admin\/team\/([^/]+)$/))) {
       if (m[1] === TEAM_ME[role]?.id) throw new DemoError(409, "لا يمكنك تغيير دورك بنفسك");
@@ -799,7 +799,8 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       if (body.role) { const r = adminRoles.find((x) => x.code === body.role); if (!r) throw new DemoError(422, "الدور غير موجود"); guardGrant(role, r); }
       if (t.platform_role === "SUPER_ADMIN" && body.role !== "SUPER_ADMIN"
           && !team.some((x) => x !== t && x.platform_role === "SUPER_ADMIN" && x.is_active)) throw new DemoError(409, "لا يمكن: هذا آخر مدير عام");
-      log("ADMIN_TEAM_ROLE", null, { from: t.platform_role, to: body.role });
+      log("ADMIN_TEAM_ROLE", null, { from: adminRoles.find((x) => x.code === t.platform_role)?.name ?? t.platform_role,
+        to: body.role ? adminRoles.find((x) => x.code === body.role)?.name ?? body.role : null });
       if (body.role) t.platform_role = String(body.role); else team.splice(team.indexOf(t), 1);
       return { role: body.role ?? null };
     }
@@ -828,7 +829,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
         if (r.code === "SUPER_ADMIN") throw new DemoError(409, "دور المدير العام ثابت ويملك كل الصلاحيات");
         check(); guardGrant(role, r); guardGrant(role, { code: r.code, permissions: perms });
         if (adminRoles.some((x) => x.name === name && x.code !== r.code)) throw new DemoError(409, "يوجد دور بهذا الاسم");
-        log("ADMIN_ROLE_UPDATE", null, { code: r.code, from: r.permissions, to: perms, name });
+        log("ADMIN_ROLE_UPDATE", null, { code: r.code, name, permissions: perms, before: r.permissions });
         Object.assign(r, { name, description: (body.description as string) || null, permissions: perms, updated_at: new Date().toISOString() });
         return { updated: true };
       }
