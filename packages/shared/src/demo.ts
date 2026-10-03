@@ -163,6 +163,7 @@ const team: { id: string; full_name: string; email: string; platform_role: strin
   { id: "0a1f5c1e-0000-4000-8000-0000000000b3", full_name: "المحاسبة", email: "billing@haseef.sa", platform_role: "BILLING", is_active: true, last_login_at: ago(60 * 30), must_change_password: false },
 ];
 let auditSeq = 50;
+let actor = { name: "فريق عمليات حصيف", role: "SUPER_ADMIN" };   // عضو الفريق الحالي في نسخة العرض
 const audit: { id: number; created_at: string; action: string; entity_type: string; entity_id: string | null; changes: Record<string, unknown> | null; ip: string | null; actor: string | null; actor_role: string | null; org_name: string | null; org_id: string | null }[] = [
   { id: 3, created_at: ts(-3), action: "ADMIN_CREATE_ORG", entity_type: "organization", entity_id: ORG_C, changes: { name: "شركة الأفق للتجارة", cr_number: "4030111222", plan: "PROFESSIONAL_GRC" }, ip: "10.0.0.4", actor: "الدعم الفني", actor_role: "SUPPORT", org_name: "شركة الأفق للتجارة", org_id: ORG_C },
   { id: 2, created_at: ts(-10), action: "ADMIN_RECORD_PAYMENT", entity_type: "subscription", entity_id: null, changes: { amount_sar: 499, cycle: "MONTHLY", reference: "INV-2026-0007" }, ip: "10.0.0.4", actor: "فريق عمليات حصيف", actor_role: "SUPER_ADMIN", org_name: "مؤسسة النخبة للمقاولات", org_id: ORG_A },
@@ -170,7 +171,7 @@ const audit: { id: number; created_at: string; action: string; entity_type: stri
 ];
 function log(action: string, org: Org | null, changes: Record<string, unknown> | null) {
   audit.unshift({ id: ++auditSeq, created_at: new Date().toISOString(), action, entity_type: org ? "organization" : "user", entity_id: org?.id ?? null,
-    changes, ip: "—", actor: "فريق عمليات حصيف", actor_role: "SUPER_ADMIN", org_name: org?.name ?? null, org_id: org?.id ?? null });
+    changes, ip: "—", actor: actor.name, actor_role: actor.role, org_name: org?.name ?? null, org_id: org?.id ?? null });
 }
 
 // منشأة العرض الرئيسية: مؤشرها وأعدادها تُحسب من بيانات العميل نفسها حتى تتطابق الواجهتان
@@ -698,9 +699,10 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
   if (p.startsWith("/admin")) {
     if (!isAdmin) throw new DemoError(403, "هذه الواجهة لفريق حصيف فقط");
     if (p === "/admin/me") return { user_id: TEAM_ME[role].id, role, role_name: adminRoles.find((r) => r.code === role)?.name ?? role, permissions: permsOf(role) };
+    actor = { name: TEAM_ME[role]?.full_name ?? role, role };
     requirePerm(role, method, p, body);
     if (p === "/admin/overview") { const ov = overview(); return canDo(role, "finance.view") ? ov : { ...ov, kpis: { ...ov.kpis, mrr_sar: null } }; }
-    if (p === "/admin/organizations" && method === "GET") return orgs.map(orgRow);
+    if (p === "/admin/organizations" && method === "GET") return orgs.map(orgRow).map((r) => canDo(role, "orgs.view") ? r : { ...r, haseef_score: null });
     if (p === "/admin/organizations" && method === "POST") {
       const o: Org = { id: uid(), name: String(body.name), cr: String(body.cr_number), legal: String(body.entity_legal_type), industry: String(body.industry_type ?? "—"),
         size: String(body.commercial_size ?? "SMALL"), score: null, suspended_at: null, reason: null, created_at: new Date().toISOString(),
@@ -739,13 +741,13 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       if (m[2] === "change-plan") {
         if (body.plan_tier === s.plan_tier) throw new DemoError(409, "المنشأة على هذه الباقة أصلاً");
         log("ADMIN_CHANGE_PLAN", o, { from: s.plan_tier, to: body.plan_tier }); s.plan_tier = String(body.plan_tier);
-        o.billing.unshift({ event_type: "PLAN_CHANGED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: (body.note as string) ?? null, created_at: now, actor: "فريق عمليات حصيف" });
+        o.billing.unshift({ event_type: "PLAN_CHANGED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: (body.note as string) ?? null, created_at: now, actor: actor.name });
         return { plan_tier: s.plan_tier };
       }
       if (m[2] === "extend-trial") {
         if (s.billing_status !== "TRIAL") throw new DemoError(409, "المنشأة ليست في فترة تجريبية");
         s.ends_at = new Date(new Date(s.ends_at).getTime() + Number(body.days) * DAY).toISOString();
-        o.billing.unshift({ event_type: "TRIAL_EXTENDED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: `${body.days} يوماً`, created_at: now, actor: "فريق عمليات حصيف" });
+        o.billing.unshift({ event_type: "TRIAL_EXTENDED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: `${body.days} يوماً`, created_at: now, actor: actor.name });
         log("ADMIN_EXTEND_TRIAL", o, { days: body.days }); return { ends_at: s.ends_at };
       }
       if (m[2] === "payment") {
@@ -753,12 +755,12 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
         const base = s.billing_status === "TRIAL" ? Date.now() : Math.max(Date.now(), new Date(s.ends_at).getTime());
         const end = new Date(base); end.setMonth(end.getMonth() + months);
         Object.assign(s, { billing_status: "ACTIVE", billing_cycle: body.billing_cycle, plan_tier: body.plan_tier ?? s.plan_tier, ends_at: end.toISOString() });
-        o.billing.unshift({ event_type: "PAYMENT", plan_tier: s.plan_tier, amount_sar: Number(body.amount_sar), period_months: months, reference: (body.reference as string) ?? null, note: (body.note as string) ?? null, created_at: now, actor: "فريق عمليات حصيف" });
+        o.billing.unshift({ event_type: "PAYMENT", plan_tier: s.plan_tier, amount_sar: Number(body.amount_sar), period_months: months, reference: (body.reference as string) ?? null, note: (body.note as string) ?? null, created_at: now, actor: actor.name });
         log("ADMIN_RECORD_PAYMENT", o, { amount_sar: body.amount_sar, cycle: body.billing_cycle, reference: body.reference }); return { status: "ACTIVE" };
       }
       if (m[2] === "cancel") {
         s.billing_status = "CANCELED";
-        o.billing.unshift({ event_type: "CANCELED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: String(body.reason), created_at: now, actor: "فريق عمليات حصيف" });
+        o.billing.unshift({ event_type: "CANCELED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: String(body.reason), created_at: now, actor: actor.name });
         log("ADMIN_CANCEL_SUBSCRIPTION", o, { reason: body.reason }); return { status: "CANCELED" };
       }
     }
