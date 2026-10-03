@@ -69,9 +69,13 @@
   .ops-bar nav a { padding: 6px 8px; }
 }
 
-@media (max-width: 860px) {
+/* القائمة لا تتسع لكل الأقسام في سطر واحد: تنزل لسطر ثانٍ كامل العرض بدل أن يختفي أولها */
+@media (max-width: 1360px) {
   .ops-bar { height: auto; flex-wrap: wrap; padding-block: 10px; gap: 10px; }
   .ops-bar nav { order: 3; inline-size: 100%; }
+}
+
+@media (max-width: 860px) {
   .table { display: block; overflow-x: auto; }
 }
 

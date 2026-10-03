@@ -150,6 +150,12 @@ export function auditSummary(action: string, changes: Record<string, unknown> | 
   if (!changes) return "";
   const c = { ...changes };
   const parts: string[] = [];
+  if (typeof c.role_name === "string") { c.role = c.role_name; delete c.role_name; }   // مسمى الدور المخصص بدل رمزه
+  if (Array.isArray(c.permissions)) {
+    parts.push(`${c.permissions.length} صلاحية${Array.isArray(c.before) ? ` (كانت ${c.before.length})` : ""}`);
+    delete c.permissions; delete c.before;
+  }
+  if (c.name && c.code) delete c.code;
   if ("from" in c || "to" in c) {
     const from = c.from ? auditValue(action, "from", c.from) : null;
     const to = c.to ? auditValue(action, "to", c.to) : null;
