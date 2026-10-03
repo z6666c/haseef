@@ -38,13 +38,17 @@ def overview(a: Admin = Depends(require_perm("overview.view"))):
 @router.get("/organizations")
 def organizations(a: Admin = Depends(require_perm("orgs.view", "billing.manage", "finance.view"))):
     conn = a.conn
-    return [dict(r) for r in conn.execute(text("""
+    rows = [dict(r) for r in conn.execute(text("""
         SELECT o.id, o.name, o.cr_number, o.industry_type, o.haseef_score, o.created_at, o.suspended_at,
                s.plan_tier, s.billing_status, s.ends_at,
                (SELECT count(*) FROM memberships m WHERE m.org_id = o.id AND m.is_active) AS members
         FROM organizations o
         LEFT JOIN subscriptions s ON s.org_id = o.id AND s.billing_status IN ('TRIAL','ACTIVE','PAST_DUE')
         ORDER BY o.created_at DESC""")).mappings()]
+    if not a.can("orgs.view"):          # بلا صلاحية بيانات المنشآت: لا مؤشر امتثال
+        for r in rows:
+            r["haseef_score"] = None
+    return rows
 
 
 @router.get("/dispatches")

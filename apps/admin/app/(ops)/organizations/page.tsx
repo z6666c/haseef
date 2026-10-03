@@ -17,6 +17,7 @@ export default function Organizations() {
   if (!rows) return null;
   const shown = rows.filter((r) => !q || r.name.includes(q) || r.cr_number.includes(q));
 
+  const showScore = can("orgs.view");
   return (
     <>
       <div className="head-row">
@@ -31,7 +32,7 @@ export default function Organizations() {
       </div>
       <table className="table table-click">
         <thead>
-          <tr><th>المنشأة</th><th>السجل التجاري</th><th>الباقة</th><th>الاشتراك</th><th className="num">الأعضاء</th><th className="num">المؤشر</th><th>انضمت</th></tr>
+          <tr><th>المنشأة</th><th>السجل التجاري</th><th>الباقة</th><th>الاشتراك</th><th className="num">الأعضاء</th>{showScore && <th className="num">المؤشر</th>}<th>انضمت</th></tr>
         </thead>
         <tbody>
           {shown.map((r) => (
@@ -46,7 +47,7 @@ export default function Organizations() {
               <td>{r.billing_status ? BILLING_STATUS_LABEL[r.billing_status] ?? r.billing_status : "—"}
                 {r.ends_at && <div className="muted small">حتى {formatDate(r.ends_at)}</div>}</td>
               <td className="num">{r.members}</td>
-              <td className="num">{r.haseef_score ?? <span className="muted">غير مُقيَّم</span>}</td>
+              {showScore && <td className="num">{r.haseef_score ?? <span className="muted">غير مُقيَّم</span>}</td>}
               <td>{formatDate(r.created_at)}</td>
             </tr>
           ))}
