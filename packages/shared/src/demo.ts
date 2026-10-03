@@ -124,7 +124,7 @@ type Org = {
 const ts = (n: number) => new Date(riyadhToday().getTime() + n * DAY).toISOString();
 const orgs: Org[] = [
   {
-    id: ORG_A, name: "مؤسسة النخبة للمقاولات", cr: "1010123456", legal: "SOLE_PROPRIETORSHIP", industry: "المقاولات", size: "SMALL",
+    id: ORG_A, name: "مؤسسة النخبة للمقاولات", cr: "1010123456", legal: "LLC", industry: "المقاولات", size: "SMALL",
     score: 66, suspended_at: null, reason: null, created_at: ts(-40),
     sub: { id: uid(), plan_tier: "PROFESSIONAL_GRC", billing_cycle: "MONTHLY", billing_status: "ACTIVE", starts_at: ts(-10), ends_at: ts(20) },
     members: [
@@ -173,19 +173,23 @@ function log(action: string, org: Org | null, changes: Record<string, unknown> |
     changes, ip: "—", actor: "فريق عمليات حصيف", actor_role: "SUPER_ADMIN", org_name: org?.name ?? null, org_id: org?.id ?? null });
 }
 
+// منشأة العرض الرئيسية: مؤشرها وأعدادها تُحسب من بيانات العميل نفسها حتى تتطابق الواجهتان
+const liveScore = (o: Org) => (o.id === ORG_A ? dashboard().score.score : o.score);
+const liveCounts = (o: Org) => (o.id === ORG_A
+  ? { items: items.length, expired: itemViews().filter((i) => i.status === "EXPIRED").length, policies: policies.length } : o.counts);
 const orgRow = (o: Org) => ({
-  id: o.id, name: o.name, cr_number: o.cr, industry_type: o.industry, haseef_score: o.score, created_at: o.created_at,
+  id: o.id, name: o.name, cr_number: o.cr, industry_type: o.industry, haseef_score: liveScore(o), created_at: o.created_at,
   suspended_at: o.suspended_at, plan_tier: o.sub?.plan_tier ?? null, billing_status: o.sub?.billing_status ?? null,
   ends_at: o.sub?.ends_at ?? null, members: o.members.length,
 });
 const orgDetail = (o: Org) => ({
   organization: { id: o.id, name: o.name, cr_number: o.cr, entity_legal_type: o.legal, industry_type: o.industry, commercial_size: o.size,
-    haseef_score: o.score, is_active: true, suspended_at: o.suspended_at, suspension_reason: o.reason, created_at: o.created_at },
+    haseef_score: liveScore(o), is_active: true, suspended_at: o.suspended_at, suspension_reason: o.reason, created_at: o.created_at },
   subscription: o.sub && { ...o.sub, monthly_price_sar: PRICES[o.sub.plan_tier][0], yearly_price_sar: PRICES[o.sub.plan_tier][1] },
   members: o.members.map((m) => ({ membership_id: m.membership_id, role: m.role, membership_active: m.active, receives_alerts: true,
     user_id: m.user_id, full_name: m.full_name, email: m.email, phone_number: m.phone, user_active: m.active,
     last_login_at: m.last, must_change_password: false, is_team_member: false })),
-  billing: o.billing, counts: o.counts,
+  billing: o.billing, counts: liveCounts(o),
 });
 function overview() {
   const live = orgs.filter((o) => o.sub && !o.suspended_at && o.sub.billing_status !== "CANCELED");
@@ -195,7 +199,7 @@ function overview() {
   const count = (f: (o: Org) => string) => Object.entries(live.reduce<Record<string, number>>((a, o) => ({ ...a, [f(o)]: (a[f(o)] ?? 0) + 1 }), {}));
   return {
     kpis: { active_orgs: live.length, trials: live.filter((o) => o.sub!.billing_status === "TRIAL").length, mrr_sar: mrr,
-      avg_score: scored.length ? Math.round(scored.reduce((s, o) => s + o.score!, 0) / scored.length) : null },
+      avg_score: scored.length ? Math.round(scored.reduce((s, o) => s + liveScore(o)!, 0) / scored.length) : null },
     by_plan: count((o) => o.sub!.plan_tier).map(([plan_tier, n]) => ({ plan_tier, n })),
     by_industry: count((o) => o.industry).map(([industry, n]) => ({ industry, n })),
   };
