@@ -6,6 +6,7 @@ import {
   ALERT_CHANNEL_LABEL, DISPATCH_STATUS_LABEL, ORG_ROLE_LABEL, countDays, formatDate,
   type AlertRuleView, type AlertsOverview,
 } from "@haseef/shared";
+import { AlertPreview } from "@/components/AlertPreview";
 import { api } from "@/lib/session";
 
 type Target = "COMPLIANCE_ITEM" | "POLICY";
@@ -34,6 +35,8 @@ export default function AlertsPage() {
   const [ov, setOv] = useState<AlertsOverview | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [orgName, setOrgName] = useState("منشأتك");
+  useEffect(() => { api.dashboard().then((d) => setOrgName(d.org_name)).catch(() => {}); }, []);
 
   const load = useCallback(() => { api.alertsOverview().then(setOv).catch((e: Error) => setError(e.message)); }, []);
   useEffect(load, [load]);
@@ -92,6 +95,8 @@ export default function AlertsPage() {
           <p className="small muted">بتوقيت الرياض، مرة يومياً لكل موعد مستحق.</p>
         </div>
       </section>
+
+      <AlertPreview ov={ov} orgName={orgName} />
 
       <section className="gov-section">
         <div className="section-head">
