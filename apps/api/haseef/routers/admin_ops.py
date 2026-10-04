@@ -22,6 +22,7 @@ from ..deps import Admin, require_perm
 from ..permissions import ALL as PERM_ALL, FINANCE_AUDIT_ACTIONS, LABEL as PERM_LABEL, SUPER, catalog
 from ..security import hash_password
 from ..services import governance_service as gs
+from ..services import invoicing
 from ..services.score_service import recompute
 
 router = APIRouter(prefix="/admin", tags=["admin-actions"])
@@ -55,12 +56,12 @@ def _live_sub(c: Connection, org_id: UUID) -> dict | None:
     return dict(row) if row else None
 
 
-def _billing_event(a: Admin, org_id, sub_id, event: str, **kw) -> None:
-    a.conn.execute(text("""
+def _billing_event(a: Admin, org_id, sub_id, event: str, **kw) -> int:
+    return a.conn.execute(text("""
         INSERT INTO billing_events (org_id, subscription_id, event_type, plan_tier, amount_sar, period_months, reference, note, actor_user_id)
-        VALUES (:o, :s, :e, :tier, :amt, :months, :ref, :note, :u)"""),
+        VALUES (:o, :s, :e, :tier, :amt, :months, :ref, :note, :u) RETURNING id"""),
         {"o": org_id, "s": sub_id, "e": event, "tier": kw.get("tier"), "amt": kw.get("amount"),
-         "months": kw.get("months"), "ref": kw.get("reference"), "note": kw.get("note"), "u": a.user_id})
+         "months": kw.get("months"), "ref": kw.get("reference"), "note": kw.get("note"), "u": a.user_id}).scalar_one()
 
 
 def _find_or_create_user(c: Connection, email: str, full_name: str, phone: str | None,
@@ -297,12 +298,13 @@ def record_payment(org_id: UUID, body: PaymentIn, a: Admin = Depends(require_per
                 ends_at = CASE WHEN billing_status = 'TRIAL' THEN now() ELSE GREATEST(ends_at, now()) END
                           + make_interval(months => :m)
             WHERE id = :s"""), {"c": body.billing_cycle, "t": tier, "m": months, "s": sub_id})
-    _billing_event(a, org_id, sub_id, "PAYMENT", tier=tier, amount=body.amount_sar, months=months,
-                   reference=body.reference, note=body.note)
+    ev = _billing_event(a, org_id, sub_id, "PAYMENT", tier=tier, amount=body.amount_sar, months=months,
+                        reference=body.reference, note=body.note)
+    inv = invoicing.invoice_subscription_payment(a.conn, billing_event_id=ev, user_id=a.user_id)
     a.audit("ADMIN_RECORD_PAYMENT", "subscription", sub_id, org_id,
             {"amount_sar": body.amount_sar, "cycle": body.billing_cycle, "reference": body.reference})
     recompute(a.conn, org_id)
-    return {"subscription_id": sub_id, "status": "ACTIVE"}
+    return {"subscription_id": sub_id, "status": "ACTIVE", "invoice": {"id": inv["id"], "number": inv["number"]}}
 
 
 @router.post("/organizations/{org_id}/subscription/cancel")

@@ -7,3 +7,5 @@ export * from "./dpia.ts";
 export * from "./platformLegal.ts";
 export * from "./whatsappTemplates.ts";
 export * from "./contractCheck.ts";
+export * from "./finance.ts";
+export * from "./qr.ts";

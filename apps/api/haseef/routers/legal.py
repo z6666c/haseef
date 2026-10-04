@@ -20,6 +20,7 @@ from sqlalchemy import text
 
 from ..deps import WRITERS, Admin, Tenant, get_tenant, require_perm
 from ..domain.legal_pricing import ALLOWED_MINUTES, PLAN_DISCOUNT_PCT, URGENT_PCT, VAT_PCT, quote
+from ..services import invoicing
 from .compliance import _audit
 
 router = APIRouter(tags=["legal"])
@@ -197,7 +198,18 @@ def payment(cid: UUID, body: PaymentIn, a: Admin = Depends(require_perm("legal.b
     if not n:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "الطلب غير موجود")
     a.audit("ADMIN_LEGAL_PAYMENT", "legal_consultation", cid, None, body.model_dump())
-    return {"payment_status": body.payment_status}
+    # الفاتورة عند الدفع، والإشعار الدائن عند الاسترداد
+    invoice = None
+    if body.payment_status == "PAID":
+        invoice = invoicing.invoice_consultation(a.conn, consultation_id=cid, user_id=a.user_id, reference=body.payment_reference)
+    else:
+        inv_id = a.conn.execute(text("""SELECT id FROM invoices WHERE consultation_id = :c AND kind = 'INVOICE' AND status = 'ISSUED'"""),
+                                {"c": cid}).scalar_one_or_none()
+        if inv_id:
+            invoice = invoicing.credit_note(a.conn, invoice_id=inv_id, reason=f"استرداد الاستشارة ({body.payment_reference})",
+                                            user_id=a.user_id)
+    return {"payment_status": body.payment_status,
+            "invoice": {"id": invoice["id"], "number": invoice["number"]} if invoice else None}
 
 
 @router.get("/admin/legal/rates")
