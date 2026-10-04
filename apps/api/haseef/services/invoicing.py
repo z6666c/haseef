@@ -67,13 +67,13 @@ def _insert(conn: Connection, *, kind: str, source: str, org_id, buyer: dict, li
     return dict(row)
 
 
-def invoice_subscription_payment(conn: Connection, *, billing_event_id: int, user_id) -> dict:
+def invoice_subscription_payment(conn: Connection, *, billing_event_id: int, user_id, description: str | None = None) -> dict:
     ev = conn.execute(text("""SELECT org_id, plan_tier, amount_sar, period_months, reference FROM billing_events WHERE id = :e"""),
                       {"e": billing_event_id}).mappings().one()
     months = ev["period_months"]
     desc = f"اشتراك {PLAN_NAME.get(ev['plan_tier'], ev['plan_tier'])} — {'سنة' if months == 12 else f'{months} شهر' if months > 2 else 'شهر'}"
     return _insert(conn, kind="INVOICE", source="SUBSCRIPTION", org_id=ev["org_id"], buyer=_buyer(conn, ev["org_id"]),
-                   lines=[line(desc, 1, ev["amount_sar"])], user_id=user_id, billing_event_id=billing_event_id,
+                   lines=[line(description or desc, 1, ev["amount_sar"])], user_id=user_id, billing_event_id=billing_event_id,
                    payment_reference=ev["reference"])
 
 

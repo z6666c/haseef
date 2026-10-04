@@ -60,6 +60,7 @@ export function createApi(
       req<void>("/auth/change-password", { method: "POST", org: false, body: JSON.stringify({ current_password, new_password }) }),
     me: () => req<Me>("/auth/me", { org: false }),
 
+    billingOverview: () => req<BillingOverview>("/billing/overview"),
     dashboard: () => req<Dashboard>("/dashboard"),
     listItems: () => req<ComplianceItem[]>("/compliance-items"),
     createItem: (body: ComplianceItemInput) =>
@@ -223,6 +224,17 @@ export function createApi(
         req<{ updated: boolean }>(`/admin/finance/expenses/${id}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
       deleteExpense: (id: string) => req<{ deleted: boolean }>(`/admin/finance/expenses/${id}`, { method: "DELETE", org: false }),
       vatReturn: (period: string) => req<VatReturn>(`/admin/finance/vat?period=${encodeURIComponent(period)}`, { org: false }),
+      plans: (status?: string, orgId?: string) => {
+        const p = new URLSearchParams(); if (status) p.set("status", status); if (orgId) p.set("org_id", orgId);
+        const qs = p.toString();
+        return req<PaymentPlan[]>(`/admin/finance/plans${qs ? `?${qs}` : ""}`, { org: false });
+      },
+      plan: (id: string) => req<PaymentPlanDetail>(`/admin/finance/plans/${id}`, { org: false }),
+      createPlan: (b: PaymentPlanInput) => post<{ id: string; invoice: { id: string; number: string } | null }>("/admin/finance/plans", b),
+      payInstallment: (planId: string, instId: string, reference: string | null) =>
+        post<{ invoice: { id: string; number: string } }>(`/admin/finance/plans/${planId}/installments/${instId}/pay`, { reference }),
+      remindInstallment: (planId: string, instId: string) => post<{ sent: number }>(`/admin/finance/plans/${planId}/installments/${instId}/remind`, {}),
+      cancelPlan: (id: string, reason: string) => post<{ status: string }>(`/admin/finance/plans/${id}/cancel`, { reason }),
       finProfile: () => req<HaseefProfile>("/admin/finance/profile", { org: false }),
       saveFinProfile: (b: HaseefProfile) =>
         req<{ updated: boolean }>("/admin/finance/profile", { method: "PUT", org: false, body: JSON.stringify(b) }),
@@ -284,6 +296,29 @@ export interface FinanceSummary {
   mrr: number;
   renewals_due: { org_id: string; name: string; plan_tier: string; billing_cycle: string; ends_at: string; expected: number }[];
   renewals_expected: number;
+  installments_due: { id: string; plan_id: string; seq: number; installments: number; due_date: string; amount_net: number;
+    org_id: string; name: string; overdue: boolean }[];
+  installments_overdue_total: number;
+}
+export interface PaymentPlan {
+  id: string; org_id: string; org_name: string; plan_tier: string; total_net: number; installments: number; starts_on: string; ends_on: string;
+  status: "ACTIVE" | "COMPLETED" | "CANCELED"; note: string | null; created_at: string; paid_net: number; remaining_net: number;
+  paid_count: number; next_due: string | null; overdue_count: number;
+}
+export interface Installment {
+  id: string; seq: number; due_date: string; amount_net: number; paid_at: string | null; payment_reference: string | null;
+  invoice_id?: string | null; invoice_number: string | null; last_reminder_at: string | null; reminders: number;
+}
+export interface PaymentPlanDetail extends PaymentPlan { items: Installment[] }
+export interface PaymentPlanInput {
+  org_id: string; plan_tier: string; installments: number; starts_on: string; total_net?: number | null; note?: string | null;
+  pay_first?: boolean; first_reference?: string | null;
+}
+export interface BillingOverview {
+  subscription: { plan_tier: string; billing_cycle: string; billing_status: string; starts_at: string; ends_at: string;
+    monthly_price_sar: number; yearly_price_sar: number } | null;
+  plan: PaymentPlanDetail | null; vat_rate: number;
+  invoices: { id: string; number: string; kind: string; source: string; subtotal: number; vat_amount: number; total: number; issued_at: string; status: string }[];
 }
 export interface VatReturn {
   period: string; from: string; to: string; file_by: string;

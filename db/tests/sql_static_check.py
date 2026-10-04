@@ -12,6 +12,8 @@ import subprocess
 import sys
 
 FRAGMENTS = {
+    "PLAN_COLS": 'p.id, p.org_id, o.name AS org_name, p.plan_tier, p.total_net, p.installments, p.starts_on, p.ends_on, p.status, p.note, p.created_at, COALESCE(sum(i.amount_net) FILTER (WHERE i.paid_at IS NOT NULL), 0) AS paid_net, COALESCE(sum(i.amount_net) FILTER (WHERE i.paid_at IS NULL), 0) AS remaining_net, count(*) FILTER (WHERE i.paid_at IS NOT NULL) AS paid_count, min(i.due_date) FILTER (WHERE i.paid_at IS NULL) AS next_due, count(*) FILTER (WHERE i.paid_at IS NULL AND i.due_date < :today) AS overdue_count',
+    "_DUE": "SELECT i.id, i.seq, i.due_date, i.amount_net, p.org_id, p.installments, o.name AS org_name FROM plan_installments i JOIN payment_plans p ON p.id = i.plan_id JOIN organizations o ON o.id = p.org_id WHERE i.paid_at IS NULL AND p.status = 'ACTIVE' AND o.is_active AND o.suspended_at IS NULL",
     "_DPIA_COLS": "d.id, d.project_name, r.activity_name AS related_activity, ua.full_name, uc.full_name",
     "_DPIA_FROM": "FROM dpia_assessments d LEFT JOIN pdpl_data_records r ON r.id = d.related_record_id "
                   "LEFT JOIN users ua ON ua.id = d.approved_by LEFT JOIN users uc ON uc.id = d.created_by",

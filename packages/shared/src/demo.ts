@@ -127,13 +127,13 @@ const orgs: Org[] = [
   {
     id: ORG_A, name: "مؤسسة النخبة للمقاولات", cr: "1010123456", legal: "LLC", industry: "المقاولات", size: "SMALL",
     score: 66, suspended_at: null, reason: null, created_at: ts(-40),
-    sub: { id: uid(), plan_tier: "PROFESSIONAL_GRC", billing_cycle: "MONTHLY", billing_status: "ACTIVE", starts_at: ts(-10), ends_at: ts(20) },
+    sub: { id: uid(), plan_tier: "PROFESSIONAL_GRC", billing_cycle: "YEARLY", billing_status: "ACTIVE", starts_at: ts(-10), ends_at: ts(355) },
     members: [
       { membership_id: uid(), role: "ORG_ADMIN", user_id: CLIENT_ME.id, full_name: "أحمد العتيبي", email: "demo@haseef.sa", phone: "+966500000001", active: true, last: ago(30) },
       { membership_id: uid(), role: "EXTERNAL_ADVISOR", user_id: uid(), full_name: "مكتب المستشار القانوني", email: "advisor@example.sa", phone: null, active: true, last: ago(60 * 26) },
     ],
     billing: [
-      { event_type: "PAYMENT", plan_tier: "PROFESSIONAL_GRC", amount_sar: 499, period_months: 1, reference: "INV-2026-0007", note: null, created_at: ts(-10), actor: "فريق عمليات حصيف" },
+      { event_type: "PAYMENT", plan_tier: "PROFESSIONAL_GRC", amount_sar: 1247.5, period_months: 3, reference: "INV-2026-0007", note: "القسط 1 من 4", created_at: ts(-10), actor: "فريق عمليات حصيف" },
       { event_type: "TRIAL_STARTED", plan_tier: "PROFESSIONAL_GRC", amount_sar: null, period_months: null, reference: null, note: "14 يوماً", created_at: ts(-40), actor: "فريق عمليات حصيف" },
     ],
     counts: { items: 6, expired: 0, policies: 3 },
@@ -167,7 +167,7 @@ let auditSeq = 50;
 let actor = { name: "فريق عمليات حصيف", role: "SUPER_ADMIN" };   // عضو الفريق الحالي في نسخة العرض
 const audit: { id: number; created_at: string; action: string; entity_type: string; entity_id: string | null; changes: Record<string, unknown> | null; ip: string | null; actor: string | null; actor_role: string | null; org_name: string | null; org_id: string | null }[] = [
   { id: 3, created_at: ts(-3), action: "ADMIN_CREATE_ORG", entity_type: "organization", entity_id: ORG_C, changes: { name: "شركة الأفق للتجارة", cr_number: "4030111222", plan: "PROFESSIONAL_GRC" }, ip: "10.0.0.4", actor: "الدعم الفني", actor_role: "SUPPORT", org_name: "شركة الأفق للتجارة", org_id: ORG_C },
-  { id: 2, created_at: ts(-10), action: "ADMIN_RECORD_PAYMENT", entity_type: "subscription", entity_id: null, changes: { amount_sar: 499, cycle: "MONTHLY", reference: "INV-2026-0007" }, ip: "10.0.0.4", actor: "فريق عمليات حصيف", actor_role: "SUPER_ADMIN", org_name: "مؤسسة النخبة للمقاولات", org_id: ORG_A },
+  { id: 2, created_at: ts(-10), action: "ADMIN_RECORD_PAYMENT", entity_type: "subscription", entity_id: null, changes: { amount_sar: 1247.5, cycle: "YEARLY", reference: "INV-2026-0007" }, ip: "10.0.0.4", actor: "فريق عمليات حصيف", actor_role: "SUPER_ADMIN", org_name: "مؤسسة النخبة للمقاولات", org_id: ORG_A },
   { id: 1, created_at: ts(-60), action: "ADMIN_RECORD_PAYMENT", entity_type: "subscription", entity_id: null, changes: { amount_sar: 1990, cycle: "YEARLY", reference: "INV-2026-0003" }, ip: "10.0.0.7", actor: "المحاسبة", actor_role: "BILLING", org_name: "شركة واحة التقنية", org_id: ORG_B },
 ];
 function log(action: string, org: Org | null, changes: Record<string, unknown> | null) {
@@ -448,6 +448,8 @@ const PERM_RULES: [RegExp, RegExp, string[]][] = [
   [/GET/, /^\/admin\/(team|roles)$/, ["team.view", "team.manage"]],
   [/./, /^\/admin\/(team|roles)/, ["team.manage"]],
   [/GET/, /^\/admin\/audit/, ["audit.view"]],
+  [/GET/, /^\/admin\/finance\/plans/, ["finance.view", "billing.manage"]],
+  [/./, /^\/admin\/finance\/plans/, ["billing.manage"]],
   [/GET/, /^\/admin\/finance\/invoices/, ["finance.view", "billing.manage"]],
   [/GET/, /^\/admin\/finance\/profile/, ["finance.view", "expenses.manage", "billing.manage"]],
   [/GET/, /^\/admin\/finance\/expenses/, ["finance.view", "expenses.manage"]],
@@ -567,9 +569,9 @@ function issueInvoice(x: { kind?: "INVOICE" | "CREDIT_NOTE"; source: DemoInvoice
   invoicesDemo.unshift(inv);
   return inv;
 }
-function subscriptionInvoice(o: Org, plan: string, amount: number, months: number, ref: string | null, at?: string) {
-  return issueInvoice({ source: "SUBSCRIPTION", org: o, ref, at,
-    lines: [invoiceLine(`اشتراك ${PLAN_AR[plan] ?? plan} — ${months === 12 ? "سنة" : "شهر"}`, 1, amount)] });
+function subscriptionInvoice(o: Org, plan: string, amount: number, months: number, ref: string | null, at?: string, note?: string | null) {
+  const desc = note?.startsWith("القسط") ? `اشتراك سنوي ${PLAN_AR[plan] ?? plan} — ${note}` : `اشتراك ${PLAN_AR[plan] ?? plan} — ${months === 12 ? "سنة" : "شهر"}`;
+  return issueInvoice({ source: "SUBSCRIPTION", org: o, ref, at, lines: [invoiceLine(desc, 1, amount)] });
 }
 function consultationInvoice(c: { id: string; topic: string; duration_minutes: number; urgent: boolean; price: { subtotal: number } }, ref: string, at?: string) {
   if (invoicesDemo.some((i) => i.consultation_id === c.id && i.kind === "INVOICE")) return null;
@@ -587,10 +589,10 @@ function voidInvoice(inv: DemoInvoice, reason: string) {
 
 // فواتير الدفعات المسجلة في بيانات العرض (بالترتيب الزمني حتى تتسلسل الأرقام)
 (() => {
-  const past: { o: Org; plan: string; amount: number; months: number; ref: string | null; at: string }[] = [];
+  const past: { o: Org; plan: string; amount: number; months: number; ref: string | null; at: string; note: string | null }[] = [];
   for (const o of orgs) for (const b of o.billing) if (b.event_type === "PAYMENT" && b.amount_sar)
-    past.push({ o, plan: b.plan_tier ?? "ESSENTIAL", amount: b.amount_sar, months: b.period_months ?? 1, ref: b.reference, at: b.created_at });
-  past.sort((a, b) => a.at.localeCompare(b.at)).forEach((p) => subscriptionInvoice(p.o, p.plan, p.amount, p.months, p.ref, p.at));
+    past.push({ o, plan: b.plan_tier ?? "ESSENTIAL", amount: b.amount_sar, months: b.period_months ?? 1, ref: b.reference, at: b.created_at, note: b.note });
+  past.sort((a, b) => a.at.localeCompare(b.at)).forEach((p) => subscriptionInvoice(p.o, p.plan, p.amount, p.months, p.ref, p.at, p.note));
   for (const c of consults) if (c.payment_status === "PAID") consultationInvoice(c, c.payment_reference ?? "—", c.created_at);
 })();
 
@@ -641,7 +643,8 @@ function finSummary(period: string) {
   return { period, from, to, revenue: { total: revenue, by_source: bySource }, expenses: { total: expenses, by_category: byCat },
     net_profit: round2(revenue - expenses), margin: revenue ? (revenue - expenses) / revenue : null,
     vat: { output: out, input: inp, payable: round2(out - inp) }, monthly: [...months.values()].sort((a, b) => a.month.localeCompare(b.month)),
-    mrr: overview().kpis.mrr_sar ?? 0, renewals_due: due, renewals_expected: due.reduce((a, d) => a + d.expected, 0) };
+    mrr: overview().kpis.mrr_sar ?? 0, renewals_due: due, renewals_expected: due.reduce((a, d) => a + d.expected, 0),
+    installments_due: installmentsDue(), installments_overdue_total: round2(installmentsDue().filter((i) => i.overdue).reduce((a, i) => a + i.amount_net, 0)) };
 }
 const invoiceRow = (i: DemoInvoice) => ({ id: i.id, number: i.number, kind: i.kind, source: i.source, org_id: i.org_id, buyer_name: i.buyer_name,
   subtotal: i.subtotal, vat_amount: i.vat_amount, total: i.total, issued_at: i.issued_at, status: i.status, payment_reference: i.payment_reference,
@@ -709,6 +712,114 @@ function financeRoute(method: string, p: string, q: URLSearchParams, body: Recor
     Object.assign(finProfile, body); log("ADMIN_FINANCE_PROFILE", null, { vat_registered: !!body.vat_registered }); return { updated: true };
   }
   throw new DemoError(404, "غير موجود");
+}
+
+
+// ---------- الاشتراك السنوي بالأقساط (نسخة العرض) — مطابق لـ installments_service.py ----------
+type DemoInst = { id: string; seq: number; due_date: string; amount_net: number; paid_at: string | null; payment_reference: string | null;
+  invoice_id: string | null; reminders: { stage: string; channel: string; at: string }[] };
+type DemoPlan = { id: string; org_id: string; plan_tier: string; total_net: number; installments: number; starts_on: string; ends_on: string;
+  status: "ACTIVE" | "COMPLETED" | "CANCELED"; note: string | null; created_at: string; items: DemoInst[] };
+const plansDemo: DemoPlan[] = [];
+const riyadhDate = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+function addMonthsIso(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), Math.min(d, last))).toISOString().slice(0, 10);
+}
+function buildPlan(org: Org, tier: string, n: number, starts: string, total: number, note: string | null): DemoPlan {
+  if (![1, 2, 3, 4, 6, 12].includes(n)) throw new DemoError(422, "عدد الأقساط: 1 أو 2 أو 3 أو 4 أو 6 أو 12");
+  const each = round2(total / n), step = 12 / n;
+  const items = Array.from({ length: n }, (_, i) => ({ id: uid(), seq: i + 1, due_date: addMonthsIso(starts, i * step),
+    amount_net: i === n - 1 ? round2(total - each * (n - 1)) : each, paid_at: null, payment_reference: null, invoice_id: null, reminders: [] as DemoInst["reminders"] }));
+  return { id: uid(), org_id: org.id, plan_tier: tier, total_net: round2(total), installments: n, starts_on: starts, ends_on: addMonthsIso(starts, 12),
+    status: "ACTIVE", note, created_at: new Date().toISOString(), items };
+}
+function planHead(p: DemoPlan) {
+  const t = riyadhDate(), unpaid = p.items.filter((i) => !i.paid_at);
+  return { id: p.id, org_id: p.org_id, org_name: orgs.find((o) => o.id === p.org_id)?.name ?? "—", plan_tier: p.plan_tier, total_net: p.total_net,
+    installments: p.installments, starts_on: p.starts_on, ends_on: p.ends_on, status: p.status, note: p.note, created_at: p.created_at,
+    paid_net: round2(p.items.filter((i) => i.paid_at).reduce((a, i) => a + i.amount_net, 0)), remaining_net: round2(unpaid.reduce((a, i) => a + i.amount_net, 0)),
+    paid_count: p.items.length - unpaid.length, next_due: unpaid[0]?.due_date ?? null, overdue_count: unpaid.filter((i) => i.due_date < t).length };
+}
+function planDetail(p: DemoPlan) {
+  return { ...planHead(p), items: p.items.map((i) => ({ id: i.id, seq: i.seq, due_date: i.due_date, amount_net: i.amount_net, paid_at: i.paid_at,
+    payment_reference: i.payment_reference, invoice_id: i.invoice_id, invoice_number: invoicesDemo.find((v) => v.id === i.invoice_id)?.number ?? null,
+    last_reminder_at: i.reminders.at(-1)?.at ?? null, reminders: i.reminders.length })) };
+}
+function payInst(p: DemoPlan, i: DemoInst, ref: string | null, who: string, at?: string) {
+  if (i.paid_at) throw new DemoError(409, "القسط مدفوع أصلاً");
+  if (p.status !== "ACTIVE") throw new DemoError(409, "خطة الدفع غير فعّالة");
+  const o = orgs.find((x) => x.id === p.org_id)!;
+  const note = `القسط ${i.seq} من ${p.installments}`;
+  const inv = subscriptionInvoice(o, p.plan_tier, i.amount_net, 12 / p.installments, ref, at, note);
+  if (!at) o.billing.unshift({ event_type: "PAYMENT", plan_tier: p.plan_tier, amount_sar: i.amount_net, period_months: 12 / p.installments,
+    reference: ref, note, created_at: new Date().toISOString(), actor: who });
+  Object.assign(i, { paid_at: at ?? new Date().toISOString(), payment_reference: ref, invoice_id: inv.id });
+  if (p.items.every((x) => x.paid_at)) p.status = "COMPLETED";
+  return inv;
+}
+// خطة منشأة العرض: سنوي بأربعة أقساط، القسط الأول مدفوع (فاتورته صدرت من سجل الدفعات أعلاه)
+(() => {
+  const o = orgs.find((x) => x.id === ORG_A)!;
+  const p = buildPlan(o, "PROFESSIONAL_GRC", 4, ts(-10).slice(0, 10), 4990, "اتفاق تقسيط ربعي");
+  p.created_at = ts(-10);
+  const first = invoicesDemo.find((v) => v.org_id === ORG_A && v.source === "SUBSCRIPTION");
+  Object.assign(p.items[0], { paid_at: ts(-10), payment_reference: "INV-2026-0007", invoice_id: first?.id ?? null });
+  plansDemo.push(p);
+})();
+
+function plansRoute(method: string, p: string, q: URLSearchParams, body: Record<string, unknown>, who: string): unknown {
+  let m: RegExpMatchArray | null;
+  if (p === "/admin/finance/plans" && method === "GET") {
+    const st = q.get("status"), org = q.get("org_id");
+    return plansDemo.filter((x) => (!st || x.status === st) && (!org || x.org_id === org)).map(planHead)
+      .sort((a, b) => Number(b.status === "ACTIVE") - Number(a.status === "ACTIVE") || (a.next_due ?? "9").localeCompare(b.next_due ?? "9"));
+  }
+  if (p === "/admin/finance/plans" && method === "POST") {
+    const o = orgs.find((x) => x.id === body.org_id); if (!o) throw new DemoError(404, "المنشأة غير موجودة");
+    if (plansDemo.some((x) => x.org_id === o.id && x.status === "ACTIVE")) throw new DemoError(409, "لدى المنشأة خطة دفع فعّالة؛ ألغها أو أكملها أولاً");
+    const tier = String(body.plan_tier), total = body.total_net ? Number(body.total_net) : PRICES[tier][1];
+    const plan = buildPlan(o, tier, Number(body.installments), String(body.starts_on), total, (body.note as string) || null);
+    plansDemo.unshift(plan);
+    o.sub = { id: o.sub?.id ?? uid(), plan_tier: tier, billing_cycle: "YEARLY", billing_status: "ACTIVE", starts_at: `${plan.starts_on}T00:00:00Z`, ends_at: `${plan.ends_on}T00:00:00Z` };
+    log("ADMIN_PLAN_CREATE", o, { plan: tier, installments: plan.installments, amount_sar: total });
+    const inv = body.pay_first ? payInst(plan, plan.items[0], (body.first_reference as string) || null, who) : null;
+    return { id: plan.id, invoice: inv ? { id: inv.id, number: inv.number } : null };
+  }
+  if ((m = p.match(/^\/admin\/finance\/plans\/([^/]+)$/))) {
+    const plan = plansDemo.find((x) => x.id === m![1]); if (!plan) throw new DemoError(404, "خطة الدفع غير موجودة");
+    return planDetail(plan);
+  }
+  if ((m = p.match(/^\/admin\/finance\/plans\/([^/]+)\/cancel$/))) {
+    const plan = plansDemo.find((x) => x.id === m![1]); if (!plan || plan.status !== "ACTIVE") throw new DemoError(409, "الخطة غير فعّالة");
+    plan.status = "CANCELED"; log("ADMIN_PLAN_CANCEL", null, { reason: body.reason }); return { status: "CANCELED" };
+  }
+  if ((m = p.match(/^\/admin\/finance\/plans\/([^/]+)\/installments\/([^/]+)\/(pay|remind)$/))) {
+    const plan = plansDemo.find((x) => x.id === m![1]); const inst = plan?.items.find((i) => i.id === m![2]);
+    if (!plan || !inst) throw new DemoError(404, "القسط غير موجود");
+    if (m[3] === "pay") {
+      const inv = payInst(plan, inst, (body.reference as string) || null, who);
+      log("ADMIN_INSTALLMENT_PAID", orgs.find((o) => o.id === plan.org_id) ?? null, { amount_sar: inv.total, reference: body.reference, invoice: inv.number });
+      return { invoice: { id: inv.id, number: inv.number } };
+    }
+    if (inst.paid_at) throw new DemoError(409, "القسط غير موجود أو مدفوع");
+    const o = orgs.find((x) => x.id === plan.org_id)!;
+    const recs = o.members.filter((x) => x.role === "ORG_ADMIN" && x.active);
+    let n = 0;
+    for (const r of recs) for (const [ch, to] of [["EMAIL", r.email], ["WHATSAPP", r.phone]] as const) if (to) { inst.reminders.push({ stage: "MANUAL", channel: ch, at: new Date().toISOString() }); n++; }
+    log("ADMIN_INSTALLMENT_REMIND", o, { sent: n });
+    return { sent: n };
+  }
+  throw new DemoError(404, "غير موجود");
+}
+function installmentsDue() {
+  const t = riyadhDate(), lim = addMonthsIso(t, 1);
+  return plansDemo.filter((x) => x.status === "ACTIVE").flatMap((x) => x.items.filter((i) => !i.paid_at && i.due_date < lim).map((i) => ({
+    id: i.id, plan_id: x.id, seq: i.seq, installments: x.installments, due_date: i.due_date, amount_net: i.amount_net, org_id: x.org_id,
+    name: orgs.find((o) => o.id === x.org_id)?.name ?? "—", overdue: i.due_date < t })))
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
 }
 
 // ---------- الموجّه ----------
@@ -1039,6 +1150,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
         return { deleted: true };
       }
     }
+    if (p.startsWith("/admin/finance/plans")) return plansRoute(method, p, q, body, TEAM_ME[role]?.full_name ?? role);
     if (p.startsWith("/admin/finance/")) return financeRoute(method, p, q, body, TEAM_ME[role]?.full_name ?? role);
     if (p === "/admin/catalog/standards") return standards;
     if (p === "/admin/catalog/obligations") return obligationCatalog.map((o) => ({ ...o, orgs: oblState.has(o.code) ? 1 : 0 }));
@@ -1372,6 +1484,15 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     return { ...policyView(x), body_md: x.body_md, source_library_id: x.source };
   }
 
+  if (p === "/billing/overview") {
+    const o = orgs.find((x) => x.id === ORG_A)!;
+    const plan = plansDemo.find((x) => x.org_id === ORG_A && x.status === "ACTIVE") ?? plansDemo.find((x) => x.org_id === ORG_A);
+    const sub = o.sub ? { plan_tier: o.sub.plan_tier, billing_cycle: o.sub.billing_cycle, billing_status: o.sub.billing_status, starts_at: o.sub.starts_at,
+      ends_at: o.sub.ends_at, monthly_price_sar: PRICES[o.sub.plan_tier][0], yearly_price_sar: PRICES[o.sub.plan_tier][1] } : null;
+    return { subscription: sub, plan: plan ? planDetail(plan) : null, vat_rate: finProfile.vat_registered ? VAT_RATE : 0,
+      invoices: invoicesDemo.filter((i) => i.org_id === ORG_A).map((i) => ({ id: i.id, number: i.number, kind: i.kind, source: i.source,
+        subtotal: i.subtotal, vat_amount: i.vat_amount, total: i.total, issued_at: i.issued_at, status: i.status })) };
+  }
   if (p === "/dashboard") return dashboard();
   if (p === "/compliance-items" && method === "GET") return itemViews();
   if (p === "/compliance-items" && method === "POST") {

@@ -224,3 +224,10 @@
   .invoice { border: 0; padding: 0; max-inline-size: none; }
   body { background: #fff; }
 }
+.kpis .kpi-sub { display: block; margin: 4px 0 0; }
+.fin-section .table bdi[dir="ltr"] { white-space: nowrap; }
+.plan-progress { display: block; inline-size: 120px; block-size: 6px; border-radius: 4px; background: var(--paper); border: 1px solid var(--line); overflow: hidden; }
+.plan-progress span { display: block; block-size: 100%; background: var(--emerald); }
+.plan-detail { border: 1px solid var(--line); border-radius: var(--r-md); padding: 16px; background: var(--surface); display: grid; gap: 12px; }
+.row-open td { background: var(--emerald-wash); }
+.txt-bad { color: var(--crimson); }
