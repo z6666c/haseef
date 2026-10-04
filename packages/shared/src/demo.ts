@@ -7,6 +7,7 @@ import CONTENT from "./demo-content.json" with { type: "json" };
 import { runCheck, type CkStandard } from "./governanceCheck.ts";
 import { dpiaAssess, dpiaSuggest } from "./dpia.ts";
 import type { DpiaMitigation, DpiaQuestion } from "./api.ts";
+import { EXPENSE_CATEGORY, VAT_RATE, invoiceLine, invoiceNumber, periodRange, round2, zatcaTlv, type InvoiceLine } from "./finance.ts";
 
 
 /** بيانات الدخول لنسخة العرض فقط. ليست حسابات حقيقية ولا تفتح أي نظام فعلي. */
@@ -379,6 +380,7 @@ const ADMIN_PERMISSIONS: { code: string; name: string; group: string; descriptio
   { code: "overview.view", name: "النظرة العامة", group: "عام", description: "لوحة الأرقام الرئيسية وتوزيع الباقات والقطاعات" },
   { code: "finance.view", name: "رؤية الأرقام المالية", group: "المالية", description: "الإيراد الشهري، مبالغ الدفعات ومراجعها، تكلفة الذكاء الاصطناعي" },
   { code: "billing.manage", name: "إدارة الاشتراكات والدفعات", group: "المالية", description: "تسجيل الدفعات، تغيير الباقة، تمديد التجربة، إلغاء الاشتراك" },
+  { code: "expenses.manage", name: "المصروفات وبيانات الفوترة", group: "المالية", description: "تسجيل المصروفات، إلغاء الفواتير بإشعار دائن، وبيانات حصيف الضريبية" },
   { code: "orgs.view", name: "عرض بيانات المنشآت", group: "المنشآت", description: "تفاصيل المنشأة وأعضاؤها ومؤشرها وحوكمتها" },
   { code: "orgs.manage", name: "إدارة المنشآت ومستخدميها", group: "المنشآت", description: "إنشاء المنشآت وتعديلها، دعوة المستخدمين، إعادة كلمات المرور والتعطيل" },
   { code: "orgs.suspend", name: "تعليق المنشآت", group: "المنشآت", description: "تعليق حساب منشأة وإعادة تفعيله" },
@@ -403,7 +405,7 @@ const adminRoles: DemoRole[] = [
     permissions: ["overview.view", "orgs.view", "orgs.manage", "trials.manage", "alerts.view", "legal.cases", "content.manage", "usage.view", "team.view", "audit.view"],
     is_system: true, created_at: ts(-200), updated_at: ts(-200) },
   { code: "BILLING", name: "المحاسبة", description: "الاشتراكات والدفعات والباقات وتسعير الاستشارات، دون بيانات العملاء التشغيلية",
-    permissions: ["overview.view", "finance.view", "billing.manage", "legal.billing", "usage.view", "audit.view"], is_system: true, created_at: ts(-200), updated_at: ts(-200) },
+    permissions: ["overview.view", "finance.view", "billing.manage", "expenses.manage", "legal.billing", "usage.view", "audit.view"], is_system: true, created_at: ts(-200), updated_at: ts(-200) },
 ];
 const TEAM_ROLE: Record<string, string> = { "demo-admin": "SUPER_ADMIN", "demo-support": "SUPPORT", "demo-billing": "BILLING" };
 const TEAM_ME: Record<string, { id: string; email: string; full_name: string }> = {
@@ -446,6 +448,11 @@ const PERM_RULES: [RegExp, RegExp, string[]][] = [
   [/GET/, /^\/admin\/(team|roles)$/, ["team.view", "team.manage"]],
   [/./, /^\/admin\/(team|roles)/, ["team.manage"]],
   [/GET/, /^\/admin\/audit/, ["audit.view"]],
+  [/GET/, /^\/admin\/finance\/invoices/, ["finance.view", "billing.manage"]],
+  [/GET/, /^\/admin\/finance\/profile/, ["finance.view", "expenses.manage", "billing.manage"]],
+  [/GET/, /^\/admin\/finance\/expenses/, ["finance.view", "expenses.manage"]],
+  [/GET/, /^\/admin\/finance/, ["finance.view"]],
+  [/./, /^\/admin\/finance/, ["expenses.manage"]],
 ];
 function requirePerm(role: string, method: string, p: string, body: Record<string, unknown>) {
   if (role === "SUPER_ADMIN") return;
@@ -516,6 +523,193 @@ const consultView = (c: DemoConsult) => {
   const l = LAWYERS.find((x) => x.id === c.lawyer_id);
   return { ...c, topic_title: LEGAL_RATES.find((r) => r.topic === c.topic)!.title, lawyer_name: l?.full_name ?? null, lawyer_license: l?.license_number ?? null };
 };
+
+
+// ---------- المالية الداخلية لحصيف (نسخة العرض) — مطابقة لـ apps/api/haseef/routers/finance.py ----------
+type DemoInvoice = {
+  id: string; number: string; kind: "INVOICE" | "CREDIT_NOTE"; source: "SUBSCRIPTION" | "CONSULTATION" | "MANUAL";
+  org_id: string | null; consultation_id: string | null; related_invoice_id: string | null; buyer_name: string; buyer_cr: string | null;
+  buyer_vat: string | null; seller: Record<string, unknown>; lines: InvoiceLine[]; subtotal: number; vat_rate: number; vat_amount: number;
+  total: number; payment_reference: string | null; note: string | null; qr: string | null; issued_at: string; status: "ISSUED" | "VOID";
+  void_reason: string | null;
+};
+type DemoExpense = { id: string; spent_on: string; category: string; vendor: string; description: string | null; net_amount: number;
+  vat_amount: number; total: number; reference: string | null; recurring: boolean; created_at: string; created_by_name: string | null };
+
+const finProfile = {
+  legal_name: "شركة حصيف لتقنية المعلومات (نموذج)", trade_name: "حصيف", vat_registered: true, vat_number: "300000000000003",
+  cr_number: "1010000000", address: "الرياض، المملكة العربية السعودية", email: "billing@haseef.sa", phone: null as string | null,
+  iban: null as string | null, invoice_note: "شكراً لثقتكم. هذه فاتورة نموذجية في نسخة العرض." as string | null,
+};
+const invoicesDemo: DemoInvoice[] = [];
+const invSeq = { INVOICE: 0, CREDIT_NOTE: 0 };
+const PLAN_AR: Record<string, string> = { ESSENTIAL: "باقة الأساس", PROFESSIONAL_GRC: "باقة الحوكمة والنمو", ENTERPRISE: "باقة كبار العملاء" };
+
+function issueInvoice(x: { kind?: "INVOICE" | "CREDIT_NOTE"; source: DemoInvoice["source"]; org: Org | null; lines: InvoiceLine[];
+  at?: string; ref?: string | null; consultation_id?: string | null; related?: DemoInvoice; note?: string | null }): DemoInvoice {
+  const kind = x.kind ?? "INVOICE";
+  const reg = finProfile.vat_registered;
+  const lines = x.related ? x.related.lines.map((l) => ({ ...l, description: `إلغاء: ${l.description}` }))
+    : reg ? x.lines : x.lines.map((l) => ({ ...l, vat: 0, total: l.net }));
+  const subtotal = x.related ? x.related.subtotal : round2(lines.reduce((a, l) => a + l.net, 0));
+  const vat = x.related ? x.related.vat_amount : round2(lines.reduce((a, l) => a + l.vat, 0));
+  const issued = (x.at ?? new Date().toISOString()).slice(0, 19) + "Z";
+  invSeq[kind] += 1;
+  const inv: DemoInvoice = {
+    id: uid(), number: invoiceNumber(kind, Number(issued.slice(0, 4)), invSeq[kind]), kind, source: x.source, org_id: x.org?.id ?? x.related?.org_id ?? null,
+    consultation_id: x.consultation_id ?? null, related_invoice_id: x.related?.id ?? null,
+    buyer_name: x.org?.name ?? x.related?.buyer_name ?? "—", buyer_cr: x.org?.cr ?? x.related?.buyer_cr ?? null, buyer_vat: null,
+    seller: { ...finProfile }, lines, subtotal, vat_rate: x.related ? x.related.vat_rate : reg ? VAT_RATE : 0, vat_amount: vat, total: round2(subtotal + vat),
+    payment_reference: x.ref ?? null, note: x.note ?? null,
+    qr: reg && finProfile.vat_number ? zatcaTlv({ seller: finProfile.legal_name, vatNumber: finProfile.vat_number, timestamp: issued, total: round2(subtotal + vat), vat }) : null,
+    issued_at: issued, status: "ISSUED", void_reason: null,
+  };
+  invoicesDemo.unshift(inv);
+  return inv;
+}
+function subscriptionInvoice(o: Org, plan: string, amount: number, months: number, ref: string | null, at?: string) {
+  return issueInvoice({ source: "SUBSCRIPTION", org: o, ref, at,
+    lines: [invoiceLine(`اشتراك ${PLAN_AR[plan] ?? plan} — ${months === 12 ? "سنة" : "شهر"}`, 1, amount)] });
+}
+function consultationInvoice(c: { id: string; topic: string; duration_minutes: number; urgent: boolean; price: { subtotal: number } }, ref: string, at?: string) {
+  if (invoicesDemo.some((i) => i.consultation_id === c.id && i.kind === "INVOICE")) return null;
+  const topic = LEGAL_RATES.find((r) => r.topic === c.topic)?.title ?? c.topic;
+  return issueInvoice({ source: "CONSULTATION", org: orgs.find((o) => o.id === ORG_A) ?? null, ref, consultation_id: c.id, at,
+    lines: [invoiceLine(`استشارة قانونية — ${topic} (${c.duration_minutes / 60} ساعة${c.urgent ? "، عاجلة" : ""})`, 1, c.price.subtotal)] });
+}
+function voidInvoice(inv: DemoInvoice, reason: string) {
+  if (inv.kind !== "INVOICE") throw new DemoError(404, "الفاتورة غير موجودة");
+  if (inv.status === "VOID") throw new DemoError(409, "الفاتورة ملغاة أصلاً");
+  const cn = issueInvoice({ kind: "CREDIT_NOTE", source: inv.source, org: null, related: inv, lines: [], note: `إشعار دائن للفاتورة ${inv.number}: ${reason}` });
+  Object.assign(inv, { status: "VOID", void_reason: reason });
+  return cn;
+}
+
+// فواتير الدفعات المسجلة في بيانات العرض (بالترتيب الزمني حتى تتسلسل الأرقام)
+(() => {
+  const past: { o: Org; plan: string; amount: number; months: number; ref: string | null; at: string }[] = [];
+  for (const o of orgs) for (const b of o.billing) if (b.event_type === "PAYMENT" && b.amount_sar)
+    past.push({ o, plan: b.plan_tier ?? "ESSENTIAL", amount: b.amount_sar, months: b.period_months ?? 1, ref: b.reference, at: b.created_at });
+  past.sort((a, b) => a.at.localeCompare(b.at)).forEach((p) => subscriptionInvoice(p.o, p.plan, p.amount, p.months, p.ref, p.at));
+  for (const c of consults) if (c.payment_status === "PAID") consultationInvoice(c, c.payment_reference ?? "—", c.created_at);
+})();
+
+const expensesDemo: DemoExpense[] = (() => {
+  const out: DemoExpense[] = [];
+  const add = (daysAgo: number, category: string, vendor: string, net: number, vat: number, description: string | null, recurring = false, reference: string | null = null) =>
+    out.push({ id: uid(), spent_on: ts(-daysAgo).slice(0, 10), category, vendor, description, net_amount: net, vat_amount: vat, total: round2(net + vat),
+      reference, recurring, created_at: ts(-daysAgo), created_by_name: "المحاسبة" });
+  for (const k of [0, 1, 2]) {
+    const d = 30 * k + 3;
+    add(d, "HOSTING", "مزوّد سحابي داخل المملكة", 300, 45, "خادم 2 نواة / 8 جيجا + تخزين 50 جيجا", true);
+    add(d, "MESSAGING", "مزوّد واتساب للأعمال", 12.5, 1.88, "رسائل التنبيهات الخدمية", true);
+    add(d + 1, "SOFTWARE", "البريد المهني والأدوات", 90, 13.5, "بريد الفريق وأدوات العمل", true);
+    add(d + 2, "PROFESSIONAL", "مكتب محاسبة خارجي", 600, 90, "مسك الدفاتر والإقرار", true);
+  }
+  add(20, "MARKETING", "حملة إعلانات رقمية", 1500, 225, "إعلانات البحث لصفحة حصيف التعريفية");
+  add(45, "GOVERNMENT", "وزارة التجارة والغرفة التجارية", 1200, 0, "تجديد السجل والاشتراك");
+  add(8, "PAYMENT_FEES", "بوابة الدفع", 21.4, 3.21, "2.2% من التحصيل");
+  return out.sort((a, b) => b.spent_on.localeCompare(a.spent_on));
+})();
+
+function finSummary(period: string) {
+  const { from, to } = periodRange(period);
+  const inRange = (d: string) => d.slice(0, 10) >= from && d.slice(0, 10) < to;
+  const inv = invoicesDemo.filter((i) => inRange(i.issued_at));
+  const sign = (i: DemoInvoice) => (i.kind === "INVOICE" ? 1 : -1);
+  const bySource = ["CONSULTATION", "MANUAL", "SUBSCRIPTION"].map((source) => {
+    const xs = inv.filter((i) => i.source === source);
+    return { source, net: round2(xs.reduce((a, i) => a + sign(i) * i.subtotal, 0)), vat: round2(xs.reduce((a, i) => a + sign(i) * i.vat_amount, 0)),
+      invoices: xs.filter((i) => i.kind === "INVOICE").length, credit_notes: xs.filter((i) => i.kind === "CREDIT_NOTE").length };
+  }).filter((r) => r.invoices + r.credit_notes > 0);
+  const ex = expensesDemo.filter((e) => inRange(e.spent_on));
+  const byCat = Object.keys(EXPENSE_CATEGORY).map((category) => {
+    const xs = ex.filter((e) => e.category === category);
+    return { category, net: round2(xs.reduce((a, e) => a + e.net_amount, 0)), vat: round2(xs.reduce((a, e) => a + e.vat_amount, 0)), n: xs.length };
+  }).filter((r) => r.n > 0).sort((a, b) => b.net - a.net);
+  const months = new Map<string, { month: string; revenue: number; expenses: number }>();
+  const mo = (d: string) => `${d.slice(0, 7)}-01`;
+  for (const i of inv) { const k = mo(i.issued_at); const r = months.get(k) ?? { month: k, revenue: 0, expenses: 0 }; r.revenue = round2(r.revenue + sign(i) * i.subtotal); months.set(k, r); }
+  for (const e of ex) { const k = mo(e.spent_on); const r = months.get(k) ?? { month: k, revenue: 0, expenses: 0 }; r.expenses = round2(r.expenses + e.net_amount); months.set(k, r); }
+  const revenue = round2(bySource.reduce((a, r) => a + r.net, 0)), expenses = round2(byCat.reduce((a, r) => a + r.net, 0));
+  const out = round2(bySource.reduce((a, r) => a + r.vat, 0)), inp = round2(byCat.reduce((a, r) => a + r.vat, 0));
+  const soon = Date.now() + 30 * DAY;
+  const due = orgs.filter((o) => o.sub && ["ACTIVE", "PAST_DUE", "TRIAL"].includes(o.sub.billing_status) && new Date(o.sub.ends_at).getTime() < soon)
+    .map((o) => ({ org_id: o.id, name: o.name, plan_tier: o.sub!.plan_tier, billing_cycle: o.sub!.billing_cycle, ends_at: o.sub!.ends_at,
+      expected: PRICES[o.sub!.plan_tier][o.sub!.billing_cycle === "YEARLY" ? 1 : 0] }))
+    .sort((a, b) => a.ends_at.localeCompare(b.ends_at));
+  return { period, from, to, revenue: { total: revenue, by_source: bySource }, expenses: { total: expenses, by_category: byCat },
+    net_profit: round2(revenue - expenses), margin: revenue ? (revenue - expenses) / revenue : null,
+    vat: { output: out, input: inp, payable: round2(out - inp) }, monthly: [...months.values()].sort((a, b) => a.month.localeCompare(b.month)),
+    mrr: overview().kpis.mrr_sar ?? 0, renewals_due: due, renewals_expected: due.reduce((a, d) => a + d.expected, 0) };
+}
+const invoiceRow = (i: DemoInvoice) => ({ id: i.id, number: i.number, kind: i.kind, source: i.source, org_id: i.org_id, buyer_name: i.buyer_name,
+  subtotal: i.subtotal, vat_amount: i.vat_amount, total: i.total, issued_at: i.issued_at, status: i.status, payment_reference: i.payment_reference,
+  related_number: invoicesDemo.find((r) => r.id === i.related_invoice_id)?.number ?? null });
+
+function financeRoute(method: string, p: string, q: URLSearchParams, body: Record<string, unknown>, who: string): unknown {
+  let m: RegExpMatchArray | null;
+  if (p === "/admin/finance/summary") return finSummary(q.get("period") ?? new Date().toISOString().slice(0, 7));
+  if (p === "/admin/finance/invoices") {
+    const per = q.get("period"), s = (q.get("q") ?? "").trim();
+    const r = per ? periodRange(per) : null;
+    return invoicesDemo.filter((i) => (!r || (i.issued_at.slice(0, 10) >= r.from && i.issued_at.slice(0, 10) < r.to))
+      && (!s || i.number.includes(s) || i.buyer_name.includes(s))).map(invoiceRow);
+  }
+  if ((m = p.match(/^\/admin\/finance\/invoices\/([^/]+)\/void$/))) {
+    const inv = invoicesDemo.find((i) => i.id === m![1]); if (!inv) throw new DemoError(404, "الفاتورة غير موجودة");
+    if (String(body.reason ?? "").trim().length < 5) throw new DemoError(422, "اكتب سبب الإلغاء");
+    const cn = voidInvoice(inv, String(body.reason));
+    log("ADMIN_INVOICE_VOID", null, { reason: body.reason, credit_note: cn.number });
+    return { credit_note: { id: cn.id, number: cn.number } };
+  }
+  if ((m = p.match(/^\/admin\/finance\/invoices\/([^/]+)$/))) {
+    const i = invoicesDemo.find((x) => x.id === m![1]); if (!i) throw new DemoError(404, "الفاتورة غير موجودة");
+    const cn = invoicesDemo.find((x) => x.related_invoice_id === i.id);
+    return { ...i, ...invoiceRow(i), credit_note_number: cn?.number ?? null, credit_note_id: cn?.id ?? null };
+  }
+  if (p === "/admin/finance/expenses" && method === "GET") {
+    const per = q.get("period"); const r = per ? periodRange(per) : null;
+    return expensesDemo.filter((e) => !r || (e.spent_on >= r.from && e.spent_on < r.to));
+  }
+  const expenseBody = () => {
+    const net = Number(body.net_amount), vat = Number(body.vat_amount ?? 0);
+    if (!(net > 0)) throw new DemoError(422, "أدخل المبلغ قبل الضريبة");
+    if (vat < 0 || vat > net * 0.15 + 0.05) throw new DemoError(422, "ضريبة المدخلات أكبر من 15% من المبلغ");
+    if (String(body.vendor ?? "").trim().length < 2) throw new DemoError(422, "اكتب اسم المورّد");
+    if (!EXPENSE_CATEGORY[String(body.category)]) throw new DemoError(422, "اختر البند");
+    return { spent_on: String(body.spent_on), category: String(body.category), vendor: String(body.vendor), description: (body.description as string) || null,
+      net_amount: round2(net), vat_amount: round2(vat), total: round2(net + vat), reference: (body.reference as string) || null, recurring: !!body.recurring };
+  };
+  if (p === "/admin/finance/expenses" && method === "POST") {
+    const e = { id: uid(), ...expenseBody(), created_at: new Date().toISOString(), created_by_name: who };
+    expensesDemo.unshift(e); expensesDemo.sort((a, b) => b.spent_on.localeCompare(a.spent_on));
+    log("ADMIN_EXPENSE_ADD", null, { category: e.category, amount_sar: e.net_amount, vendor: e.vendor }); return { id: e.id };
+  }
+  if ((m = p.match(/^\/admin\/finance\/expenses\/([^/]+)$/))) {
+    const i = expensesDemo.findIndex((x) => x.id === m![1]); if (i < 0) throw new DemoError(404, "المصروف غير موجود");
+    if (method === "DELETE") { const [e] = expensesDemo.splice(i, 1); log("ADMIN_EXPENSE_DELETE", null, { vendor: e.vendor, amount_sar: e.net_amount }); return { deleted: true }; }
+    Object.assign(expensesDemo[i], expenseBody()); log("ADMIN_EXPENSE_UPDATE", null, { vendor: body.vendor, amount_sar: body.net_amount }); return { updated: true };
+  }
+  if (p === "/admin/finance/vat") {
+    const per = q.get("period") ?? ""; if (!/^\d{4}-Q[1-4]$/.test(per)) throw new DemoError(422, "الفترة: 2026-Q4");
+    const { from, to } = periodRange(per);
+    const inv = invoicesDemo.filter((i) => i.vat_amount > 0 && i.issued_at.slice(0, 10) >= from && i.issued_at.slice(0, 10) < to);
+    const ex = expensesDemo.filter((e) => e.spent_on >= from && e.spent_on < to);
+    const sales = { sales: round2(inv.filter((i) => i.kind === "INVOICE").reduce((a, i) => a + i.subtotal, 0)),
+      adjustments: round2(inv.filter((i) => i.kind === "CREDIT_NOTE").reduce((a, i) => a + i.subtotal, 0)),
+      vat: round2(inv.reduce((a, i) => a + (i.kind === "INVOICE" ? 1 : -1) * i.vat_amount, 0)) };
+    const purchases = { purchases: round2(ex.filter((e) => e.vat_amount > 0).reduce((a, e) => a + e.net_amount, 0)), vat: round2(ex.reduce((a, e) => a + e.vat_amount, 0)) };
+    const end = new Date(`${to}T00:00:00Z`); end.setUTCMonth(end.getUTCMonth() + 1); end.setUTCDate(0);
+    return { period: per, from, to, sales, purchases, payable: round2(sales.vat - purchases.vat), file_by: end.toISOString().slice(0, 10) };
+  }
+  if (p === "/admin/finance/profile" && method === "GET") return { ...finProfile };
+  if (p === "/admin/finance/profile" && method === "PUT") {
+    if (body.vat_registered && !/^3\d{13}3$/.test(String(body.vat_number ?? ""))) throw new DemoError(422, "أدخل الرقم الضريبي (15 رقماً يبدأ وينتهي بـ 3)");
+    Object.assign(finProfile, body); log("ADMIN_FINANCE_PROFILE", null, { vat_registered: !!body.vat_registered }); return { updated: true };
+  }
+  throw new DemoError(404, "غير موجود");
+}
 
 // ---------- الموجّه ----------
 class DemoError extends Error {
@@ -756,7 +950,9 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
         const end = new Date(base); end.setMonth(end.getMonth() + months);
         Object.assign(s, { billing_status: "ACTIVE", billing_cycle: body.billing_cycle, plan_tier: body.plan_tier ?? s.plan_tier, ends_at: end.toISOString() });
         o.billing.unshift({ event_type: "PAYMENT", plan_tier: s.plan_tier, amount_sar: Number(body.amount_sar), period_months: months, reference: (body.reference as string) ?? null, note: (body.note as string) ?? null, created_at: now, actor: actor.name });
-        log("ADMIN_RECORD_PAYMENT", o, { amount_sar: body.amount_sar, cycle: body.billing_cycle, reference: body.reference }); return { status: "ACTIVE" };
+        log("ADMIN_RECORD_PAYMENT", o, { amount_sar: body.amount_sar, cycle: body.billing_cycle, reference: body.reference });
+        const inv = subscriptionInvoice(o, s.plan_tier, Number(body.amount_sar), months, (body.reference as string) ?? null);
+        return { status: "ACTIVE", invoice: { id: inv.id, number: inv.number } };
       }
       if (m[2] === "cancel") {
         s.billing_status = "CANCELED";
@@ -843,6 +1039,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
         return { deleted: true };
       }
     }
+    if (p.startsWith("/admin/finance/")) return financeRoute(method, p, q, body, TEAM_ME[role]?.full_name ?? role);
     if (p === "/admin/catalog/standards") return standards;
     if (p === "/admin/catalog/obligations") return obligationCatalog.map((o) => ({ ...o, orgs: oblState.has(o.code) ? 1 : 0 }));
     if ((m = p.match(/^\/admin\/catalog\/(standards|obligations)\/([^/]+)$/)) && method === "PATCH") {
@@ -896,7 +1093,12 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       if (m[2] === "assign") { Object.assign(c, { lawyer_id: body.lawyer_id, scheduled_at: body.scheduled_at, meeting_link: body.meeting_link ?? null, status: "CONFIRMED" }); return { status: "CONFIRMED" }; }
       if (m[2] === "complete") { if (c.status !== "CONFIRMED") throw new DemoError(409, "الاستشارة غير مؤكدة"); Object.assign(c, { status: "COMPLETED", lawyer_summary: body.lawyer_summary ?? null }); return { status: "COMPLETED" }; }
       if (m[2] === "cancel") { Object.assign(c, { status: "CANCELED", cancel_reason: body.reason }); return { status: "CANCELED" }; }
-      Object.assign(c, { payment_status: body.payment_status, payment_reference: body.payment_reference }); return { payment_status: body.payment_status };
+      Object.assign(c, { payment_status: body.payment_status, payment_reference: body.payment_reference });
+      let inv: DemoInvoice | null = null;
+      if (body.payment_status === "PAID") inv = consultationInvoice(c, String(body.payment_reference));
+      else { const orig = invoicesDemo.find((i) => i.consultation_id === c.id && i.kind === "INVOICE" && i.status === "ISSUED");
+             if (orig) inv = voidInvoice(orig, `استرداد الاستشارة (${body.payment_reference})`); }
+      return { payment_status: body.payment_status, invoice: inv ? { id: inv.id, number: inv.number } : null };
     }
     if (p === "/admin/legal/rates") return LEGAL_RATES;
     if ((m = p.match(/^\/admin\/legal\/rates\/([^/]+)$/))) {

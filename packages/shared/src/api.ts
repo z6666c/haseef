@@ -208,6 +208,24 @@ export function createApi(
         req<{ updated: boolean }>(`/admin/library/${id}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
       deleteDoc: (id: string) => req<void>(`/admin/library/${id}`, { method: "DELETE", org: false }),
       legalConsultations: () => req<AdminConsultation[]>("/admin/legal/consultations", { org: false }),
+      // المالية الداخلية لحصيف
+      finSummary: (period: string) => req<FinanceSummary>(`/admin/finance/summary?period=${encodeURIComponent(period)}`, { org: false }),
+      invoices: (period?: string, q?: string) => {
+        const p = new URLSearchParams(); if (period) p.set("period", period); if (q) p.set("q", q);
+        const qs = p.toString();
+        return req<InvoiceRow[]>(`/admin/finance/invoices${qs ? `?${qs}` : ""}`, { org: false });
+      },
+      invoice: (id: string) => req<Invoice>(`/admin/finance/invoices/${id}`, { org: false }),
+      voidInvoice: (id: string, reason: string) => post<{ credit_note: { id: string; number: string } }>(`/admin/finance/invoices/${id}/void`, { reason }),
+      expenses: (period?: string) => req<Expense[]>(`/admin/finance/expenses${period ? `?period=${encodeURIComponent(period)}` : ""}`, { org: false }),
+      addExpense: (b: ExpenseInput) => post<{ id: string }>("/admin/finance/expenses", b),
+      updateExpense: (id: string, b: ExpenseInput) =>
+        req<{ updated: boolean }>(`/admin/finance/expenses/${id}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
+      deleteExpense: (id: string) => req<{ deleted: boolean }>(`/admin/finance/expenses/${id}`, { method: "DELETE", org: false }),
+      vatReturn: (period: string) => req<VatReturn>(`/admin/finance/vat?period=${encodeURIComponent(period)}`, { org: false }),
+      finProfile: () => req<HaseefProfile>("/admin/finance/profile", { org: false }),
+      saveFinProfile: (b: HaseefProfile) =>
+        req<{ updated: boolean }>("/admin/finance/profile", { method: "PUT", org: false, body: JSON.stringify(b) }),
       trials: () => req<TrialRequest[]>("/admin/trial-requests", { org: false }),
       updateTrial: (id: string, b: { status: TrialRequest["status"]; notes: string | null }) =>
         req<{ updated: boolean }>(`/admin/trial-requests/${id}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
@@ -236,6 +254,42 @@ export interface AdminOverview {
   by_plan: { plan_tier: string; n: number }[];
   by_industry: { industry: string; n: number }[];
 }
+// ---------- المالية الداخلية لحصيف
+export interface HaseefProfile {
+  legal_name: string; trade_name: string; vat_registered: boolean; vat_number: string | null; cr_number: string | null;
+  address: string | null; email: string | null; phone: string | null; iban: string | null; invoice_note: string | null;
+}
+export interface InvoiceLineRow { description: string; quantity: number; unit_price: number; net: number; vat: number; total: number }
+export interface InvoiceRow {
+  id: string; number: string; kind: "INVOICE" | "CREDIT_NOTE"; source: "SUBSCRIPTION" | "CONSULTATION" | "MANUAL";
+  org_id: string | null; buyer_name: string; subtotal: number; vat_amount: number; total: number; issued_at: string;
+  status: "ISSUED" | "VOID"; payment_reference: string | null; related_number: string | null;
+}
+export interface Invoice extends InvoiceRow {
+  buyer_cr: string | null; buyer_vat: string | null; seller: HaseefProfile; lines: InvoiceLineRow[]; vat_rate: number;
+  note: string | null; qr: string | null; void_reason: string | null; credit_note_number: string | null; credit_note_id: string | null;
+}
+export interface ExpenseInput {
+  spent_on: string; category: string; vendor: string; description: string | null; net_amount: number; vat_amount: number;
+  reference: string | null; recurring: boolean;
+}
+export interface Expense extends ExpenseInput { id: string; total: number; created_at: string; created_by_name: string | null }
+export interface FinanceSummary {
+  period: string; from: string; to: string;
+  revenue: { total: number; by_source: { source: string; net: number; vat: number; invoices: number; credit_notes: number }[] };
+  expenses: { total: number; by_category: { category: string; net: number; vat: number; n: number }[] };
+  net_profit: number; margin: number | null;
+  vat: { output: number; input: number; payable: number };
+  monthly: { month: string; revenue: number; expenses: number }[];
+  mrr: number;
+  renewals_due: { org_id: string; name: string; plan_tier: string; billing_cycle: string; ends_at: string; expected: number }[];
+  renewals_expected: number;
+}
+export interface VatReturn {
+  period: string; from: string; to: string; file_by: string;
+  sales: { sales: number; adjustments: number; vat: number }; purchases: { purchases: number; vat: number }; payable: number;
+}
+
 /** رمز دور فريق حصيف: الأدوار الأساسية الثلاثة أو أي دور مخصص ينشئه المدير. */
 export type PlatformRole = "SUPER_ADMIN" | "SUPPORT" | "BILLING" | (string & {});
 export interface AdminMe { user_id: string; role: PlatformRole; role_name: string; permissions: string[] }

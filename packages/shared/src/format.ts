@@ -113,6 +113,8 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   ADMIN_INVITE_MEMBER: "دعوة عضو", ADMIN_UPDATE_MEMBERSHIP: "تعديل عضوية",
   ADMIN_RESET_PASSWORD: "إعادة تعيين كلمة المرور", ADMIN_DISABLE_USER: "تعطيل مستخدم", ADMIN_ENABLE_USER: "تفعيل مستخدم",
   ADMIN_TEAM_ADD: "إضافة عضو للفريق", ADMIN_TEAM_ROLE: "تغيير دور في الفريق",
+  ADMIN_INVOICE_VOID: "إلغاء فاتورة بإشعار دائن", ADMIN_EXPENSE_ADD: "تسجيل مصروف", ADMIN_EXPENSE_UPDATE: "تعديل مصروف",
+  ADMIN_EXPENSE_DELETE: "حذف مصروف", ADMIN_FINANCE_PROFILE: "تعديل بيانات حصيف الضريبية",
   ADMIN_ROLE_CREATE: "إنشاء دور إداري", ADMIN_ROLE_UPDATE: "تعديل صلاحيات دور", ADMIN_ROLE_DELETE: "حذف دور إداري",
   DPIA_ADD: "تقييم أثر جديد", DPIA_EDIT: "تعديل تقييم أثر", DPIA_STATUS: "تغيير حالة تقييم أثر", DPIA_DELETE: "حذف تقييم أثر",
   GROUP_ENTITY_ADD: "إضافة منشأة للمجموعة", GROUP_ENTITY_CREATED: "إنشاء منشأة تابعة",
@@ -124,7 +126,7 @@ const AUDIT_KEY_LABEL: Record<string, string> = {
   amount_sar: "المبلغ", cycle: "الدورة", reference: "المرجع", email: "البريد", admin: "المدير",
   role: "الدور", is_active: "الحالة", name: "الاسم", cr_number: "السجل التجاري", plan: "الباقة",
   entity_legal_type: "الكيان", industry_type: "القطاع", commercial_size: "الحجم", recipients: "المستلمون",
-  title: "العنوان", expiry_date: "الانتهاء", renewed_from: "تجديد لـ", code: "الرمز",
+  title: "العنوان", expiry_date: "الانتهاء", renewed_from: "تجديد لـ", code: "الرمز", credit_note: "الإشعار الدائن", vendor: "المورّد", category: "البند",
 };
 const CYCLE_LABEL: Record<string, string> = { MONTHLY: "شهرية", YEARLY: "سنوية" };
 
