@@ -522,7 +522,7 @@ function PlanDetail({ id, editor, onChange }: { id: string; editor: boolean; onC
         <div><dt>قيمة العقد</dt><dd>{sar(d.total_net)}</dd></div>
         <div><dt>المدفوع</dt><dd data-tone="good">{sar(d.paid_net)}</dd></div>
         <div><dt>المتبقي</dt><dd>{sar(d.remaining_net)}</dd></div>
-        <div><dt>الأقساط</dt><dd>{d.paid_count} / {d.installments}</dd></div>
+        <div><dt>الأقساط المدفوعة</dt><dd>{d.paid_count} من {d.installments}</dd></div>
       </dl>
       {d.note && <p className="hint">{d.note}</p>}
       {msg && <p className="error" role="alert">{msg}</p>}
@@ -540,12 +540,12 @@ function PlanDetail({ id, editor, onChange }: { id: string; editor: boolean; onC
                 <td><span className="pill" data-tone={tone}>{label}</span>{i.paid_at && <div className="muted small">{fmtDateTime(i.paid_at)}</div>}</td>
                 <td>{i.invoice_id ? <Link href={`/finance/invoice?id=${i.invoice_id}`}><bdi dir="ltr">{i.invoice_number}</bdi></Link> : "—"}</td>
                 <td className="small">{i.reminders ? `${i.reminders} · آخرها ${fmtDateTime(i.last_reminder_at)}` : "—"}</td>
-                <td className="row-actions-cell">{editor && !i.paid_at && d.status === "ACTIVE" && <>
+                <td><div className="row-actions-cell">{editor && !i.paid_at && d.status === "ACTIVE" && <>
                   <button className="link-btn" type="button" onClick={() => { setRef(""); setPay({ id: i.id, seq: i.seq }); }}>تسجيل الدفع</button>
                   <button className="link-btn" type="button" onClick={() => act(async () => {
                     const r = await api.admin.remindInstallment(d.id, i.id);
                     return r.sent ? `أُرسل تذكير القسط ${i.seq} (${r.sent} رسالة) لمدير ${d.org_name}` : "لا يوجد مدير فعّال ببريد أو جوال لإرسال التذكير";
-                  })}>أرسل تذكيراً</button></>}</td>
+                  })}>أرسل تذكيراً</button></>}</div></td>
               </tr>
             );
           })}
