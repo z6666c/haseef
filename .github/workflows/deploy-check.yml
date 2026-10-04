@@ -4,11 +4,10 @@ name: فحص التشغيل الحقيقي
 # على النطاق localhost، ثم يتحقق من الصحة والدخول والنسخ الاحتياطي.
 on:
   pull_request:
-    paths: ["deploy/**", "apps/api/Dockerfile", "apps/api/pyproject.toml", "apps/api/scripts/**",
-            "apps/*/next.config.mjs", "package.json", "db/migrations/**", ".github/workflows/deploy-check.yml"]
+    paths: ["deploy/**", "apps/api/**", "apps/*/next.config.mjs", "package.json", "db/migrations/**", ".github/workflows/deploy-check.yml"]
   push:
     branches: [main]
-    paths: ["deploy/**", "apps/api/Dockerfile", "apps/api/pyproject.toml", "db/migrations/**"]
+    paths: ["deploy/**", "apps/api/**", "db/migrations/**"]
   workflow_dispatch:
 
 jobs:
@@ -38,6 +37,7 @@ jobs:
           R="--resolve admin.localhost:443:127.0.0.1"
           curl -skf $R https://admin.localhost/api/v1/auth/login -H 'Content-Type: application/json' \
             -d "{\"email\":\"ci@haseef.sa\",\"password\":\"$pw\"}" | grep -q '"must_change_password":true'
+          python3 scripts/smoke.py --base https://admin.localhost/api --email ci@haseef.sa --password "$pw" --insecure
           # يرفض إنشاء مدير ثانٍ بلا --force
           if scripts/create-admin.sh other@haseef.sa "X"; then echo "سُمح بمدير ثانٍ"; exit 1; fi
       - name: الحماية من تخمين كلمات المرور

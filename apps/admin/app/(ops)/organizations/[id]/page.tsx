@@ -247,7 +247,7 @@ export default function OrgDetail() {
           : Promise.resolve()} />
 
       <PaymentDialog open={dialog === "payment"} org={d} onClose={() => setDialog(null)}
-        onSubmit={(b) => act(() => api.admin.recordPayment(id, b), "سُجّلت الدفعة وفُعّل الاشتراك").then(() => {})} />
+        onSubmit={(b) => act(() => api.admin.recordPayment(id, b), "سُجّلت الدفعة وفُعّل الاشتراك، وصدرت الفاتورة (المالية ← الفواتير)").then(() => {})} />
       <PlanDialog open={dialog === "plan"} current={s?.plan_tier} onClose={() => setDialog(null)}
         onSubmit={(t, n) => act(() => api.admin.changePlan(id, t, n), "تغيّرت الباقة وأُعيد حساب المؤشر").then(() => {})} />
       <TrialDialog open={dialog === "trial"} onClose={() => setDialog(null)}
@@ -297,10 +297,10 @@ function PaymentDialog({ open, org, onClose, onSubmit }: {
             <select id="p-cycle" value={f.v.cycle} onChange={(e) => f.setV({ ...f.v, cycle: e.target.value as "MONTHLY" | "YEARLY" })}>
               <option value="MONTHLY">شهرية (شهر واحد)</option><option value="YEARLY">سنوية (12 شهراً)</option>
             </select></div>
-          <div className="field"><label htmlFor="p-amt">المبلغ المستلم (ريال)</label>
+          <div className="field"><label htmlFor="p-amt">المبلغ قبل الضريبة (ريال)</label>
             <input id="p-amt" type="number" min={1} step="0.01" required dir="ltr" value={f.v.amount}
                    placeholder={expected ? String(expected) : ""} onChange={(e) => f.setV({ ...f.v, amount: e.target.value })} /></div>
-          <div className="field"><label htmlFor="p-ref">رقم الفاتورة أو التحويل</label>
+          <div className="field"><label htmlFor="p-ref">مرجع التحويل أو الإيصال</label>
             <input id="p-ref" dir="ltr" value={f.v.reference} onChange={(e) => f.setV({ ...f.v, reference: e.target.value })} /></div>
         </div>
         {expected && f.v.amount && Number(f.v.amount) !== expected && (

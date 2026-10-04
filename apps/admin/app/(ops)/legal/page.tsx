@@ -82,7 +82,7 @@ function Requests({ act }: { act: Act }) {
                   onClick={() => { const r = window.prompt("سبب الإلغاء:"); if (r && r.trim().length >= 3) act(() => api.admin.legalCancel(c.id, r.trim()), "أُلغي الطلب", load); }}>إلغاء</button>}
                 {can("legal.billing") && c.status !== "CANCELED" && c.payment_status !== "PAID" && <button className="link-btn" type="button" onClick={() => setPay(c)}>تسجيل الدفع</button>}
                 {can("legal.billing") && c.payment_status === "PAID" && c.status === "CANCELED" && <button className="link-btn" type="button"
-                  onClick={() => { const r = window.prompt("مرجع الاسترداد:"); if (r && r.trim().length >= 2) act(() => api.admin.legalPayment(c.id, "REFUNDED", r.trim()), "سُجّل الاسترداد", load); }}>تسجيل استرداد</button>}
+                  onClick={() => { const r = window.prompt("مرجع الاسترداد:"); if (r && r.trim().length >= 2) act(() => api.admin.legalPayment(c.id, "REFUNDED", r.trim()), "سُجّل الاسترداد وصدر إشعار دائن بالفاتورة", load); }}>تسجيل استرداد</button>}
               </td>
             </tr>
           ))}
@@ -92,7 +92,7 @@ function Requests({ act }: { act: Act }) {
         {assign && <AssignForm c={assign} lawyers={lawyers} onSave={(b) => act(() => api.admin.legalAssign(assign.id, b), "أُكّد الموعد وعُيّن المحامي", () => { setAssign(null); load(); })} />}
       </Dialog>
       <Dialog open={!!pay} title="تسجيل دفع الاستشارة" onClose={() => setPay(null)}>
-        {pay && <PayForm c={pay} onSave={(ref) => act(() => api.admin.legalPayment(pay.id, "PAID", ref), "سُجّل الدفع", () => { setPay(null); load(); })} />}
+        {pay && <PayForm c={pay} onSave={(ref) => act(() => api.admin.legalPayment(pay.id, "PAID", ref), "سُجّل الدفع وصدرت الفاتورة (المالية ← الفواتير)", () => { setPay(null); load(); })} />}
       </Dialog>
     </>
   );

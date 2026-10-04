@@ -165,3 +165,62 @@
 .perm-option span { display: flex; flex-direction: column; }
 .perm-option small { color: var(--muted); font-size: var(--t-xs); }
 .perm-option[data-off] { opacity: .5; cursor: not-allowed; }
+
+/* =================== المالية =================== */
+.fin-section { display: grid; gap: 16px; margin-top: 20px; }
+.fin-section h2 { font-size: var(--t-lg); }
+.fin-section h3 { font-size: var(--t-md); margin-bottom: 8px; }
+.inline-select { display: flex; align-items: center; gap: 8px; }
+.inline-select label { font-size: var(--t-sm); color: var(--muted); }
+.boot { min-height: 120px; }
+.check-row { display: flex; gap: 8px; align-items: center; font-size: var(--t-sm); }
+.kpis dd[data-tone="good"] { color: var(--emerald-deep); }
+.kpis dd[data-tone="bad"] { color: var(--crimson); }
+.table td[data-tone="good"] { color: var(--emerald-deep); }
+.table td[data-tone="bad"] { color: var(--crimson); }
+.table td.num { text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fin-legend { display: flex; gap: 16px; font-size: var(--t-xs); color: var(--muted); margin-bottom: 6px; }
+.fin-legend span::before { content: ""; display: inline-block; inline-size: 10px; block-size: 10px; border-radius: 3px; margin-inline-end: 6px; vertical-align: -1px; }
+.fin-legend [data-s="rev"]::before, .fin-bars [data-s="rev"] { background: var(--emerald); }
+.fin-legend [data-s="exp"]::before, .fin-bars [data-s="exp"] { background: var(--ink-2, #475569); }
+.fin-bars { inline-size: 40%; min-inline-size: 140px; }
+.fin-bars span { display: block; block-size: 7px; border-radius: 0 4px 4px 0; min-inline-size: 2px; }
+.fin-bars span + span { margin-top: 2px; }
+.fin-due { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.fin-due li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+.fin-due li .small { grid-column: 1; }
+.fin-due li .num { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-weight: 600; }
+.vat-table { max-inline-size: 640px; }
+.vat-table th { background: var(--paper); }
+.vat-total td { background: var(--emerald-wash); }
+
+/* الفاتورة */
+.invoice { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 28px 32px; margin-top: 16px; display: grid; gap: 20px; max-inline-size: 900px; position: relative; }
+.invoice[data-void]::after { content: "ملغاة"; position: absolute; inset-block-start: 40%; inset-inline: 0; text-align: center; font-size: 72px; font-weight: 800; color: rgb(185 28 28 / 0.12); transform: rotate(-12deg); pointer-events: none; }
+.inv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; border-bottom: 2px solid var(--ink); padding-bottom: 14px; }
+.inv-head h1 { font-size: var(--t-2xl); }
+.inv-en { margin: 0; color: var(--muted); font-size: var(--t-sm); }
+.inv-qr svg { inline-size: 132px; block-size: 132px; display: block; }
+.inv-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 0; }
+.inv-meta dt, .inv-totals dt { font-size: var(--t-xs); color: var(--muted); }
+.inv-meta dd { margin: 2px 0 0; font-weight: 600; }
+.inv-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.inv-parties section { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px 14px; }
+.inv-parties h2 { font-size: var(--t-sm); color: var(--muted); margin-bottom: 6px; }
+.inv-parties p { margin: 2px 0; font-size: var(--t-sm); }
+.inv-ltr { text-align: end; }
+.inv-totals { margin: 0; justify-self: end; min-inline-size: 320px; display: grid; gap: 6px; }
+.inv-totals div { display: flex; justify-content: space-between; gap: 24px; }
+.inv-totals dd { margin: 0; font-variant-numeric: tabular-nums; }
+.inv-grand { border-top: 2px solid var(--ink); padding-top: 8px; font-size: var(--t-lg); font-weight: 700; }
+.inv-grand dt { font-size: var(--t-md); color: var(--ink); }
+.inv-note { margin: 0; font-size: var(--t-sm); }
+.inv-tlv ol { margin: 6px 0 0; font-size: var(--t-xs); }
+@media (max-width: 700px) { .inv-parties { grid-template-columns: 1fr; } .invoice { padding: 18px; } .inv-totals { min-inline-size: 0; justify-self: stretch; } }
+
+@media print {
+  .ops-bar, .no-print, .ops-logout { display: none !important; }
+  .ops-main { padding: 0 !important; }
+  .invoice { border: 0; padding: 0; max-inline-size: none; }
+  body { background: #fff; }
+}
