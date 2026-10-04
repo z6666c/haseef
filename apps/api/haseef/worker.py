@@ -23,6 +23,7 @@ celery.conf.beat_schedule = {
     "plan-alerts-nightly":   {"task": "haseef.plan_alerts",      "schedule": crontab(hour=1, minute=0)},
     "send-due-alerts":       {"task": "haseef.send_due_alerts",  "schedule": crontab(minute="*/5")},
     "recompute-scores":      {"task": "haseef.recompute_scores", "schedule": crontab(hour=2, minute=0)},
+    "installment-reminders": {"task": "haseef.remind_installments", "schedule": crontab(hour=s.alert_send_hour, minute=10)},
 }
 
 
@@ -35,6 +36,12 @@ def plan_alerts() -> int:
 @celery.task(name="haseef.send_due_alerts")
 def send_due_alerts() -> int:
     return alerts_service.send_due_alerts(platform_tx, build_senders(s))
+
+
+@celery.task(name="haseef.remind_installments")
+def remind_installments() -> int:
+    from .services import installments_service
+    return installments_service.send_due_reminders(platform_tx, build_senders(s), f"{s.client_base_url}/billing")
 
 
 @celery.task(name="haseef.recompute_scores")

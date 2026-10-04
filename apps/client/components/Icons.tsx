@@ -177,3 +177,12 @@ export const ReportChart = (p: P) => (
     <path d="M9 17.5v-3M12 17.5v-5M15 17.5v-2" stroke={A} />
   </Svg>
 );
+
+/** الاشتراك والدفعات — بطاقة دفع */
+export const CardReceipt = (p: P) => (
+  <Svg {...p}>
+    <rect x="3" y="5.5" width="18" height="13" rx="2" />
+    <path d="M3 9.5h18" />
+    <path d="M6.5 15h4" stroke={A} />
+  </Svg>
+);

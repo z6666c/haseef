@@ -5,7 +5,7 @@
  */
 import { duePhrase, formatDate } from "./format.ts";
 
-export type TemplateKey = "haseef_license_expiring" | "haseef_license_expired" | "haseef_policy_review_due";
+export type TemplateKey = "haseef_license_expiring" | "haseef_license_expired" | "haseef_policy_review_due" | "haseef_payment_due";
 
 export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; footer: string }> = {
   haseef_license_expiring: {
@@ -16,6 +16,11 @@ export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; fo
   haseef_license_expired: {
     title: "انتهاء ترخيص أو وثيقة",
     body: "مرحباً {{1}}،\nتنبيه عاجل من حصيف: انتهت صلاحية «{{2}}» لمنشأة {{3}}، وكان انتهاؤها {{4}} بتاريخ {{5}}.\nالمنشأة معرضة لغرامات أو تعطل خدمات حتى يتم التجديد. جدّد الآن ثم حدّث التاريخ في حصيف.\nللتجديد: {{6}}\nفريق حصيف",
+    footer: "رسالة خدمية من منصة حصيف",
+  },
+  haseef_payment_due: {
+    title: "استحقاق قسط الاشتراك",
+    body: "مرحباً {{1}}،\nتذكير من حصيف: {{3}} لمنشأة {{2}} بمبلغ {{4}} مستحق {{5}}، بتاريخ {{6}}.\nتفاصيل الأقساط والفواتير: {{7}}\nفريق حصيف",
     footer: "رسالة خدمية من منصة حصيف",
   },
   haseef_policy_review_due: {

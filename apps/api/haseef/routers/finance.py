@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from ..deps import Admin, require_perm
-from ..services import invoicing
+from ..services import installments_service, invoicing
 
 router = APIRouter(prefix="/admin/finance", tags=["finance"])
 
@@ -85,13 +85,21 @@ def summary(period: str = Query(...), a: Admin = Depends(require_perm(*VIEW))):
         FROM subscriptions s JOIN organizations o ON o.id = s.org_id JOIN plans p ON p.tier = s.plan_tier
         WHERE s.billing_status IN ('ACTIVE','PAST_DUE','TRIAL') AND s.ends_at < now() + interval '30 days'
         ORDER BY s.ends_at""")).mappings())
+    inst = _money(c.execute(text("""
+        SELECT i.id, i.plan_id, i.seq, p.installments, i.due_date, i.amount_net, o.id AS org_id, o.name,
+               (i.due_date < CAST(:today AS date)) AS overdue
+        FROM plan_installments i JOIN payment_plans p ON p.id = i.plan_id JOIN organizations o ON o.id = p.org_id
+        WHERE i.paid_at IS NULL AND p.status = 'ACTIVE' AND i.due_date < CAST(:today AS date) + 30
+        ORDER BY i.due_date"""), {"today": installments_service.today_riyadh()}).mappings())
     return {"period": period, "from": start, "to": end,
             "revenue": {"total": revenue, "by_source": rev},
             "expenses": {"total": expenses, "by_category": exp},
             "net_profit": revenue - expenses, "margin": (revenue - expenses) / revenue if revenue else None,
             "vat": {"output": out_vat, "input": in_vat, "payable": out_vat - in_vat},
             "monthly": monthly, "mrr": float(mrr), "renewals_due": due,
-            "renewals_expected": sum(d["expected"] for d in due)}
+            "renewals_expected": sum(d["expected"] for d in due),
+            "installments_due": inst,
+            "installments_overdue_total": sum(i["amount_net"] for i in inst if i["overdue"])}
 
 
 # ---------------------------------------------------------------- الفواتير
@@ -258,3 +266,99 @@ def update_profile(body: ProfileIn, a: Admin = Depends(require_perm("expenses.ma
         {**body.model_dump(), "u": a.user_id})
     a.audit("ADMIN_FINANCE_PROFILE", "haseef_profile", None, None, {"vat_registered": body.vat_registered})
     return {"updated": True}
+
+
+# ---------------------------------------------------------------- الاشتراك السنوي بالأقساط
+class PlanIn(BaseModel):
+    org_id: UUID
+    plan_tier: Literal["ESSENTIAL", "PROFESSIONAL_GRC", "ENTERPRISE"]
+    installments: Literal[1, 2, 3, 4, 6, 12]
+    starts_on: date
+    total_net: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)   # افتراضياً سعر الباقة السنوي
+    note: str | None = Field(default=None, max_length=500)
+    pay_first: bool = False
+    first_reference: str | None = Field(default=None, max_length=100)
+
+
+def _link() -> str:
+    from ..config import get_settings
+    return f"{get_settings().client_base_url}/billing"
+
+
+@router.get("/plans")
+def list_plans(status_: Literal["ACTIVE", "COMPLETED", "CANCELED"] | None = Query(default=None, alias="status"),
+               org_id: UUID | None = None, a: Admin = Depends(require_perm("finance.view", "billing.manage"))):
+    return _money(installments_service.plans(a.conn, status=status_, org_id=org_id))
+
+
+@router.get("/plans/{plan_id}")
+def get_plan(plan_id: UUID, a: Admin = Depends(require_perm("finance.view", "billing.manage"))):
+    d = installments_service.plan_detail(a.conn, plan_id)
+    if d is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "خطة الدفع غير موجودة")
+    return {**_money([{k: v for k, v in d.items() if k != "items"}])[0], "items": _money(d["items"])}
+
+
+@router.post("/plans", status_code=201)
+def create_plan(body: PlanIn, a: Admin = Depends(require_perm("billing.manage"))):
+    if not a.conn.execute(text("SELECT 1 FROM organizations WHERE id = :o"), {"o": body.org_id}).first():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "المنشأة غير موجودة")
+    try:
+        pid = installments_service.create_plan(a.conn, org_id=body.org_id, tier=body.plan_tier, installments=body.installments,
+                                               starts_on=body.starts_on, total_net=body.total_net, note=body.note, user_id=a.user_id)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
+    a.audit("ADMIN_PLAN_CREATE", "payment_plan", pid, body.org_id,
+            {"plan": body.plan_tier, "installments": body.installments, "amount_sar": float(body.total_net or 0) or None})
+    invoice = None
+    if body.pay_first:
+        first = a.conn.execute(text("SELECT id FROM plan_installments WHERE plan_id = :p AND seq = 1"), {"p": pid}).scalar_one()
+        invoice = installments_service.pay(a.conn, plan_id=pid, installment_id=first, reference=body.first_reference, user_id=a.user_id)
+    return {"id": pid, "invoice": {"id": invoice["id"], "number": invoice["number"]} if invoice else None}
+
+
+class PayIn(BaseModel):
+    reference: str | None = Field(default=None, max_length=100)
+
+
+@router.post("/plans/{plan_id}/installments/{installment_id}/pay")
+def pay_installment(plan_id: UUID, installment_id: UUID, body: PayIn, a: Admin = Depends(require_perm("billing.manage"))):
+    try:
+        inv = installments_service.pay(a.conn, plan_id=plan_id, installment_id=installment_id, reference=body.reference, user_id=a.user_id)
+    except LookupError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
+    org = a.conn.execute(text("SELECT org_id FROM payment_plans WHERE id = :p"), {"p": plan_id}).scalar_one()
+    a.audit("ADMIN_INSTALLMENT_PAID", "plan_installment", installment_id, org,
+            {"amount_sar": float(inv["total"]), "reference": body.reference, "invoice": inv["number"]})
+    return {"invoice": {"id": inv["id"], "number": inv["number"]}}
+
+
+@router.post("/plans/{plan_id}/installments/{installment_id}/remind")
+def remind_installment(plan_id: UUID, installment_id: UUID, a: Admin = Depends(require_perm("billing.manage"))):
+    from ..config import get_settings
+    from ..db import platform_tx
+    from ..messaging import build_senders
+    if not a.conn.execute(text("SELECT 1 FROM plan_installments WHERE id = :i AND plan_id = :p"), {"i": installment_id, "p": plan_id}).first():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "القسط غير موجود")
+    try:
+        n = installments_service.remind_now(platform_tx, build_senders(get_settings()), installment_id, _link(), a.user_id)
+    except LookupError as e:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
+    a.audit("ADMIN_INSTALLMENT_REMIND", "plan_installment", installment_id, None, {"sent": n})
+    return {"sent": n}
+
+
+class CancelPlanIn(BaseModel):
+    reason: str = Field(min_length=5, max_length=500)
+
+
+@router.post("/plans/{plan_id}/cancel")
+def cancel_plan(plan_id: UUID, body: CancelPlanIn, a: Admin = Depends(require_perm("billing.manage"))):
+    n = a.conn.execute(text("""UPDATE payment_plans SET status = 'CANCELED', cancel_reason = :r WHERE id = :p AND status = 'ACTIVE'
+                               RETURNING org_id"""), {"r": body.reason, "p": plan_id}).scalar_one_or_none()
+    if n is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "الخطة غير فعّالة")
+    a.audit("ADMIN_PLAN_CANCEL", "payment_plan", plan_id, n, {"reason": body.reason})
+    return {"status": "CANCELED"}

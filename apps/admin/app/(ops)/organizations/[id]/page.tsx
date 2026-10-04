@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   auditSummary, type AdminOrgGovernance,
-  AUDIT_ACTION_LABEL, BILLING_EVENT_LABEL, BILLING_STATUS_LABEL, LEGAL_TYPE_LABEL, ORG_ROLE_LABEL, PLAN_LABEL,
+  type PaymentPlan, AUDIT_ACTION_LABEL, BILLING_EVENT_LABEL, BILLING_STATUS_LABEL, LEGAL_TYPE_LABEL, ORG_ROLE_LABEL, PLAN_LABEL,
   SIZE_LABEL, countDays, formatDate, type AdminMember, type AdminOrgDetail, type AuditEntry,
 } from "@haseef/shared";
 import { Dialog, ReasonDialog, TempPasswordDialog, fmtDateTime, useCan } from "@/components/ui";
@@ -27,10 +27,12 @@ export default function OrgDetail() {
   const [dialog, setDialog] = useState<"payment" | "plan" | "trial" | "invite" | null>(null);
 
   const [gov, setGov] = useState<AdminOrgGovernance | null>(null);
+  const [plan, setPlan] = useState<PaymentPlan | null>(null);
   const load = useCallback(() => {
     api.admin.orgDetail(id).then(setD).catch((e: Error) => setError(e.message));
     api.admin.audit(id).then(setAudit).catch(() => {});
     api.admin.orgGovernance(id).then(setGov).catch(() => {});
+    api.admin.plans(undefined, id).then((p) => setPlan(p.find((x) => x.status === "ACTIVE") ?? null)).catch(() => {});
   }, [id]);
   useEffect(load, [load]);
 
@@ -98,6 +100,9 @@ export default function OrgDetail() {
             <div><dt>الحالة</dt><dd><span className="pill" data-tone={s.billing_status === "ACTIVE" ? "good" : s.billing_status === "TRIAL" ? "none" : "warn"}>{BILLING_STATUS_LABEL[s.billing_status]}</span></dd></div>
             <div><dt>الدورة</dt><dd>{s.billing_cycle === "YEARLY" ? "سنوية" : "شهرية"}</dd></div>
             <div><dt>ينتهي</dt><dd>{formatDate(s.ends_at)}</dd></div>
+            {plan && <div><dt>السداد بالأقساط</dt><dd>{plan.paid_count} من {plan.installments} — المتبقي {plan.remaining_net.toLocaleString("en", { minimumFractionDigits: 2 })} ريال
+              {plan.overdue_count > 0 && <span className="pill" data-tone="bad">متأخر</span>}
+              <div><Link href={`/finance?tab=plans&plan=${plan.id}`}>الأقساط والتذكير</Link></div></dd></div>}
           </dl>
         ) : (
           <p className="muted">لا يوجد اشتراك قائم، والتنبيهات متوقفة. سجّل دفعة لبدء اشتراك.</p>

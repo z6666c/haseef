@@ -5,14 +5,16 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   EXPENSE_CATEGORY, INVOICE_KIND, INVOICE_SOURCE, INVOICE_STATUS, PLAN_LABEL, periodRange, round2, sar,
-  type Expense, type ExpenseInput, type FinanceSummary, type HaseefProfile, type InvoiceRow, type VatReturn,
+  type AdminOrg, type Expense, type ExpenseInput, type FinanceSummary, type HaseefProfile, type InvoiceRow, type PaymentPlan,
+  type PaymentPlanDetail, type VatReturn,
 } from "@haseef/shared";
 import { Dialog, ReasonDialog, fmtDateTime, useCan } from "@/components/ui";
 import { api } from "@/lib/session";
 
-type Tab = "overview" | "invoices" | "expenses" | "vat" | "profile";
+type Tab = "overview" | "plans" | "invoices" | "expenses" | "vat" | "profile";
 const TABS: [Tab, string, string[]][] = [
   ["overview", "الوضع المالي", ["finance.view"]],
+  ["plans", "الأقساط السنوية", ["finance.view", "billing.manage"]],
   ["invoices", "الفواتير", ["finance.view", "billing.manage"]],
   ["expenses", "المصروفات", ["finance.view", "expenses.manage"]],
   ["vat", "ضريبة القيمة المضافة", ["finance.view"]],
@@ -57,6 +59,7 @@ function Finance() {
         ))}
       </div>
       {tab === "overview" && <Overview />}
+      {tab === "plans" && <Plans focus={sp.get("plan")} />}
       {tab === "invoices" && <Invoices />}
       {tab === "expenses" && <Expenses />}
       {tab === "vat" && <Vat />}
@@ -164,6 +167,21 @@ function Overview() {
                 <div><dt>ضريبة المدخلات</dt><dd>{sar(d.vat.input)}</dd></div>
                 <div><dt>{d.vat.payable >= 0 ? "المستحق للهيئة" : "رصيد مسترد"}</dt><dd>{sar(Math.abs(d.vat.payable))}</dd></div>
               </dl>
+            </section>
+            <section>
+              <h3>أقساط مستحقة خلال 30 يوماً</h3>
+              {d.installments_due.length === 0 ? <p className="muted">لا أقساط قريبة.</p> : (
+                <>
+                  {d.installments_overdue_total > 0 && <p className="hint warn">متأخر السداد: <b>{sar(d.installments_overdue_total)}</b> قبل الضريبة.</p>}
+                  <ul className="fin-due">
+                    {d.installments_due.map((i) => (
+                      <li key={i.id}><Link href={`/finance?tab=plans&plan=${i.plan_id}`}>{i.name}</Link>
+                        <span className="muted small">القسط {i.seq} من {i.installments} · {i.overdue ? <b className="txt-bad">متأخر منذ {i.due_date}</b> : `يستحق ${i.due_date}`}</span>
+                        <span className="num">{sar(i.amount_net)}</span></li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </section>
             <section>
               <h3>تجديدات مستحقة خلال 30 يوماً</h3>
@@ -422,5 +440,190 @@ function Profile() {
       {error && <p className="error" role="alert">{error}</p>}
       {editor && <div className="dialog-actions"><button className="btn btn-action" type="submit" disabled={busy}>حفظ البيانات</button></div>}
     </form>
+  );
+}
+
+// ---------------------------------------------------------------- الأقساط السنوية
+const COUNTS: [number, string][] = [[1, "دفعة واحدة"], [2, "قسطان (كل 6 أشهر)"], [3, "3 أقساط (كل 4 أشهر)"], [4, "4 أقساط ربعية"], [6, "6 أقساط (كل شهرين)"], [12, "12 قسطاً شهرياً"]];
+const YEARLY: Record<string, number> = { ESSENTIAL: 1990, PROFESSIONAL_GRC: 4990, ENTERPRISE: 12990 };
+const PLAN_STATUS: Record<string, string> = { ACTIVE: "فعّالة", COMPLETED: "مكتملة السداد", CANCELED: "ملغاة" };
+
+function Plans({ focus }: { focus: string | null }) {
+  const can = useCan();
+  const editor = can("billing.manage");
+  const [rows, setRows] = useState<PaymentPlan[] | null>(null);
+  const [open, setOpen] = useState<string | null>(focus);
+  const [creating, setCreating] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => { api.admin.plans().then(setRows).catch((e: Error) => setError(e.message)); }, []);
+  useEffect(load, [load]);
+  if (error) return <p className="error" role="alert">{error}</p>;
+  const active = rows?.filter((r) => r.status === "ACTIVE") ?? [];
+  const remaining = round2(active.reduce((a, r) => a + r.remaining_net, 0));
+  return (
+    <section className="fin-section">
+      <div className="head-row">
+        <h2>الاشتراكات السنوية بالأقساط {rows && <span className="muted">({rows.length})</span>}</h2>
+        {editor && <button className="btn btn-action" type="button" onClick={() => setCreating(true)}>خطة دفع جديدة</button>}
+      </div>
+      <p className="hint">عقد سنوي بقيمة كاملة يُقسَّط على دفعات. كل قسط يُسجَّل دفعه تصدر له فاتورة، ويصل تذكير تلقائي لمدير المنشأة
+        بالبريد والواتساب <b>قبل الاستحقاق بـ7 أيام، ويوم الاستحقاق، وبعد 3 أيام تأخير</b>، ويمكن إرسال تذكير يدوي في أي وقت.</p>
+      {notice && <p className="notice" role="status">{notice}</p>}
+      {rows && active.length > 0 && <p className="hint">المتبقي على الخطط الفعّالة: <b>{sar(remaining)}</b> قبل الضريبة.</p>}
+      <table className="table">
+        <thead><tr><th>المنشأة</th><th>الباقة</th><th className="num">قيمة العقد</th><th>السداد</th><th className="num">المدفوع</th><th className="num">المتبقي</th><th>القسط القادم</th><th>الحالة</th></tr></thead>
+        <tbody>
+          {rows?.map((p) => (
+            <tr key={p.id} className={open === p.id ? "row-open" : undefined}>
+              <td><button className="link-btn" type="button" onClick={() => setOpen(open === p.id ? null : p.id)}>{p.org_name}</button></td>
+              <td>{PLAN_LABEL[p.plan_tier] ?? p.plan_tier}<div className="muted small">{p.starts_on} ← {p.ends_on}</div></td>
+              <td className="num">{sar(p.total_net)}</td>
+              <td><span className="plan-progress" title={`${p.paid_count} من ${p.installments}`}><span style={{ inlineSize: `${(100 * p.paid_net) / p.total_net}%` }} /></span>
+                <div className="muted small">{p.paid_count} من {p.installments} أقساط</div></td>
+              <td className="num">{sar(p.paid_net)}</td>
+              <td className="num"><b>{sar(p.remaining_net)}</b></td>
+              <td>{p.next_due ?? "—"}{p.overdue_count > 0 && <span className="pill" data-tone="bad">متأخر</span>}</td>
+              <td><span className="pill" data-tone={p.status === "ACTIVE" ? "good" : undefined}>{PLAN_STATUS[p.status]}</span></td>
+            </tr>
+          ))}
+          {rows?.length === 0 && <tr><td colSpan={8} className="muted">لا خطط دفع. أنشئ خطة لمنشأة اشترت اشتراكاً سنوياً بالأقساط.</td></tr>}
+        </tbody>
+      </table>
+      {open && <PlanDetail id={open} editor={editor} onChange={(msg) => { setNotice(msg); load(); }} />}
+      {creating && <CreatePlan onClose={() => setCreating(false)} onDone={(id, msg) => { setCreating(false); setNotice(msg); setOpen(id); load(); }} />}
+    </section>
+  );
+}
+
+function PlanDetail({ id, editor, onChange }: { id: string; editor: boolean; onChange: (msg: string) => void }) {
+  const [d, setD] = useState<PaymentPlanDetail | null>(null);
+  const [pay, setPay] = useState<{ id: string; seq: number } | null>(null);
+  const [ref, setRef] = useState("");
+  const [cancel, setCancel] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const load = useCallback(() => { api.admin.plan(id).then(setD).catch((e: Error) => setMsg(e.message)); }, [id]);
+  useEffect(load, [load]);
+  if (!d) return msg ? <p className="error">{msg}</p> : null;
+  const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
+  const state = (i: PaymentPlanDetail["items"][number]) => i.paid_at ? ["مدفوع", "good"] : i.due_date < today ? ["متأخر", "bad"]
+    : i.due_date <= new Date(Date.now() + 10 * 86400e3).toISOString().slice(0, 10) ? ["مستحق قريباً", "warn"] : ["قادم", undefined];
+  async function act(fn: () => Promise<string>) {
+    setMsg(null);
+    try { const m = await fn(); load(); onChange(m); } catch (e) { setMsg(e instanceof Error ? e.message : "تعذّر التنفيذ"); }
+  }
+  return (
+    <section className="plan-detail" aria-label={`أقساط ${d.org_name}`}>
+      <div className="head-row">
+        <h3>أقساط {d.org_name} — {PLAN_LABEL[d.plan_tier]}</h3>
+        {editor && d.status === "ACTIVE" && <button className="btn btn-danger-quiet" type="button" onClick={() => setCancel(true)}>إلغاء الخطة</button>}
+      </div>
+      <dl className="kpis compact">
+        <div><dt>قيمة العقد</dt><dd>{sar(d.total_net)}</dd></div>
+        <div><dt>المدفوع</dt><dd data-tone="good">{sar(d.paid_net)}</dd></div>
+        <div><dt>المتبقي</dt><dd>{sar(d.remaining_net)}</dd></div>
+        <div><dt>الأقساط</dt><dd>{d.paid_count} / {d.installments}</dd></div>
+      </dl>
+      {d.note && <p className="hint">{d.note}</p>}
+      {msg && <p className="error" role="alert">{msg}</p>}
+      <table className="table">
+        <thead><tr><th>القسط</th><th>الاستحقاق</th><th className="num">قبل الضريبة</th><th className="num">شامل الضريبة</th><th>الحالة</th><th>الفاتورة</th><th>التذكيرات</th><th><span className="sr-only">إجراءات</span></th></tr></thead>
+        <tbody>
+          {d.items.map((i) => {
+            const [label, tone] = state(i);
+            return (
+              <tr key={i.id}>
+                <td>{i.seq} من {d.installments}</td>
+                <td>{i.due_date}</td>
+                <td className="num">{sar(i.amount_net)}</td>
+                <td className="num">{sar(round2(i.amount_net * 1.15))}</td>
+                <td><span className="pill" data-tone={tone}>{label}</span>{i.paid_at && <div className="muted small">{fmtDateTime(i.paid_at)}</div>}</td>
+                <td>{i.invoice_id ? <Link href={`/finance/invoice?id=${i.invoice_id}`}><bdi dir="ltr">{i.invoice_number}</bdi></Link> : "—"}</td>
+                <td className="small">{i.reminders ? `${i.reminders} · آخرها ${fmtDateTime(i.last_reminder_at)}` : "—"}</td>
+                <td className="row-actions-cell">{editor && !i.paid_at && d.status === "ACTIVE" && <>
+                  <button className="link-btn" type="button" onClick={() => { setRef(""); setPay({ id: i.id, seq: i.seq }); }}>تسجيل الدفع</button>
+                  <button className="link-btn" type="button" onClick={() => act(async () => {
+                    const r = await api.admin.remindInstallment(d.id, i.id);
+                    return r.sent ? `أُرسل تذكير القسط ${i.seq} (${r.sent} رسالة) لمدير ${d.org_name}` : "لا يوجد مدير فعّال ببريد أو جوال لإرسال التذكير";
+                  })}>أرسل تذكيراً</button></>}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <Dialog open={!!pay} title={`تسجيل دفع القسط ${pay?.seq ?? ""}`} onClose={() => setPay(null)}>
+        <form className="dialog-body" onSubmit={(e) => { e.preventDefault(); const p = pay; setPay(null); if (p) act(async () => {
+          const r = await api.admin.payInstallment(d.id, p.id, ref.trim() || null);
+          return `سُجّل دفع القسط ${p.seq} وصدرت الفاتورة ${r.invoice.number}`;
+        }); }}>
+          <div className="field"><label htmlFor="pay-ref">مرجع التحويل أو الإيصال</label>
+            <input id="pay-ref" dir="ltr" value={ref} onChange={(e) => setRef(e.target.value)} /></div>
+          <p className="hint">تصدر فاتورة بقيمة القسط وتُضاف الضريبة، ويُحدَّث المدفوع والمتبقي.</p>
+          <div className="dialog-actions"><button className="btn btn-action" type="submit">سجّل الدفع</button>
+            <button className="btn btn-quiet" type="button" onClick={() => setPay(null)}>إلغاء</button></div>
+        </form>
+      </Dialog>
+      <ReasonDialog open={cancel} title="إلغاء خطة الدفع" danger confirmLabel="ألغِ الخطة"
+        description="تتوقف التذكيرات وتبقى الأقساط المدفوعة وفواتيرها كما هي. الأقساط غير المدفوعة لا تُطالَب بعد الإلغاء."
+        onClose={() => setCancel(false)}
+        onConfirm={async (reason) => { await api.admin.cancelPlan(d.id, reason); setCancel(false); load(); onChange("أُلغيت خطة الدفع"); }} />
+    </section>
+  );
+}
+
+function CreatePlan({ onClose, onDone }: { onClose: () => void; onDone: (id: string, msg: string) => void }) {
+  const [orgList, setOrgList] = useState<AdminOrg[]>([]);
+  const [f, setF] = useState({ org_id: "", plan_tier: "PROFESSIONAL_GRC", installments: 4, starts_on: new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10),
+    total: "", note: "", pay_first: true, first_reference: "" });
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.admin.organizations().then((o) => { setOrgList(o); setF((x) => ({ ...x, org_id: x.org_id || o[0]?.id || "" })); }).catch(() => {}); }, []);
+  const total = Number(f.total) || YEARLY[f.plan_tier];
+  const each = round2(total / f.installments);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault(); setBusy(true); setError(null);
+    try {
+      const r = await api.admin.createPlan({ org_id: f.org_id, plan_tier: f.plan_tier, installments: f.installments, starts_on: f.starts_on,
+        total_net: f.total ? Number(f.total) : null, note: f.note || null, pay_first: f.pay_first, first_reference: f.first_reference || null });
+      onDone(r.id, r.invoice ? `أُنشئت الخطة وسُجّل القسط الأول وصدرت الفاتورة ${r.invoice.number}` : "أُنشئت خطة الدفع");
+    } catch (err) { setError(err instanceof Error ? err.message : "تعذّر الإنشاء"); } finally { setBusy(false); }
+  }
+  return (
+    <Dialog open title="خطة دفع سنوية بالأقساط" onClose={onClose}>
+      <form className="dialog-body" onSubmit={submit}>
+        <div className="field"><label htmlFor="pl-org">المنشأة</label>
+          <select id="pl-org" required value={f.org_id} onChange={(e) => setF({ ...f, org_id: e.target.value })}>
+            {orgList.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select></div>
+        <div className="grid">
+          <div className="field"><label htmlFor="pl-tier">الباقة</label>
+            <select id="pl-tier" value={f.plan_tier} onChange={(e) => setF({ ...f, plan_tier: e.target.value })}>
+              {Object.keys(YEARLY).map((t) => <option key={t} value={t}>{PLAN_LABEL[t]}</option>)}
+            </select></div>
+          <div className="field"><label htmlFor="pl-n">طريقة السداد</label>
+            <select id="pl-n" value={f.installments} onChange={(e) => setF({ ...f, installments: Number(e.target.value) })}>
+              {COUNTS.map(([n, l]) => <option key={n} value={n}>{l}</option>)}
+            </select></div>
+        </div>
+        <div className="grid">
+          <div className="field"><label htmlFor="pl-start">بداية العقد</label>
+            <input id="pl-start" type="date" required value={f.starts_on} onChange={(e) => setF({ ...f, starts_on: e.target.value })} /></div>
+          <div className="field"><label htmlFor="pl-total">قيمة العقد قبل الضريبة</label>
+            <input id="pl-total" type="number" min="1" step="0.01" dir="ltr" placeholder={String(YEARLY[f.plan_tier])} value={f.total}
+                   onChange={(e) => setF({ ...f, total: e.target.value })} /></div>
+        </div>
+        <p className="hint">كل قسط ≈ <b>{sar(each)}</b> قبل الضريبة (<b>{sar(round2(each * 1.15))}</b> شاملة). القسط الأخير يحمل فرق التقريب.</p>
+        <div className="field"><label htmlFor="pl-note">ملاحظة (اختيارية)</label>
+          <input id="pl-note" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
+        <label className="check-row"><input type="checkbox" checked={f.pay_first} onChange={(e) => setF({ ...f, pay_first: e.target.checked })} /> القسط الأول مدفوع الآن</label>
+        {f.pay_first && <div className="field"><label htmlFor="pl-ref">مرجع دفع القسط الأول</label>
+          <input id="pl-ref" dir="ltr" value={f.first_reference} onChange={(e) => setF({ ...f, first_reference: e.target.value })} /></div>}
+        {error && <p className="error" role="alert">{error}</p>}
+        <div className="dialog-actions">
+          <button className="btn btn-action" type="submit" disabled={busy || !f.org_id}>أنشئ الخطة</button>
+          <button className="btn btn-quiet" type="button" onClick={onClose}>إلغاء</button>
+        </div>
+      </form>
+    </Dialog>
   );
 }

@@ -701,3 +701,19 @@ fieldset.checks { display: flex; gap: 18px; flex-wrap: wrap; }
 .finding-fix { padding: 8px 12px; background: var(--emerald-wash); border-radius: var(--r-sm); }
 .redacted-text { white-space: pre-wrap; font: inherit; font-size: var(--t-sm); line-height: 1.9; padding: 12px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-sm); max-height: 320px; overflow: auto; }
 .disclaimer { margin: 0; }
+
+/* الاشتراك والدفعات */
+.bill-sub { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.bill-sub > div { display: grid; gap: 4px; }
+.bill-plan { display: grid; gap: 14px; margin-bottom: 28px; }
+.bill-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.bill-kpis > div { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.bill-kpis span { font-size: var(--t-xs); color: var(--muted); }
+.bill-kpis b { font-size: var(--t-xl); }
+.bill-kpis small { font-size: var(--t-xs); color: var(--muted); }
+.bill-kpis [data-tone="good"] b { color: var(--emerald-deep); }
+.bill-kpis [data-tone="warn"] { border-color: var(--amber-fill); }
+.bill-kpis [data-tone="bad"] { border-color: var(--crimson-fill); }
+.bill-kpis [data-tone="bad"] b { color: var(--crimson); }
+.bill-progress { block-size: 8px; border-radius: 4px; background: var(--paper); border: 1px solid var(--line); overflow: hidden; }
+.bill-progress span { display: block; block-size: 100%; background: var(--emerald); }
