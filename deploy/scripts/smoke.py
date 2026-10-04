@@ -74,6 +74,10 @@ assert s["revenue"]["total"] == 0 and s["expenses"]["total"] == 300 and s["vat"]
 q = (int(period[5:7]) - 1) // 3 + 1
 v = call("GET", f"/v1/admin/finance/vat?period={period[:4]}-Q{q}")
 assert v["payable"] == -45, v
+st = call("GET", f"/v1/admin/finance/statement?view=monthly&year={period[:4]}")
+assert len(st["columns"]) == 12 and st["expenses_total"]["total"] == 300, st
+st = call("GET", f"/v1/admin/finance/statement?view=yearly&year={period[:4]}&years=3")
+assert len(st["columns"]) == 3, st
 step("المصروفات والملخص المالي وإقرار الضريبة")
 plan = call("POST", "/v1/admin/finance/plans", {"org_id": org["id"], "plan_tier": "PROFESSIONAL_GRC", "installments": 4,
                                                "starts_on": inv["issued_at"][:10], "pay_first": True, "first_reference": "SMOKE-Q1"}, expect=201)

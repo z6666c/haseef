@@ -36,7 +36,7 @@ def _buyer(conn: Connection, org_id: UUID) -> dict:
 
 def _insert(conn: Connection, *, kind: str, source: str, org_id, buyer: dict, lines: list[dict], user_id,
             billing_event_id=None, consultation_id=None, related=None, payment_reference=None, note=None,
-            mirror: dict | None = None) -> dict:
+            mirror: dict | None = None, plan_cycle: str | None = None) -> dict:
     s = seller(conn)
     if mirror:                                      # الإشعار الدائن يطابق مبالغ الفاتورة الأصلية حرفياً
         sub, vat, rate = r2(mirror["subtotal"]), r2(mirror["vat_amount"]), mirror["vat_rate"]
@@ -55,25 +55,27 @@ def _insert(conn: Connection, *, kind: str, source: str, org_id, buyer: dict, li
     row = conn.execute(text("""
         INSERT INTO invoices (number, kind, source, org_id, billing_event_id, consultation_id, related_invoice_id,
                               buyer_name, buyer_cr, seller, lines, subtotal, vat_rate, vat_amount, total,
-                              payment_reference, note, qr, issued_at, created_by)
+                              payment_reference, note, qr, issued_at, created_by, plan_cycle)
         VALUES (:number, :kind, :source, :org, :be, :cid, :rel, :bn, :bcr, CAST(:seller AS jsonb), CAST(:lines AS jsonb),
-                :sub, :rate, :vat, :total, :ref, :note, :qr, :issued, :u)
+                :sub, :rate, :vat, :total, :ref, :note, :qr, :issued, :u, :cycle)
         RETURNING id, number, total"""),
         {"number": number, "kind": kind, "source": source, "org": org_id, "be": billing_event_id, "cid": consultation_id,
          "rel": related, "bn": buyer["name"], "bcr": buyer.get("cr_number"), "seller": json.dumps(s, ensure_ascii=False),
          "lines": json.dumps(lines, ensure_ascii=False), "sub": sub, "rate": rate,
          "vat": vat, "total": sub + vat, "ref": payment_reference, "note": note, "qr": qr, "issued": issued,
-         "u": user_id}).mappings().one()
+         "u": user_id, "cycle": (mirror or {}).get("plan_cycle") or plan_cycle}).mappings().one()
     return dict(row)
 
 
-def invoice_subscription_payment(conn: Connection, *, billing_event_id: int, user_id, description: str | None = None) -> dict:
+def invoice_subscription_payment(conn: Connection, *, billing_event_id: int, user_id, description: str | None = None,
+                                 plan_cycle: str | None = None) -> dict:
     ev = conn.execute(text("""SELECT org_id, plan_tier, amount_sar, period_months, reference FROM billing_events WHERE id = :e"""),
                       {"e": billing_event_id}).mappings().one()
     months = ev["period_months"]
     desc = f"اشتراك {PLAN_NAME.get(ev['plan_tier'], ev['plan_tier'])} — {'سنة' if months == 12 else f'{months} شهر' if months > 2 else 'شهر'}"
     return _insert(conn, kind="INVOICE", source="SUBSCRIPTION", org_id=ev["org_id"], buyer=_buyer(conn, ev["org_id"]),
                    lines=[line(description or desc, 1, ev["amount_sar"])], user_id=user_id, billing_event_id=billing_event_id,
+                   plan_cycle=plan_cycle or ("MONTHLY" if months == 1 else "YEARLY"),
                    payment_reference=ev["reference"])
 
 
@@ -94,7 +96,7 @@ def invoice_consultation(conn: Connection, *, consultation_id: UUID, user_id, re
 
 def credit_note(conn: Connection, *, invoice_id: UUID, reason: str, user_id) -> dict:
     inv = conn.execute(text("""SELECT id, number, kind, status, source, org_id, buyer_name, buyer_cr, lines, consultation_id,
-                                      subtotal, vat_amount, vat_rate
+                                      subtotal, vat_amount, vat_rate, plan_cycle
                                FROM invoices WHERE id = :i FOR UPDATE"""), {"i": invoice_id}).mappings().one_or_none()
     if inv is None or inv["kind"] != "INVOICE":
         raise LookupError("الفاتورة غير موجودة")

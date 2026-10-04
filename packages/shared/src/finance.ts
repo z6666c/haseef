@@ -67,6 +67,8 @@ export const INVOICE_SOURCE: Record<string, string> = {
   CONSULTATION: "استشارة قانونية",
   MANUAL: "يدوية",
 };
+export const EXPENSE_FREQUENCY: Record<string, string> = { ONE_TIME: "مرة واحدة", MONTHLY: "شهري متكرر", YEARLY: "سنوي" };
+export const PLAN_CYCLE: Record<string, string> = { MONTHLY: "اشتراك شهري", YEARLY: "اشتراك سنوي", CONSULTATION: "استشارات قانونية", MANUAL: "أخرى" };
 export const INVOICE_KIND: Record<string, string> = { INVOICE: "فاتورة ضريبية", CREDIT_NOTE: "إشعار دائن" };
 export const INVOICE_STATUS: Record<string, string> = { ISSUED: "صادرة", VOID: "ملغاة بإشعار دائن" };
 

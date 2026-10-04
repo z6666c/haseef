@@ -4,9 +4,9 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  EXPENSE_CATEGORY, INVOICE_KIND, INVOICE_SOURCE, INVOICE_STATUS, PLAN_LABEL, periodRange, round2, sar,
+  EXPENSE_CATEGORY, EXPENSE_FREQUENCY, INVOICE_KIND, PLAN_CYCLE, INVOICE_SOURCE, INVOICE_STATUS, PLAN_LABEL, periodRange, round2, sar,
   type AdminOrg, type Expense, type ExpenseInput, type FinanceSummary, type HaseefProfile, type InvoiceRow, type PaymentPlan,
-  type PaymentPlanDetail, type VatReturn,
+  type FinanceStatement, type PaymentPlanDetail, type VatReturn,
 } from "@haseef/shared";
 import { Dialog, ReasonDialog, fmtDateTime, useCan } from "@/components/ui";
 import { api } from "@/lib/session";
@@ -87,6 +87,72 @@ function PeriodSelect({ value, onChange, allowAll }: { value: string; onChange: 
 
 // ---------------------------------------------------------------- الوضع المالي
 function Overview() {
+  const [mode, setMode] = useState<"period" | "monthly" | "yearly">("period");
+  return (
+    <>
+      <div className="filters fin-mode" role="group" aria-label="طريقة العرض">
+        {([["period", "ملخص فترة"], ["monthly", "شهري — أشهر السنة"], ["yearly", "سنوي — مقارنة السنوات"]] as const).map(([k, l]) => (
+          <button key={k} type="button" aria-pressed={mode === k} onClick={() => setMode(k)}>{l}</button>
+        ))}
+      </div>
+      {mode === "period" ? <PeriodOverview /> : <Statement view={mode} />}
+    </>
+  );
+}
+
+function Statement({ view }: { view: "monthly" | "yearly" }) {
+  const [year, setYear] = useState(now.getUTCFullYear());
+  const [allocate, setAllocate] = useState(true);
+  const [d, setD] = useState<FinanceStatement | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { setD(null); api.admin.statement(view, year, allocate).then(setD).catch((e: Error) => setError(e.message)); }, [view, year, allocate]);
+  if (error) return <p className="error" role="alert">{error}</p>;
+  const colLabel = (c: string) => view === "yearly" ? c
+    : new Intl.DateTimeFormat("ar-SA-u-nu-latn-ca-gregory", { month: "short" }).format(new Date(`${c}-01T00:00:00Z`));
+  const n = (v: number) => (v === 0 ? "—" : Math.round(v).toLocaleString("en"));
+  const Row = ({ r, cls }: { r: FinanceStatement["net"]; cls?: string }) => (
+    <tr className={cls}>
+      <th scope="row">{r.label}</th>
+      {r.values.map((v, i) => <td key={i} className="num" data-tone={r.group === "net" ? (v > 0 ? "good" : v < 0 ? "bad" : undefined) : undefined}>{n(v)}</td>)}
+      <td className="num"><b>{n(r.total)}</b></td>
+    </tr>
+  );
+  return (
+    <section className="fin-section">
+      <div className="head-row">
+        <h2>قائمة الدخل {view === "monthly" ? `الشهرية — ${year}` : `السنوية — حتى ${year}`}</h2>
+        <div className="head-tools">
+          <label className="check-row"><input type="checkbox" checked={allocate} onChange={(e) => setAllocate(e.target.checked)} /> توزيع المصاريف السنوية على أشهرها</label>
+          <div className="field inline-select"><label htmlFor="st-y">{view === "monthly" ? "السنة" : "حتى سنة"}</label>
+            <select id="st-y" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+              {[0, 1, 2].map((k) => now.getUTCFullYear() - k).map((y) => <option key={y} value={y}>{y}</option>)}
+            </select></div>
+        </div>
+      </div>
+      {!d ? <div className="boot" aria-busy="true" /> : (
+        <div className="statement-wrap">
+          <table className="table statement">
+            <thead><tr><th>البند (ريال، قبل الضريبة)</th>{d.columns.map((c) => <th key={c} className="num">{colLabel(c)}</th>)}<th className="num">المجموع</th></tr></thead>
+            <tbody>
+              <tr className="st-group"><th colSpan={d.columns.length + 2}>الإيرادات</th></tr>
+              {d.revenue.map((r) => <Row key={r.key} r={r} />)}
+              {d.revenue.length === 0 && <tr><td colSpan={d.columns.length + 2} className="muted">لا إيرادات.</td></tr>}
+              <Row r={d.revenue_total} cls="st-total" />
+              <tr className="st-group"><th colSpan={d.columns.length + 2}>المصروفات</th></tr>
+              {d.expenses.map((r) => <Row key={r.key} r={r} />)}
+              <Row r={d.expenses_total} cls="st-total" />
+              <Row r={d.net} cls="st-net" />
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="hint">الإيراد على أساس الفواتير (الاشتراك السنوي المدفوع مقدماً يظهر في شهر دفعه، وأقساطه في أشهر سدادها).
+        {allocate ? " المصاريف السنوية (كتجديد السجل والنطاق) موزعة على 12 شهراً من تاريخها." : " المصاريف تظهر في شهر دفعها."}</p>
+    </section>
+  );
+}
+
+function PeriodOverview() {
   const [period, setPeriod] = useState(thisYear);
   const [d, setD] = useState<FinanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,20 +173,29 @@ function Overview() {
                 {d.margin !== null && <small className="kpi-sub">هامش <bdi dir="ltr">{Math.round(d.margin * 100)}%</bdi></small>}</dd></div>
             <div><dt>الإيراد الشهري المتكرر (حالياً)</dt><dd>{sar(round2(d.mrr))}</dd></div>
           </dl>
+          <dl className="kpis compact">
+            {d.mrr_split.map((m) => (
+              <div key={m.cycle}><dt>مشتركون {m.cycle === "YEARLY" ? "سنويون" : "شهريون"}</dt>
+                <dd>{m.subscribers} <small>إيراد شهري {sar(round2(m.mrr))}</small></dd></div>
+            ))}
+            <div><dt>المصاريف الثابتة شهرياً</dt><dd>{sar(d.fixed_costs.total)}
+              <small className="kpi-sub">شهرية {sar(d.fixed_costs.monthly)} + حصة السنوية {sar(d.fixed_costs.yearly_share)}</small></dd></div>
+          </dl>
 
           <div className="split">
             <section>
-              <h3>الإيرادات حسب المصدر</h3>
+              <h3>الإيرادات حسب نوع الاشتراك</h3>
               <table className="table">
-                <thead><tr><th>المصدر</th><th className="num">الصافي</th><th className="num">الضريبة</th><th className="num">فواتير / إشعارات</th></tr></thead>
+                <thead><tr><th>النوع</th><th className="num">الصافي قبل الضريبة</th><th className="num">الفواتير</th><th className="num">النسبة</th></tr></thead>
                 <tbody>
-                  {d.revenue.by_source.map((r) => (
-                    <tr key={r.source}><td>{INVOICE_SOURCE[r.source] ?? r.source}</td><td className="num">{sar(r.net)}</td>
-                      <td className="num">{sar(r.vat)}</td><td className="num">{r.invoices} / {r.credit_notes}</td></tr>
+                  {d.revenue.by_cycle.map((r) => (
+                    <tr key={r.cycle}><td>{PLAN_CYCLE[r.cycle] ?? r.cycle}</td><td className="num">{sar(r.net)}</td><td className="num">{r.invoices}</td>
+                      <td className="num">{d.revenue.total ? `${Math.round((100 * r.net) / d.revenue.total)}%` : "—"}</td></tr>
                   ))}
-                  {d.revenue.by_source.length === 0 && <tr><td colSpan={4} className="muted">لا فواتير في هذه الفترة.</td></tr>}
+                  {d.revenue.by_cycle.length === 0 && <tr><td colSpan={4} className="muted">لا فواتير في هذه الفترة.</td></tr>}
                 </tbody>
               </table>
+              <p className="hint">الضريبة المحصلة في الفترة: {sar(d.vat.output)} — تفصيل المصادر: {d.revenue.by_source.map((r) => `${INVOICE_SOURCE[r.source]} ${sar(r.net)}`).join("، ") || "—"}</p>
             </section>
             <section>
               <h3>المصروفات حسب البند</h3>
@@ -210,9 +285,10 @@ function Overview() {
 function Invoices() {
   const [period, setPeriod] = useState("");
   const [q, setQ] = useState("");
+  const [cycle, setCycle] = useState("");
   const [rows, setRows] = useState<InvoiceRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const load = useCallback(() => { api.admin.invoices(period || undefined, q.trim() || undefined).then(setRows).catch((e: Error) => setError(e.message)); }, [period, q]);
+  const load = useCallback(() => { api.admin.invoices(period || undefined, q.trim() || undefined, cycle || undefined).then(setRows).catch((e: Error) => setError(e.message)); }, [period, q, cycle]);
   useEffect(load, [load]);
   if (error) return <p className="error" role="alert">{error}</p>;
   const issued = rows?.filter((r) => r.kind === "INVOICE") ?? [];
@@ -224,6 +300,11 @@ function Invoices() {
         <div className="head-tools">
           <div className="field inline"><label htmlFor="inv-q" className="sr-only">بحث</label>
             <input id="inv-q" type="search" placeholder="رقم الفاتورة أو اسم المنشأة" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+          <div className="field inline-select"><label htmlFor="inv-cy">النوع</label>
+            <select id="inv-cy" value={cycle} onChange={(e) => setCycle(e.target.value)}>
+              <option value="">الكل</option><option value="MONTHLY">اشتراكات شهرية</option><option value="YEARLY">اشتراكات سنوية</option>
+              <option value="CONSULTATION">استشارات</option>
+            </select></div>
           <PeriodSelect value={period} onChange={setPeriod} allowAll />
         </div>
       </div>
@@ -237,7 +318,7 @@ function Invoices() {
                 {r.related_number && <div className="muted small">عن <bdi dir="ltr">{r.related_number}</bdi></div>}</td>
               <td>{INVOICE_KIND[r.kind]}</td>
               <td>{r.buyer_name}</td>
-              <td>{INVOICE_SOURCE[r.source]}</td>
+              <td>{r.source === "SUBSCRIPTION" ? PLAN_CYCLE[r.plan_cycle ?? "YEARLY"] : INVOICE_SOURCE[r.source]}</td>
               <td>{fmtDateTime(r.issued_at)}</td>
               <td className="num">{r.kind === "CREDIT_NOTE" ? "−" : ""}{sar(r.subtotal)}</td>
               <td className="num">{r.kind === "CREDIT_NOTE" ? "−" : ""}{sar(r.vat_amount)}</td>
@@ -254,19 +335,20 @@ function Invoices() {
 
 // ---------------------------------------------------------------- المصروفات
 const today = () => new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10);
-const EMPTY: ExpenseInput = { spent_on: today(), category: "HOSTING", vendor: "", description: null, net_amount: 0, vat_amount: 0, reference: null, recurring: false };
+const EMPTY: ExpenseInput = { spent_on: today(), category: "HOSTING", vendor: "", description: null, net_amount: 0, vat_amount: 0, reference: null, frequency: "ONE_TIME" };
 
 function Expenses() {
   const can = useCan();
   const editor = can("expenses.manage");
   const [period, setPeriod] = useState(thisMonth);
+  const [freq, setFreq] = useState("");
   const [rows, setRows] = useState<Expense[] | null>(null);
   const [edit, setEdit] = useState<{ id: string | null; v: ExpenseInput } | null>(null);
   const [del, setDel] = useState<Expense | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => { api.admin.expenses(period || undefined).then(setRows).catch((e: Error) => setNotice(e.message)); }, [period]);
+  const load = useCallback(() => { api.admin.expenses(period || undefined, freq || undefined).then(setRows).catch((e: Error) => setNotice(e.message)); }, [period, freq]);
   useEffect(load, [load]);
 
   async function save(e: React.FormEvent) {
@@ -287,6 +369,10 @@ function Expenses() {
       <div className="head-row">
         <h2>المصروفات {rows && <span className="muted">({rows.length})</span>}</h2>
         <div className="head-tools">
+          <div className="field inline-select"><label htmlFor="x-fq">الدورية</label>
+            <select id="x-fq" value={freq} onChange={(e) => setFreq(e.target.value)}>
+              <option value="">الكل</option>{Object.entries(EXPENSE_FREQUENCY).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select></div>
           <PeriodSelect value={period} onChange={setPeriod} allowAll />
           {editor && <button className="btn btn-action" type="button" onClick={() => { setFormError(null); setEdit({ id: null, v: { ...EMPTY, spent_on: today() } }); }}>مصروف جديد</button>}
         </div>
@@ -300,12 +386,12 @@ function Expenses() {
           {rows?.map((r) => (
             <tr key={r.id}>
               <td>{r.spent_on}</td>
-              <td>{EXPENSE_CATEGORY[r.category] ?? r.category}{r.recurring && <span className="pill">شهري</span>}</td>
+              <td>{EXPENSE_CATEGORY[r.category] ?? r.category}{r.frequency !== "ONE_TIME" && <span className="pill">{r.frequency === "MONTHLY" ? "شهري" : "سنوي"}</span>}</td>
               <td>{r.vendor}{r.description && <div className="muted small">{r.description}</div>}{r.reference && <div className="muted small">مرجع: <bdi dir="ltr">{r.reference}</bdi></div>}</td>
               <td className="num">{sar(r.net_amount)}</td><td className="num">{sar(r.vat_amount)}</td><td className="num"><b>{sar(r.total)}</b></td>
               <td className="row-actions-cell">{editor && <>
                 <button className="link-btn" type="button" onClick={() => { setFormError(null); setEdit({ id: r.id, v: { spent_on: r.spent_on, category: r.category, vendor: r.vendor, description: r.description,
-                  net_amount: r.net_amount, vat_amount: r.vat_amount, reference: r.reference, recurring: r.recurring } }); }}>تعديل</button>
+                  net_amount: r.net_amount, vat_amount: r.vat_amount, reference: r.reference, frequency: r.frequency } }); }}>تعديل</button>
                 <button className="link-btn danger" type="button" onClick={() => setDel(r)}>حذف</button></>}</td>
             </tr>
           ))}
@@ -335,7 +421,10 @@ function Expenses() {
             <div className="field"><label htmlFor="x-desc">الوصف (اختياري)</label><input id="x-desc" value={v.description ?? ""} onChange={(e) => set({ description: e.target.value || null })} /></div>
             <div className="grid">
               <div className="field"><label htmlFor="x-ref">رقم فاتورة المورّد (اختياري)</label><input id="x-ref" dir="ltr" value={v.reference ?? ""} onChange={(e) => set({ reference: e.target.value || null })} /></div>
-              <label className="check-row"><input type="checkbox" checked={v.recurring} onChange={(e) => set({ recurring: e.target.checked })} /> مصروف شهري متكرر</label>
+              <div className="field"><label htmlFor="x-freq">الدورية</label>
+                <select id="x-freq" value={v.frequency} onChange={(e) => set({ frequency: e.target.value as ExpenseInput["frequency"] })}>
+                  {Object.entries(EXPENSE_FREQUENCY).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select></div>
             </div>
             {formError && <p className="error" role="alert">{formError}</p>}
             <div className="dialog-actions">
@@ -600,11 +689,20 @@ function CreatePlan({ onClose, onDone }: { onClose: () => void; onDone: (id: str
             <select id="pl-tier" value={f.plan_tier} onChange={(e) => setF({ ...f, plan_tier: e.target.value })}>
               {Object.keys(YEARLY).map((t) => <option key={t} value={t}>{PLAN_LABEL[t]}</option>)}
             </select></div>
-          <div className="field"><label htmlFor="pl-n">طريقة السداد</label>
-            <select id="pl-n" value={f.installments} onChange={(e) => setF({ ...f, installments: Number(e.target.value) })}>
-              {COUNTS.map(([n, l]) => <option key={n} value={n}>{l}</option>)}
-            </select></div>
         </div>
+        <fieldset className="pay-style">
+          <legend>طريقة الدفع</legend>
+          <label><input type="radio" name="pl-style" checked={f.installments === 12} onChange={() => setF({ ...f, installments: 12 })} />
+            <span><b>شهري</b><small>12 دفعة شهرية لعقد سنوي</small></span></label>
+          <label><input type="radio" name="pl-style" checked={f.installments === 1} onChange={() => setF({ ...f, installments: 1 })} />
+            <span><b>سنوي</b><small>دفعة واحدة مقدماً</small></span></label>
+          <label><input type="radio" name="pl-style" checked={![1, 12].includes(f.installments)} onChange={() => setF({ ...f, installments: 4 })} />
+            <span><b>تقسيط</b><small>2 أو 3 أو 4 أو 6 أقساط</small></span></label>
+        </fieldset>
+        {![1, 12].includes(f.installments) && <div className="field"><label htmlFor="pl-n">عدد الأقساط</label>
+          <select id="pl-n" value={f.installments} onChange={(e) => setF({ ...f, installments: Number(e.target.value) })}>
+            {COUNTS.filter(([n]) => n !== 1 && n !== 12).map(([n, l]) => <option key={n} value={n}>{l}</option>)}
+          </select></div>}
         <div className="grid">
           <div className="field"><label htmlFor="pl-start">بداية العقد</label>
             <input id="pl-start" type="date" required value={f.starts_on} onChange={(e) => setF({ ...f, starts_on: e.target.value })} /></div>
@@ -615,7 +713,7 @@ function CreatePlan({ onClose, onDone }: { onClose: () => void; onDone: (id: str
         <p className="hint">كل قسط ≈ <b>{sar(each)}</b> قبل الضريبة (<b>{sar(round2(each * 1.15))}</b> شاملة). القسط الأخير يحمل فرق التقريب.</p>
         <div className="field"><label htmlFor="pl-note">ملاحظة (اختيارية)</label>
           <input id="pl-note" value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></div>
-        <label className="check-row"><input type="checkbox" checked={f.pay_first} onChange={(e) => setF({ ...f, pay_first: e.target.checked })} /> القسط الأول مدفوع الآن</label>
+        <label className="check-row"><input type="checkbox" checked={f.pay_first} onChange={(e) => setF({ ...f, pay_first: e.target.checked })} /> {f.installments === 1 ? "المبلغ مدفوع الآن" : "الدفعة الأولى مدفوعة الآن"}</label>
         {f.pay_first && <div className="field"><label htmlFor="pl-ref">مرجع دفع القسط الأول</label>
           <input id="pl-ref" dir="ltr" value={f.first_reference} onChange={(e) => setF({ ...f, first_reference: e.target.value })} /></div>}
         {error && <p className="error" role="alert">{error}</p>}

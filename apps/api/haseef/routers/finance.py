@@ -71,6 +71,19 @@ def summary(period: str = Query(...), a: Admin = Depends(require_perm(*VIEW))):
                    FROM expenses WHERE spent_on >= :s AND spent_on < :e GROUP BY 1)
         SELECT COALESCE(r.m, x.m) AS month, COALESCE(revenue, 0) AS revenue, COALESCE(expenses, 0) AS expenses
         FROM r FULL JOIN x ON r.m = x.m ORDER BY 1"""), p).mappings())
+    by_cycle = _money(c.execute(text("""
+        SELECT CASE WHEN source = 'SUBSCRIPTION' THEN COALESCE(plan_cycle, 'YEARLY') ELSE source END AS cycle,
+               sum(CASE WHEN kind = 'INVOICE' THEN subtotal ELSE -subtotal END) AS net, count(*) FILTER (WHERE kind = 'INVOICE') AS invoices
+        FROM invoices WHERE issued_at >= :s AND issued_at < :e GROUP BY 1 ORDER BY 1"""), p).mappings())
+    mrr_split = _money(c.execute(text("""
+        SELECT s.billing_cycle AS cycle, count(*) AS subscribers,
+               COALESCE(sum(CASE WHEN s.billing_cycle = 'YEARLY' THEN p.yearly_price_sar / 12.0 ELSE p.monthly_price_sar END), 0) AS mrr
+        FROM subscriptions s JOIN plans p ON p.tier = s.plan_tier WHERE s.billing_status = 'ACTIVE'
+        GROUP BY s.billing_cycle ORDER BY 1""")).mappings())
+    fixed = c.execute(text("""
+        SELECT COALESCE(sum(net_amount) FILTER (WHERE frequency = 'MONTHLY' AND spent_on > current_date - 31), 0) AS monthly,
+               COALESCE(sum(net_amount) FILTER (WHERE frequency = 'YEARLY' AND spent_on > current_date - 365), 0) / 12.0 AS yearly_share
+        FROM expenses""")).mappings().one()
     revenue = sum(r["net"] for r in rev)
     expenses = sum(e["net"] for e in exp)
     out_vat = sum(r["vat"] for r in rev)
@@ -92,7 +105,10 @@ def summary(period: str = Query(...), a: Admin = Depends(require_perm(*VIEW))):
         WHERE i.paid_at IS NULL AND p.status = 'ACTIVE' AND i.due_date < CAST(:today AS date) + 30
         ORDER BY i.due_date"""), {"today": installments_service.today_riyadh()}).mappings())
     return {"period": period, "from": start, "to": end,
-            "revenue": {"total": revenue, "by_source": rev},
+            "revenue": {"total": revenue, "by_source": rev, "by_cycle": by_cycle},
+            "mrr_split": mrr_split,
+            "fixed_costs": {"monthly": float(fixed["monthly"]), "yearly_share": round(float(fixed["yearly_share"]), 2),
+                            "total": round(float(fixed["monthly"]) + float(fixed["yearly_share"]), 2)},
             "expenses": {"total": expenses, "by_category": exp},
             "net_profit": revenue - expenses, "margin": (revenue - expenses) / revenue if revenue else None,
             "vat": {"output": out_vat, "input": in_vat, "payable": out_vat - in_vat},
@@ -105,15 +121,18 @@ def summary(period: str = Query(...), a: Admin = Depends(require_perm(*VIEW))):
 # ---------------------------------------------------------------- الفواتير
 @router.get("/invoices")
 def invoices(period: str | None = None, q: str | None = None,
+             cycle: Literal["MONTHLY", "YEARLY", "CONSULTATION"] | None = None,
              a: Admin = Depends(require_perm("finance.view", "billing.manage"))):
     start, end = _period(period) if period else (date(2000, 1, 1), date(2100, 1, 1))
     rows = a.conn.execute(text("""
         SELECT i.id, i.number, i.kind, i.source, i.org_id, i.buyer_name, i.subtotal, i.vat_amount, i.total,
-               i.issued_at, i.status, i.payment_reference, r.number AS related_number
+               i.issued_at, i.status, i.payment_reference, i.plan_cycle, r.number AS related_number
         FROM invoices i LEFT JOIN invoices r ON r.id = i.related_invoice_id
         WHERE i.issued_at >= :s AND i.issued_at < :e
           AND (CAST(:q AS text) IS NULL OR i.number ILIKE '%' || :q || '%' OR i.buyer_name ILIKE '%' || :q || '%')
-        ORDER BY i.issued_at DESC LIMIT 500"""), {"s": start, "e": end, "q": q or None}).mappings()
+          AND (CAST(:cy AS text) IS NULL OR (CAST(:cy AS text) = 'CONSULTATION' AND i.source = 'CONSULTATION')
+               OR (i.source = 'SUBSCRIPTION' AND i.plan_cycle = :cy))
+        ORDER BY i.issued_at DESC LIMIT 500"""), {"s": start, "e": end, "q": q or None, "cy": cycle}).mappings()
     return _money(rows)
 
 
@@ -154,18 +173,21 @@ class ExpenseIn(BaseModel):
     net_amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
     vat_amount: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
     reference: str | None = Field(default=None, max_length=100)
-    recurring: bool = False
+    frequency: Literal["ONE_TIME", "MONTHLY", "YEARLY"] = "ONE_TIME"
 
 
 @router.get("/expenses")
-def expenses(period: str | None = None, category: Category | None = None, a: Admin = Depends(require_perm(*VIEW, "expenses.manage"))):
+def expenses(period: str | None = None, category: Category | None = None,
+             frequency: Literal["ONE_TIME", "MONTHLY", "YEARLY"] | None = None,
+             a: Admin = Depends(require_perm(*VIEW, "expenses.manage"))):
     start, end = _period(period) if period else (date(2000, 1, 1), date(2100, 1, 1))
     rows = a.conn.execute(text("""
         SELECT e.id, e.spent_on, e.category, e.vendor, e.description, e.net_amount, e.vat_amount, e.total, e.reference,
-               e.recurring, e.created_at, u.full_name AS created_by_name
+               e.frequency, e.created_at, u.full_name AS created_by_name
         FROM expenses e LEFT JOIN users u ON u.id = e.created_by
         WHERE e.spent_on >= :s AND e.spent_on < :e AND (CAST(:c AS text) IS NULL OR e.category = :c)
-        ORDER BY e.spent_on DESC, e.created_at DESC LIMIT 1000"""), {"s": start, "e": end, "c": category}).mappings()
+          AND (CAST(:f AS text) IS NULL OR e.frequency = :f)
+        ORDER BY e.spent_on DESC, e.created_at DESC LIMIT 1000"""), {"s": start, "e": end, "c": category, "f": frequency}).mappings()
     return _money(rows)
 
 
@@ -178,8 +200,8 @@ def _check_vat(body: ExpenseIn) -> None:
 def add_expense(body: ExpenseIn, a: Admin = Depends(require_perm("expenses.manage"))):
     _check_vat(body)
     eid = a.conn.execute(text("""
-        INSERT INTO expenses (spent_on, category, vendor, description, net_amount, vat_amount, reference, recurring, created_by)
-        VALUES (:spent_on, :category, :vendor, :description, :net_amount, :vat_amount, :reference, :recurring, :u) RETURNING id"""),
+        INSERT INTO expenses (spent_on, category, vendor, description, net_amount, vat_amount, reference, frequency, created_by)
+        VALUES (:spent_on, :category, :vendor, :description, :net_amount, :vat_amount, :reference, :frequency, :u) RETURNING id"""),
         {**body.model_dump(), "u": a.user_id}).scalar_one()
     a.audit("ADMIN_EXPENSE_ADD", "expense", eid, None, {"category": body.category, "amount_sar": float(body.net_amount), "vendor": body.vendor})
     return {"id": eid}
@@ -190,7 +212,7 @@ def update_expense(expense_id: UUID, body: ExpenseIn, a: Admin = Depends(require
     _check_vat(body)
     n = a.conn.execute(text("""
         UPDATE expenses SET spent_on = :spent_on, category = :category, vendor = :vendor, description = :description,
-               net_amount = :net_amount, vat_amount = :vat_amount, reference = :reference, recurring = :recurring,
+               net_amount = :net_amount, vat_amount = :vat_amount, reference = :reference, frequency = :frequency,
                updated_at = now(), updated_by = :u
         WHERE id = :id"""), {**body.model_dump(), "u": a.user_id, "id": expense_id}).rowcount
     if not n:
@@ -362,3 +384,63 @@ def cancel_plan(plan_id: UUID, body: CancelPlanIn, a: Admin = Depends(require_pe
         raise HTTPException(status.HTTP_409_CONFLICT, "الخطة غير فعّالة")
     a.audit("ADMIN_PLAN_CANCEL", "payment_plan", plan_id, n, {"reason": body.reason})
     return {"status": "CANCELED"}
+
+
+# ---------------------------------------------------------------- قائمة الدخل شهرياً أو سنوياً
+REV_ROWS = [("MONTHLY", "اشتراكات شهرية"), ("YEARLY", "اشتراكات سنوية"), ("CONSULTATION", "استشارات قانونية"), ("MANUAL", "إيرادات أخرى")]
+EXP_LABEL = {"HOSTING": "الاستضافة والخوادم", "AI": "الذكاء الاصطناعي", "MESSAGING": "واتساب والبريد", "PAYMENT_FEES": "رسوم بوابة الدفع",
+             "SALARIES": "الرواتب والتأمينات", "LAWYER_FEES": "أتعاب المحامين", "MARKETING": "التسويق",
+             "PROFESSIONAL": "المحاسبة والاستشارات المهنية", "GOVERNMENT": "الرسوم الحكومية والتراخيص", "SOFTWARE": "البرامج والأدوات",
+             "OFFICE": "المكتب ومساحة العمل", "OTHER": "أخرى"}
+
+
+@router.get("/statement")
+def statement(view: Literal["monthly", "yearly"] = "monthly", year: int | None = None, years: int = Query(default=3, ge=2, le=6),
+              allocate: bool = True, a: Admin = Depends(require_perm(*VIEW))):
+    """قائمة دخل بأعمدة: أشهر سنة واحدة، أو سنوات متتالية. allocate يوزّع المصروف السنوي على 12 شهراً من تاريخه."""
+    from ..services.installments_service import today_riyadh
+    from ..domain.finance import add_months
+    this_year = today_riyadh().year
+    if view == "monthly":
+        y = year or this_year
+        cols = [f"{y}-{m:02d}" for m in range(1, 13)]
+        start, end = date(y, 1, 1), date(y + 1, 1, 1)
+        key = lambda ym: ym                                       # noqa: E731
+    else:
+        last = year or this_year
+        cols = [str(y) for y in range(last - years + 1, last + 1)]
+        start, end = date(int(cols[0]), 1, 1), date(last + 1, 1, 1)
+        key = lambda ym: ym[:4]                                   # noqa: E731
+    idx = {c: i for i, c in enumerate(cols)}
+    rev = a.conn.execute(text("""
+        SELECT to_char(issued_at AT TIME ZONE 'Asia/Riyadh', 'YYYY-MM') AS ym,
+               CASE WHEN source = 'SUBSCRIPTION' THEN COALESCE(plan_cycle, 'YEARLY') ELSE source END AS k,
+               sum(CASE WHEN kind = 'INVOICE' THEN subtotal ELSE -subtotal END) AS amt
+        FROM invoices WHERE issued_at >= :s AND issued_at < :e GROUP BY 1, 2"""), {"s": start, "e": end}).mappings()
+    rows: dict[str, list[float]] = {}
+    for r_ in rev:
+        rows.setdefault(r_["k"], [0.0] * len(cols))[idx[key(r_["ym"])]] += float(r_["amt"])
+    exp = a.conn.execute(text("""
+        SELECT spent_on, category, net_amount, frequency FROM expenses
+        WHERE spent_on >= CAST(:s AS date) - 365 AND spent_on < :e"""), {"s": start, "e": end}).mappings()
+    erows: dict[str, list[float]] = {}
+    for e_ in exp:
+        amt = float(e_["net_amount"])
+        parts = [(e_["spent_on"], amt)]
+        if allocate and e_["frequency"] == "YEARLY":
+            parts = [(add_months(e_["spent_on"], i), amt / 12) for i in range(12)]
+        for d, v in parts:
+            k = key(d.strftime("%Y-%m"))
+            if k in idx:
+                erows.setdefault(e_["category"], [0.0] * len(cols))[idx[k]] += v
+    def row(group, k, label, vals):
+        vals = [round(v, 2) for v in vals]
+        return {"group": group, "key": k, "label": label, "values": vals, "total": round(sum(vals), 2)}
+    out = [row("revenue", k, label, rows[k]) for k, label in REV_ROWS if k in rows]
+    rev_tot = [sum(r_["values"][i] for r_ in out) for i in range(len(cols))]
+    exp_rows = sorted((row("expenses", k, EXP_LABEL.get(k, k), v) for k, v in erows.items()), key=lambda x: -x["total"])
+    exp_tot = [sum(r_["values"][i] for r_ in exp_rows) for i in range(len(cols))]
+    return {"view": view, "columns": cols, "allocate": allocate,
+            "revenue": out, "revenue_total": row("total", "revenue", "إجمالي الإيرادات", rev_tot),
+            "expenses": exp_rows, "expenses_total": row("total", "expenses", "إجمالي المصروفات", exp_tot),
+            "net": row("net", "net", "صافي الربح (الخسارة)", [rev_tot[i] - exp_tot[i] for i in range(len(cols))])}
