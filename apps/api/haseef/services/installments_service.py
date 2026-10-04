@@ -77,7 +77,7 @@ def pay(conn: Connection, *, plan_id: UUID, installment_id: UUID, reference: str
         {"o": row["org_id"], "s": row["subscription_id"], "t": row["plan_tier"], "a": row["amount_net"], "m": months,
          "r": reference, "note": f"القسط {row['seq']} من {row['installments']}", "u": user_id}).scalar_one()
     desc = f"اشتراك سنوي {PLAN_NAME.get(row['plan_tier'], row['plan_tier'])} — القسط {row['seq']} من {row['installments']}"
-    inv = invoicing.invoice_subscription_payment(conn, billing_event_id=ev, user_id=user_id, description=desc)
+    inv = invoicing.invoice_subscription_payment(conn, billing_event_id=ev, user_id=user_id, description=desc, plan_cycle="YEARLY")
     conn.execute(text("UPDATE plan_installments SET paid_at = now(), invoice_id = :inv, payment_reference = :r WHERE id = :i"),
                  {"inv": inv["id"], "r": reference, "i": installment_id})
     left = conn.execute(text("SELECT count(*) FROM plan_installments WHERE plan_id = :p AND paid_at IS NULL"), {"p": plan_id}).scalar_one()

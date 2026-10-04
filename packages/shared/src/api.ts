@@ -211,14 +211,20 @@ export function createApi(
       legalConsultations: () => req<AdminConsultation[]>("/admin/legal/consultations", { org: false }),
       // المالية الداخلية لحصيف
       finSummary: (period: string) => req<FinanceSummary>(`/admin/finance/summary?period=${encodeURIComponent(period)}`, { org: false }),
-      invoices: (period?: string, q?: string) => {
-        const p = new URLSearchParams(); if (period) p.set("period", period); if (q) p.set("q", q);
+      invoices: (period?: string, q?: string, cycle?: string) => {
+        const p = new URLSearchParams(); if (period) p.set("period", period); if (q) p.set("q", q); if (cycle) p.set("cycle", cycle);
         const qs = p.toString();
         return req<InvoiceRow[]>(`/admin/finance/invoices${qs ? `?${qs}` : ""}`, { org: false });
       },
       invoice: (id: string) => req<Invoice>(`/admin/finance/invoices/${id}`, { org: false }),
       voidInvoice: (id: string, reason: string) => post<{ credit_note: { id: string; number: string } }>(`/admin/finance/invoices/${id}/void`, { reason }),
-      expenses: (period?: string) => req<Expense[]>(`/admin/finance/expenses${period ? `?period=${encodeURIComponent(period)}` : ""}`, { org: false }),
+      expenses: (period?: string, frequency?: string) => {
+        const p = new URLSearchParams(); if (period) p.set("period", period); if (frequency) p.set("frequency", frequency);
+        const qs = p.toString();
+        return req<Expense[]>(`/admin/finance/expenses${qs ? `?${qs}` : ""}`, { org: false });
+      },
+      statement: (view: "monthly" | "yearly", year: number, allocate: boolean) =>
+        req<FinanceStatement>(`/admin/finance/statement?view=${view}&year=${year}&allocate=${allocate}${view === "yearly" ? "&years=4" : ""}`, { org: false }),
       addExpense: (b: ExpenseInput) => post<{ id: string }>("/admin/finance/expenses", b),
       updateExpense: (id: string, b: ExpenseInput) =>
         req<{ updated: boolean }>(`/admin/finance/expenses/${id}`, { method: "PATCH", org: false, body: JSON.stringify(b) }),
@@ -275,7 +281,7 @@ export interface InvoiceLineRow { description: string; quantity: number; unit_pr
 export interface InvoiceRow {
   id: string; number: string; kind: "INVOICE" | "CREDIT_NOTE"; source: "SUBSCRIPTION" | "CONSULTATION" | "MANUAL";
   org_id: string | null; buyer_name: string; subtotal: number; vat_amount: number; total: number; issued_at: string;
-  status: "ISSUED" | "VOID"; payment_reference: string | null; related_number: string | null;
+  status: "ISSUED" | "VOID"; payment_reference: string | null; related_number: string | null; plan_cycle: "MONTHLY" | "YEARLY" | null;
 }
 export interface Invoice extends InvoiceRow {
   buyer_cr: string | null; buyer_vat: string | null; seller: HaseefProfile; lines: InvoiceLineRow[]; vat_rate: number;
@@ -283,12 +289,15 @@ export interface Invoice extends InvoiceRow {
 }
 export interface ExpenseInput {
   spent_on: string; category: string; vendor: string; description: string | null; net_amount: number; vat_amount: number;
-  reference: string | null; recurring: boolean;
+  reference: string | null; frequency: "ONE_TIME" | "MONTHLY" | "YEARLY";
 }
 export interface Expense extends ExpenseInput { id: string; total: number; created_at: string; created_by_name: string | null }
 export interface FinanceSummary {
   period: string; from: string; to: string;
-  revenue: { total: number; by_source: { source: string; net: number; vat: number; invoices: number; credit_notes: number }[] };
+  revenue: { total: number; by_source: { source: string; net: number; vat: number; invoices: number; credit_notes: number }[];
+    by_cycle: { cycle: string; net: number; invoices: number }[] };
+  mrr_split: { cycle: "MONTHLY" | "YEARLY"; subscribers: number; mrr: number }[];
+  fixed_costs: { monthly: number; yearly_share: number; total: number };
   expenses: { total: number; by_category: { category: string; net: number; vat: number; n: number }[] };
   net_profit: number; margin: number | null;
   vat: { output: number; input: number; payable: number };
@@ -319,6 +328,11 @@ export interface BillingOverview {
     monthly_price_sar: number; yearly_price_sar: number } | null;
   plan: PaymentPlanDetail | null; vat_rate: number;
   invoices: { id: string; number: string; kind: string; source: string; subtotal: number; vat_amount: number; total: number; issued_at: string; status: string }[];
+}
+export interface StatementRow { group: string; key: string; label: string; values: number[]; total: number }
+export interface FinanceStatement {
+  view: "monthly" | "yearly"; columns: string[]; allocate: boolean;
+  revenue: StatementRow[]; revenue_total: StatementRow; expenses: StatementRow[]; expenses_total: StatementRow; net: StatementRow;
 }
 export interface VatReturn {
   period: string; from: string; to: string; file_by: string;

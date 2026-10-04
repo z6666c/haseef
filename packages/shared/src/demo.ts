@@ -146,7 +146,10 @@ const orgs: Org[] = [
       { membership_id: uid(), role: "ORG_ADMIN", user_id: uid(), full_name: "سارة القحطاني", email: "sara@waha.example", phone: "+966500000002", active: true, last: ago(60 * 5) },
       { membership_id: uid(), role: "DPO", user_id: uid(), full_name: "فهد الشمري", email: "fahad@waha.example", phone: null, active: true, last: null },
     ],
-    billing: [{ event_type: "PAYMENT", plan_tier: "ESSENTIAL", amount_sar: 1990, period_months: 12, reference: "INV-2026-0003", note: null, created_at: ts(-60), actor: "المحاسبة" }],
+    billing: [
+      { event_type: "PAYMENT", plan_tier: "ESSENTIAL", amount_sar: 1990, period_months: 12, reference: "INV-2026-0003", note: "تحويل للاشتراك السنوي", created_at: ts(-60), actor: "المحاسبة" },
+      { event_type: "PAYMENT", plan_tier: "ESSENTIAL", amount_sar: 199, period_months: 1, reference: "INV-2026-0001", note: null, created_at: ts(-75), actor: "المحاسبة" },
+    ],
     counts: { items: 5, expired: 0, policies: 4 },
   },
   {
@@ -533,10 +536,10 @@ type DemoInvoice = {
   org_id: string | null; consultation_id: string | null; related_invoice_id: string | null; buyer_name: string; buyer_cr: string | null;
   buyer_vat: string | null; seller: Record<string, unknown>; lines: InvoiceLine[]; subtotal: number; vat_rate: number; vat_amount: number;
   total: number; payment_reference: string | null; note: string | null; qr: string | null; issued_at: string; status: "ISSUED" | "VOID";
-  void_reason: string | null;
+  void_reason: string | null; plan_cycle: "MONTHLY" | "YEARLY" | null;
 };
 type DemoExpense = { id: string; spent_on: string; category: string; vendor: string; description: string | null; net_amount: number;
-  vat_amount: number; total: number; reference: string | null; recurring: boolean; created_at: string; created_by_name: string | null };
+  vat_amount: number; total: number; reference: string | null; frequency: "ONE_TIME" | "MONTHLY" | "YEARLY"; created_at: string; created_by_name: string | null };
 
 const finProfile = {
   legal_name: "شركة حصيف لتقنية المعلومات (نموذج)", trade_name: "حصيف", vat_registered: true, vat_number: "300000000000003",
@@ -548,7 +551,7 @@ const invSeq = { INVOICE: 0, CREDIT_NOTE: 0 };
 const PLAN_AR: Record<string, string> = { ESSENTIAL: "باقة الأساس", PROFESSIONAL_GRC: "باقة الحوكمة والنمو", ENTERPRISE: "باقة كبار العملاء" };
 
 function issueInvoice(x: { kind?: "INVOICE" | "CREDIT_NOTE"; source: DemoInvoice["source"]; org: Org | null; lines: InvoiceLine[];
-  at?: string; ref?: string | null; consultation_id?: string | null; related?: DemoInvoice; note?: string | null }): DemoInvoice {
+  at?: string; ref?: string | null; consultation_id?: string | null; related?: DemoInvoice; note?: string | null; cycle?: "MONTHLY" | "YEARLY" | null }): DemoInvoice {
   const kind = x.kind ?? "INVOICE";
   const reg = finProfile.vat_registered;
   const lines = x.related ? x.related.lines.map((l) => ({ ...l, description: `إلغاء: ${l.description}` }))
@@ -564,14 +567,15 @@ function issueInvoice(x: { kind?: "INVOICE" | "CREDIT_NOTE"; source: DemoInvoice
     seller: { ...finProfile }, lines, subtotal, vat_rate: x.related ? x.related.vat_rate : reg ? VAT_RATE : 0, vat_amount: vat, total: round2(subtotal + vat),
     payment_reference: x.ref ?? null, note: x.note ?? null,
     qr: reg && finProfile.vat_number ? zatcaTlv({ seller: finProfile.legal_name, vatNumber: finProfile.vat_number, timestamp: issued, total: round2(subtotal + vat), vat }) : null,
-    issued_at: issued, status: "ISSUED", void_reason: null,
+    issued_at: issued, status: "ISSUED", void_reason: null, plan_cycle: x.related ? x.related.plan_cycle : x.cycle ?? null,
   };
   invoicesDemo.unshift(inv);
   return inv;
 }
 function subscriptionInvoice(o: Org, plan: string, amount: number, months: number, ref: string | null, at?: string, note?: string | null) {
   const desc = note?.startsWith("القسط") ? `اشتراك سنوي ${PLAN_AR[plan] ?? plan} — ${note}` : `اشتراك ${PLAN_AR[plan] ?? plan} — ${months === 12 ? "سنة" : "شهر"}`;
-  return issueInvoice({ source: "SUBSCRIPTION", org: o, ref, at, lines: [invoiceLine(desc, 1, amount)] });
+  return issueInvoice({ source: "SUBSCRIPTION", org: o, ref, at, lines: [invoiceLine(desc, 1, amount)],
+    cycle: months === 1 && !note?.startsWith("القسط") ? "MONTHLY" : "YEARLY" });
 }
 function consultationInvoice(c: { id: string; topic: string; duration_minutes: number; urgent: boolean; price: { subtotal: number } }, ref: string, at?: string) {
   if (invoicesDemo.some((i) => i.consultation_id === c.id && i.kind === "INVOICE")) return null;
@@ -598,18 +602,20 @@ function voidInvoice(inv: DemoInvoice, reason: string) {
 
 const expensesDemo: DemoExpense[] = (() => {
   const out: DemoExpense[] = [];
-  const add = (daysAgo: number, category: string, vendor: string, net: number, vat: number, description: string | null, recurring = false, reference: string | null = null) =>
+  const add = (daysAgo: number, category: string, vendor: string, net: number, vat: number, description: string | null,
+    frequency: DemoExpense["frequency"] = "ONE_TIME", reference: string | null = null) =>
     out.push({ id: uid(), spent_on: ts(-daysAgo).slice(0, 10), category, vendor, description, net_amount: net, vat_amount: vat, total: round2(net + vat),
-      reference, recurring, created_at: ts(-daysAgo), created_by_name: "المحاسبة" });
+      reference, frequency, created_at: ts(-daysAgo), created_by_name: "المحاسبة" });
   for (const k of [0, 1, 2]) {
     const d = 30 * k + 3;
-    add(d, "HOSTING", "مزوّد سحابي داخل المملكة", 300, 45, "خادم 2 نواة / 8 جيجا + تخزين 50 جيجا", true);
-    add(d, "MESSAGING", "مزوّد واتساب للأعمال", 12.5, 1.88, "رسائل التنبيهات الخدمية", true);
-    add(d + 1, "SOFTWARE", "البريد المهني والأدوات", 90, 13.5, "بريد الفريق وأدوات العمل", true);
-    add(d + 2, "PROFESSIONAL", "مكتب محاسبة خارجي", 600, 90, "مسك الدفاتر والإقرار", true);
+    add(d, "HOSTING", "مزوّد سحابي داخل المملكة", 300, 45, "خادم 2 نواة / 8 جيجا + تخزين 50 جيجا", "MONTHLY");
+    add(d, "MESSAGING", "مزوّد واتساب للأعمال", 12.5, 1.88, "رسائل التنبيهات الخدمية", "MONTHLY");
+    add(d + 1, "SOFTWARE", "البريد المهني والأدوات", 90, 13.5, "بريد الفريق وأدوات العمل", "MONTHLY");
+    add(d + 2, "PROFESSIONAL", "مكتب محاسبة خارجي", 600, 90, "مسك الدفاتر والإقرار", "MONTHLY");
   }
   add(20, "MARKETING", "حملة إعلانات رقمية", 1500, 225, "إعلانات البحث لصفحة حصيف التعريفية");
-  add(45, "GOVERNMENT", "وزارة التجارة والغرفة التجارية", 1200, 0, "تجديد السجل والاشتراك");
+  add(45, "GOVERNMENT", "وزارة التجارة والغرفة التجارية", 1200, 0, "تجديد السجل والاشتراك", "YEARLY");
+  add(50, "SOFTWARE", "نطاق haseef.sa والشهادات", 360, 54, "تجديد سنوي", "YEARLY");
   add(8, "PAYMENT_FEES", "بوابة الدفع", 21.4, 3.21, "2.2% من التحصيل");
   return out.sort((a, b) => b.spent_on.localeCompare(a.spent_on));
 })();
@@ -640,7 +646,21 @@ function finSummary(period: string) {
     .map((o) => ({ org_id: o.id, name: o.name, plan_tier: o.sub!.plan_tier, billing_cycle: o.sub!.billing_cycle, ends_at: o.sub!.ends_at,
       expected: PRICES[o.sub!.plan_tier][o.sub!.billing_cycle === "YEARLY" ? 1 : 0] }))
     .sort((a, b) => a.ends_at.localeCompare(b.ends_at));
-  return { period, from, to, revenue: { total: revenue, by_source: bySource }, expenses: { total: expenses, by_category: byCat },
+  const cyc = (i: DemoInvoice) => (i.source === "SUBSCRIPTION" ? i.plan_cycle ?? "YEARLY" : i.source);
+  const byCycle = ["CONSULTATION", "MANUAL", "MONTHLY", "YEARLY"].map((cycle) => {
+    const xs = inv.filter((i) => cyc(i) === cycle);
+    return { cycle, net: round2(xs.reduce((a, i) => a + sign(i) * i.subtotal, 0)), invoices: xs.filter((i) => i.kind === "INVOICE").length };
+  }).filter((r) => r.invoices > 0 || r.net !== 0);
+  const active = orgs.filter((o) => o.sub?.billing_status === "ACTIVE");
+  const mrrSplit = (["MONTHLY", "YEARLY"] as const).map((cycle) => {
+    const xs = active.filter((o) => o.sub!.billing_cycle === cycle);
+    return { cycle, subscribers: xs.length, mrr: round2(xs.reduce((a, o) => a + (cycle === "YEARLY" ? PRICES[o.sub!.plan_tier][1] / 12 : PRICES[o.sub!.plan_tier][0]), 0)) };
+  }).filter((r) => r.subscribers > 0);
+  const t0 = Date.now();
+  const fm = round2(expensesDemo.filter((e) => e.frequency === "MONTHLY" && t0 - new Date(e.spent_on).getTime() < 31 * DAY).reduce((a, e) => a + e.net_amount, 0));
+  const fy = round2(expensesDemo.filter((e) => e.frequency === "YEARLY" && t0 - new Date(e.spent_on).getTime() < 365 * DAY).reduce((a, e) => a + e.net_amount, 0) / 12);
+  return { period, from, to, revenue: { total: revenue, by_source: bySource, by_cycle: byCycle }, mrr_split: mrrSplit,
+    fixed_costs: { monthly: fm, yearly_share: fy, total: round2(fm + fy) }, expenses: { total: expenses, by_category: byCat },
     net_profit: round2(revenue - expenses), margin: revenue ? (revenue - expenses) / revenue : null,
     vat: { output: out, input: inp, payable: round2(out - inp) }, monthly: [...months.values()].sort((a, b) => a.month.localeCompare(b.month)),
     mrr: overview().kpis.mrr_sar ?? 0, renewals_due: due, renewals_expected: due.reduce((a, d) => a + d.expected, 0),
@@ -648,16 +668,48 @@ function finSummary(period: string) {
 }
 const invoiceRow = (i: DemoInvoice) => ({ id: i.id, number: i.number, kind: i.kind, source: i.source, org_id: i.org_id, buyer_name: i.buyer_name,
   subtotal: i.subtotal, vat_amount: i.vat_amount, total: i.total, issued_at: i.issued_at, status: i.status, payment_reference: i.payment_reference,
-  related_number: invoicesDemo.find((r) => r.id === i.related_invoice_id)?.number ?? null });
+  related_number: invoicesDemo.find((r) => r.id === i.related_invoice_id)?.number ?? null, plan_cycle: i.plan_cycle });
+
+function finStatement(view: "monthly" | "yearly", year: number, years: number, allocate: boolean) {
+  const cols = view === "monthly" ? Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`)
+    : Array.from({ length: years }, (_, i) => String(year - years + 1 + i));
+  const key = (ym: string) => (view === "monthly" ? ym : ym.slice(0, 4));
+  const idx = new Map(cols.map((c, i) => [c, i]));
+  const add = (m: Map<string, number[]>, k: string, col: string, v: number) => {
+    const i = idx.get(col); if (i === undefined) return;
+    const arr = m.get(k) ?? new Array(cols.length).fill(0); arr[i] += v; m.set(k, arr);
+  };
+  const rev = new Map<string, number[]>();
+  for (const i of invoicesDemo) add(rev, i.source === "SUBSCRIPTION" ? i.plan_cycle ?? "YEARLY" : i.source, key(i.issued_at.slice(0, 7)), (i.kind === "INVOICE" ? 1 : -1) * i.subtotal);
+  const exp = new Map<string, number[]>();
+  for (const e of expensesDemo) {
+    const parts: [string, number][] = allocate && e.frequency === "YEARLY"
+      ? Array.from({ length: 12 }, (_, k) => [addMonthsIso(e.spent_on, k).slice(0, 7), e.net_amount / 12])
+      : [[e.spent_on.slice(0, 7), e.net_amount]];
+    for (const [ym, v] of parts) add(exp, e.category, key(ym), v);
+  }
+  const row = (group: string, k: string, label: string, vals: number[]) => {
+    const values = vals.map(round2); return { group, key: k, label, values, total: round2(values.reduce((a, b) => a + b, 0)) };
+  };
+  const REV: [string, string][] = [["MONTHLY", "اشتراكات شهرية"], ["YEARLY", "اشتراكات سنوية"], ["CONSULTATION", "استشارات قانونية"], ["MANUAL", "إيرادات أخرى"]];
+  const revenue = REV.filter(([k]) => rev.has(k)).map(([k, l]) => row("revenue", k, l, rev.get(k)!));
+  const revTot = cols.map((_, i) => revenue.reduce((a, r) => a + r.values[i], 0));
+  const expenses = [...exp.entries()].map(([k, v]) => row("expenses", k, EXPENSE_CATEGORY[k] ?? k, v)).sort((a, b) => b.total - a.total);
+  const expTot = cols.map((_, i) => expenses.reduce((a, r) => a + r.values[i], 0));
+  return { view, columns: cols, allocate, revenue, revenue_total: row("total", "revenue", "إجمالي الإيرادات", revTot),
+    expenses, expenses_total: row("total", "expenses", "إجمالي المصروفات", expTot),
+    net: row("net", "net", "صافي الربح (الخسارة)", cols.map((_, i) => revTot[i] - expTot[i])) };
+}
 
 function financeRoute(method: string, p: string, q: URLSearchParams, body: Record<string, unknown>, who: string): unknown {
   let m: RegExpMatchArray | null;
   if (p === "/admin/finance/summary") return finSummary(q.get("period") ?? new Date().toISOString().slice(0, 7));
   if (p === "/admin/finance/invoices") {
-    const per = q.get("period"), s = (q.get("q") ?? "").trim();
+    const per = q.get("period"), s = (q.get("q") ?? "").trim(), cy = q.get("cycle");
     const r = per ? periodRange(per) : null;
     return invoicesDemo.filter((i) => (!r || (i.issued_at.slice(0, 10) >= r.from && i.issued_at.slice(0, 10) < r.to))
-      && (!s || i.number.includes(s) || i.buyer_name.includes(s))).map(invoiceRow);
+      && (!s || i.number.includes(s) || i.buyer_name.includes(s))
+      && (!cy || (cy === "CONSULTATION" ? i.source === "CONSULTATION" : i.source === "SUBSCRIPTION" && i.plan_cycle === cy))).map(invoiceRow);
   }
   if ((m = p.match(/^\/admin\/finance\/invoices\/([^/]+)\/void$/))) {
     const inv = invoicesDemo.find((i) => i.id === m![1]); if (!inv) throw new DemoError(404, "الفاتورة غير موجودة");
@@ -672,8 +724,8 @@ function financeRoute(method: string, p: string, q: URLSearchParams, body: Recor
     return { ...i, ...invoiceRow(i), credit_note_number: cn?.number ?? null, credit_note_id: cn?.id ?? null };
   }
   if (p === "/admin/finance/expenses" && method === "GET") {
-    const per = q.get("period"); const r = per ? periodRange(per) : null;
-    return expensesDemo.filter((e) => !r || (e.spent_on >= r.from && e.spent_on < r.to));
+    const per = q.get("period"), fr = q.get("frequency"); const r = per ? periodRange(per) : null;
+    return expensesDemo.filter((e) => (!r || (e.spent_on >= r.from && e.spent_on < r.to)) && (!fr || e.frequency === fr));
   }
   const expenseBody = () => {
     const net = Number(body.net_amount), vat = Number(body.vat_amount ?? 0);
@@ -682,7 +734,8 @@ function financeRoute(method: string, p: string, q: URLSearchParams, body: Recor
     if (String(body.vendor ?? "").trim().length < 2) throw new DemoError(422, "اكتب اسم المورّد");
     if (!EXPENSE_CATEGORY[String(body.category)]) throw new DemoError(422, "اختر البند");
     return { spent_on: String(body.spent_on), category: String(body.category), vendor: String(body.vendor), description: (body.description as string) || null,
-      net_amount: round2(net), vat_amount: round2(vat), total: round2(net + vat), reference: (body.reference as string) || null, recurring: !!body.recurring };
+      net_amount: round2(net), vat_amount: round2(vat), total: round2(net + vat), reference: (body.reference as string) || null,
+      frequency: (["MONTHLY", "YEARLY"].includes(String(body.frequency)) ? body.frequency : "ONE_TIME") as DemoExpense["frequency"] };
   };
   if (p === "/admin/finance/expenses" && method === "POST") {
     const e = { id: uid(), ...expenseBody(), created_at: new Date().toISOString(), created_by_name: who };
@@ -706,6 +759,8 @@ function financeRoute(method: string, p: string, q: URLSearchParams, body: Recor
     const end = new Date(`${to}T00:00:00Z`); end.setUTCMonth(end.getUTCMonth() + 1); end.setUTCDate(0);
     return { period: per, from, to, sales, purchases, payable: round2(sales.vat - purchases.vat), file_by: end.toISOString().slice(0, 10) };
   }
+  if (p === "/admin/finance/statement") return finStatement(q.get("view") === "yearly" ? "yearly" : "monthly",
+    Number(q.get("year")) || new Date().getUTCFullYear(), Number(q.get("years")) || 3, q.get("allocate") !== "false");
   if (p === "/admin/finance/profile" && method === "GET") return { ...finProfile };
   if (p === "/admin/finance/profile" && method === "PUT") {
     if (body.vat_registered && !/^3\d{13}3$/.test(String(body.vat_number ?? ""))) throw new DemoError(422, "أدخل الرقم الضريبي (15 رقماً يبدأ وينتهي بـ 3)");
