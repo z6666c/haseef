@@ -101,7 +101,7 @@ function Overview() {
             <div><dt>المصروفات (قبل الضريبة)</dt><dd>{sar(d.expenses.total)}</dd></div>
             <div><dt>{d.net_profit >= 0 ? "صافي الربح" : "صافي الخسارة"}</dt>
               <dd data-tone={d.net_profit >= 0 ? "good" : "bad"}>{sar(Math.abs(d.net_profit))}
-                {d.margin !== null && <small>هامش {Math.round(d.margin * 100)}%</small>}</dd></div>
+                {d.margin !== null && <small className="kpi-sub">هامش <bdi dir="ltr">{Math.round(d.margin * 100)}%</bdi></small>}</dd></div>
             <div><dt>الإيراد الشهري المتكرر (حالياً)</dt><dd>{sar(round2(d.mrr))}</dd></div>
           </dl>
 
