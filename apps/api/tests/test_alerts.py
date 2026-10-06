@@ -109,6 +109,11 @@ class PlanTests(unittest.TestCase):
         out = plan([target(30, target_type="POLICY", target_id="pol-1")])
         self.assertEqual(out[0].template, TEMPLATE_POLICY_REVIEW)
 
+    def test_labor_template(self):
+        for tt in ("IQAMA", "LABOR_TASK"):
+            out = plan([target(-1, target_type=tt, target_id=f"{tt}-1")])
+            self.assertEqual(out[0].template, "haseef_labor_due")
+
     def test_inactive_subscription_skips(self):
         self.assertEqual(plan([target(1)], ctx={ORG: OrgAlertContext(subscription_active=False)}), [])
 

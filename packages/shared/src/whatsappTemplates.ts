@@ -5,7 +5,7 @@
  */
 import { duePhrase, formatDate } from "./format.ts";
 
-export type TemplateKey = "haseef_license_expiring" | "haseef_license_expired" | "haseef_policy_review_due" | "haseef_payment_due";
+export type TemplateKey = "haseef_license_expiring" | "haseef_license_expired" | "haseef_policy_review_due" | "haseef_payment_due" | "haseef_labor_due";
 
 export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; footer: string }> = {
   haseef_license_expiring: {
@@ -23,6 +23,11 @@ export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; fo
     body: "مرحباً {{1}}،\nتذكير من حصيف: {{3}} لمنشأة {{2}} بمبلغ {{4}} مستحق {{5}}، بتاريخ {{6}}.\nتفاصيل الأقساط والفواتير: {{7}}\nفريق حصيف",
     footer: "رسالة خدمية من منصة حصيف",
   },
+  haseef_labor_due: {
+    title: "التزام عمالي مستحق",
+    body: "مرحباً {{1}}،\nتذكير من حصيف: «{{2}}» لمنشأة {{3}} مستحق {{4}}، بتاريخ {{5}}.\nأنجزه في المنصة الحكومية المختصة (التأمينات الاجتماعية أو قوى أو مُدد) ثم أكّد الإنجاز في حصيف.\nالتفاصيل: {{6}}\nفريق حصيف",
+    footer: "رسالة خدمية من منصة حصيف",
+  },
   haseef_policy_review_due: {
     title: "موعد مراجعة سياسة داخلية",
     body: "مرحباً {{1}}،\nتذكير من حصيف: «{{2}}» في منشأة {{3}} مستحقة المراجعة الدورية {{4}}، بتاريخ {{5}}.\nراجع السياسة وحدّثها أو أعد اعتمادها من صفحة السياسات.\nالرابط: {{6}}\nفريق حصيف",
@@ -30,9 +35,12 @@ export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; fo
   },
 };
 
+export const LABOR_TARGETS = new Set(["IQAMA", "WORK_PERMIT", "CONTRACT_END", "PROBATION_END", "LABOR_TASK"]);
+
 /** القالب الذي يختاره الخادم: السياسات ← مراجعة، وغيرها ← قرب الانتهاء أو الانتهاء حسب الأيام المتبقية. */
 export function templateFor(targetType: string, daysLeft: number): TemplateKey {
   if (targetType === "POLICY") return "haseef_policy_review_due";
+  if (LABOR_TARGETS.has(targetType)) return "haseef_labor_due";
   return daysLeft < 0 ? "haseef_license_expired" : "haseef_license_expiring";
 }
 

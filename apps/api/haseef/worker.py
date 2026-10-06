@@ -23,6 +23,7 @@ celery.conf.beat_schedule = {
     "plan-alerts-nightly":   {"task": "haseef.plan_alerts",      "schedule": crontab(hour=1, minute=0)},
     "send-due-alerts":       {"task": "haseef.send_due_alerts",  "schedule": crontab(minute="*/5")},
     "recompute-scores":      {"task": "haseef.recompute_scores", "schedule": crontab(hour=2, minute=0)},
+    "labor-tasks-daily":     {"task": "haseef.labor_tasks",      "schedule": crontab(hour=0, minute=30)},
     "installment-reminders": {"task": "haseef.remind_installments", "schedule": crontab(hour=s.alert_send_hour, minute=10)},
 }
 
@@ -42,6 +43,13 @@ def send_due_alerts() -> int:
 def remind_installments() -> int:
     from .services import installments_service
     return installments_service.send_due_reminders(platform_tx, build_senders(s), f"{s.client_base_url}/billing")
+
+
+@celery.task(name="haseef.labor_tasks")
+def labor_tasks() -> int:
+    # قبل تخطيط التنبيهات الليلي (01:00) لتدخل مهام الشهر الجديد في التنبيهات من أول يوم.
+    from .services import governance_service, labor_service
+    return labor_service.ensure_all(platform_tx, governance_service.riyadh_today())
 
 
 @celery.task(name="haseef.recompute_scores")

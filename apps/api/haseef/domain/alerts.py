@@ -25,13 +25,15 @@ DEFAULT_SEND_TIME = time(9, 0)
 TEMPLATE_LICENSE_EXPIRING = "haseef_license_expiring"
 TEMPLATE_LICENSE_EXPIRED = "haseef_license_expired"
 TEMPLATE_POLICY_REVIEW = "haseef_policy_review_due"
+TEMPLATE_LABOR_DUE = "haseef_labor_due"
+LABOR_TYPES = frozenset({"IQAMA", "WORK_PERMIT", "CONTRACT_END", "PROBATION_END", "LABOR_TASK"})
 
 
 @dataclass(frozen=True)
 class AlertTarget:
     org_id: str
     org_name: str
-    target_type: str            # 'COMPLIANCE_ITEM' | 'POLICY'
+    target_type: str            # 'COMPLIANCE_ITEM' | 'POLICY' | LABOR_TYPES
     target_id: str
     title: str
     due_date: date
@@ -96,6 +98,8 @@ def send_time_for(today: date, now: datetime, send_at: time = DEFAULT_SEND_TIME)
 def render_template(t: AlertTarget, r: Recipient, days_left: int) -> tuple[str, list[str]]:
     if t.target_type == "POLICY":
         template = TEMPLATE_POLICY_REVIEW
+    elif t.target_type in LABOR_TYPES:
+        template = TEMPLATE_LABOR_DUE
     elif days_left < 0:
         template = TEMPLATE_LICENSE_EXPIRED
     else:

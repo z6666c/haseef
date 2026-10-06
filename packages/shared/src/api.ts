@@ -1,4 +1,5 @@
 import type { ComplianceItem, ComplianceItemInput, Dashboard, Me } from "./types.ts";
+import type { GosiRate, GosiSystem, LaborTaskKind, Nationality, qiwaIndicators } from "./labor.ts";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -61,6 +62,24 @@ export function createApi(
     me: () => req<Me>("/auth/me", { org: false }),
 
     billingOverview: () => req<BillingOverview>("/billing/overview"),
+
+    // ---------- العمل والموظفين
+    laborOverview: () => req<LaborOverview>("/labor/overview"),
+    setLaborProfile: (b: LaborProfile) => req<{ ok: boolean }>("/labor/profile", { method: "PUT", body: JSON.stringify(b) }),
+    laborTaskDone: (id: string, b: { reference: string | null; amount?: number | null }) =>
+      req<{ ok: boolean }>(`/labor/tasks/${id}/done`, { method: "POST", body: JSON.stringify(b) }),
+    laborTaskReopen: (id: string) => req<{ ok: boolean }>(`/labor/tasks/${id}/reopen`, { method: "POST", body: "{}" }),
+    employees: () => req<{ employees: Employee[]; show_wages: boolean }>("/labor/employees"),
+    createEmployee: (b: EmployeeInput) => req<{ id: string }>("/labor/employees", { method: "POST", body: JSON.stringify(b) }),
+    updateEmployee: (id: string, b: EmployeeInput) => req<{ ok: boolean }>(`/labor/employees/${id}`, { method: "PUT", body: JSON.stringify(b) }),
+    importEmployees: (employees: EmployeeInput[]) =>
+      req<{ imported: number }>("/labor/employees/bulk", { method: "POST", body: JSON.stringify({ employees }) }),
+    employeeLeave: (id: string, left_on: string) =>
+      req<{ ok: boolean }>(`/labor/employees/${id}/leave`, { method: "POST", body: JSON.stringify({ left_on }) }),
+    gosiMonth: (month?: string) => req<GosiMonth>(`/labor/gosi${month ? `?month=${month}` : ""}`),
+    gosiCalc: (b: { nationality: string; gosi_system: string; basic_wage: number; housing_allowance: number; on?: string | null }) =>
+      req<GosiCalcResult>("/labor/calculator", { method: "POST", body: JSON.stringify(b) }),
+    gosiRates: () => req<GosiRate[]>("/labor/rates"),
     dashboard: () => req<Dashboard>("/dashboard"),
     listItems: () => req<ComplianceItem[]>("/compliance-items"),
     createItem: (body: ComplianceItemInput) =>
@@ -125,7 +144,7 @@ export function createApi(
 
     // ---------- التنبيهات
     alertsOverview: () => req<AlertsOverview>("/alerts/overview"),
-    setAlertRule: (b: { target_type: "COMPLIANCE_ITEM" | "POLICY"; target_id: null; days_before: number[]; channels: string[]; is_enabled: boolean }) =>
+    setAlertRule: (b: { target_type: AlertTargetType; target_id: null; days_before: number[]; channels: string[]; is_enabled: boolean }) =>
       req<{ id: string }>("/alert-rules", { method: "PUT", body: JSON.stringify(b) }),
     setRecipient: (membershipId: string, b: { receives_alerts: boolean; alert_channels: ("WHATSAPP" | "EMAIL")[] }) =>
       req<{ updated: boolean }>(`/alerts/recipients/${membershipId}`, { method: "PATCH", body: JSON.stringify(b) }),
@@ -157,6 +176,8 @@ export function createApi(
       req<{ status: string }>(`/policies/${id}/approve`, { method: "POST", body: JSON.stringify({ review_months }) }),
 
     admin: {
+      gosiRates: () => req<(GosiRate & { id: number; updated_at: string })[]>("/admin/gosi-rates", { org: false }),
+      setGosiRate: (b: GosiRate) => req<{ id: number }>("/admin/gosi-rates", { method: "PUT", org: false, body: JSON.stringify(b) }),
       overview: () => req<AdminOverview>("/admin/overview", { org: false }),
       organizations: () => req<AdminOrg[]>("/admin/organizations", { org: false }),
       dispatches: (status?: string) =>
@@ -610,12 +631,13 @@ export interface BoardReportResponse {
 }
 
 // ---------- التنبيهات
+export type AlertTargetType = "COMPLIANCE_ITEM" | "POLICY" | "EMPLOYEE_DOC" | "LABOR_TASK";
 export interface AlertRuleView { target_type: string; days_before: number[]; channels: string[]; is_enabled: boolean; is_default: boolean }
 export interface AlertsOverview {
   plan: { tier: string | null; name: string | null; active: boolean };
   whatsapp: { provider: string; live: boolean; limit: number | null; used: number; remaining: number | null };
   send_hour: number;
-  rules: Record<"COMPLIANCE_ITEM" | "POLICY", AlertRuleView>; custom_rules: number;
+  rules: Record<AlertTargetType, AlertRuleView>; custom_rules: number;
   recipients: { membership_id: string; full_name: string; email: string | null; phone: string | null; role: string;
     receives_alerts: boolean; alert_channels: string[]; is_me: boolean }[];
   upcoming: { target_type: string; target_id: string; title: string; due_date: string; alert_on: string; threshold_days: number; channels: string[] }[];
@@ -633,4 +655,30 @@ export interface TrialInput {
 export interface TrialRequest extends Omit<TrialInput, "consent" | "website"> {
   id: string; status: "NEW" | "CONTACTED" | "CONVERTED" | "REJECTED"; notes: string | null; created_at: string; updated_at: string;
   handled_by_name: string | null;
+}
+
+// ---------- العمل والموظفين
+export interface LaborProfile { salary_day: number; nitaqat_band: string | null; nitaqat_checked_on: string | null; gosi_employer_no: string | null }
+export interface LaborTask {
+  id: string; period: string; kind: LaborTaskKind; label: string; due_date: string; amount: number | null; done_at: string | null;
+  reference: string | null; done_by_name: string | null; days_left: number; overdue: boolean; penalty_estimate?: number;
+}
+export interface LaborOverview {
+  enabled: boolean; profile: LaborProfile | null; tasks: LaborTask[]; hr: boolean; can_manage: boolean; today: string;
+  indicators?: ReturnType<typeof qiwaIndicators>;
+  documents?: { employee_id: string; full_name: string; kind: string; label: string; due_date: string; days_left: number }[];
+  gosi_month?: { period: string; employee_total: number; employer_total: number; total: number };
+}
+export interface EmployeeInput {
+  full_name: string; nationality: Nationality; job_title: string | null; start_date: string; gosi_system: GosiSystem;
+  basic_wage: number; housing_allowance: number; gosi_registered: boolean; qiwa_contract_documented: boolean;
+  contract_end_date: string | null; probation_end_date: string | null; iqama_expiry: string | null; work_permit_expiry: string | null;
+}
+export interface Employee extends Omit<EmployeeInput, "basic_wage" | "housing_allowance"> {
+  id: string; basic_wage: number | null; housing_allowance: number | null; is_active: boolean; left_on: string | null;
+}
+export interface GosiCalcResult { base: number; employee: number; employer: number; total: number; employee_pct: number; employer_pct: number; on?: string }
+export interface GosiMonth {
+  period: string; employee_total: number; employer_total: number; total: number;
+  lines: (GosiCalcResult & { employee_id: string; full_name: string; nationality: Nationality; gosi_system: GosiSystem; gosi_registered: boolean })[];
 }

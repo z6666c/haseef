@@ -4,20 +4,28 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   ALERT_CHANNEL_LABEL, DISPATCH_STATUS_LABEL, ORG_ROLE_LABEL, countDays, formatDate,
-  type AlertRuleView, type AlertsOverview,
+  type AlertRuleView, type AlertTargetType, type AlertsOverview,
 } from "@haseef/shared";
 import { AlertPreview } from "@/components/AlertPreview";
 import { api } from "@/lib/session";
 
-type Target = "COMPLIANCE_ITEM" | "POLICY";
+type Target = AlertTargetType;
 type Channel = "WHATSAPP" | "EMAIL";
 
 const DAY_OPTIONS = [90, 60, 45, 30, 14, 7, 3, 1, 0];
 const CHANNELS: Channel[] = ["WHATSAPP", "EMAIL"];
-const TARGET_LABEL: Record<string, string> = { COMPLIANCE_ITEM: "التراخيص والوثائق", POLICY: "مراجعة السياسات" };
+const TARGET_LABEL: Record<string, string> = {
+  COMPLIANCE_ITEM: "التراخيص والوثائق", POLICY: "مراجعة السياسات", EMPLOYEE_DOC: "وثائق الموظفين", LABOR_TASK: "التأمينات وحماية الأجور والرواتب",
+  IQAMA: "الإقامات", WORK_PERMIT: "رخص العمل", CONTRACT_END: "عقود العمل", PROBATION_END: "فترات التجربة",
+};
+const LABOR_TARGETS = new Set(["LABOR_TASK", "IQAMA", "WORK_PERMIT", "CONTRACT_END", "PROBATION_END"]);
+const targetHref = (type: string, id: string) =>
+  type === "POLICY" ? `/policies/view?id=${id}` : LABOR_TARGETS.has(type) ? "/labor" : "/licenses";
 const TARGET_HINT: Record<string, string> = {
   COMPLIANCE_ITEM: "تذكير قبل انتهاء السجل التجاري والرخص والشهادات وكل وثيقة لها تاريخ انتهاء.",
   POLICY: "تذكير قبل موعد المراجعة الدورية لكل سياسة معتمدة.",
+  EMPLOYEE_DOC: "تذكير قبل انتهاء إقامات الموظفين ورخص العمل وعقود العمل المحددة المدة وفترات التجربة.",
+  LABOR_TASK: "تذكير قبل موعد سداد التأمينات (15 من الشهر التالي) ورفع ملف الأجور في مُدد وصرف الرواتب، حتى تأكيد الإنجاز.",
 };
 const DISPATCH_TONE: Record<string, string> = {
   SENT: "IN_PLACE", DELIVERED: "IN_PLACE", READ: "IN_PLACE", QUEUED: "PENDING", SENDING: "PENDING", FAILED: "FAIL",
@@ -55,7 +63,7 @@ export default function AlertsPage() {
     <>
       <header className="page-head">
         <h1>التنبيهات والواتساب</h1>
-        <p className="muted">تذكيرات تلقائية قبل انتهاء التراخيص والوثائق ومواعيد مراجعة السياسات، تصل بالبريد الإلكتروني وواتساب
+        <p className="muted">تذكيرات تلقائية قبل انتهاء التراخيص والوثائق ومواعيد مراجعة السياسات والتزامات العمل (التأمينات، حماية الأجور، الإقامات)، تصل بالبريد الإلكتروني وواتساب
           للمستلمين الذين تحددهم. تُرسل يومياً الساعة {hourLabel(ov.send_hour)} بتوقيت الرياض.</p>
       </header>
       {notice && <p className="notice" role="status">{notice}</p>}
@@ -104,7 +112,7 @@ export default function AlertsPage() {
           {!ov.can_manage && <p className="muted">يعدّلها مدير المنشأة أو مسؤول الامتثال.</p>}
         </div>
         <div className="rule-grid">
-          {(["COMPLIANCE_ITEM", "POLICY"] as Target[]).map((t) => (
+          {(["COMPLIANCE_ITEM", "POLICY", "EMPLOYEE_DOC", "LABOR_TASK"] as Target[]).filter((t) => ov.rules[t]).map((t) => (
             <RuleEditor key={t + JSON.stringify(ov.rules[t])} target={t} rule={ov.rules[t]} canManage={ov.can_manage}
               onSave={(r) => act(() => api.setAlertRule({ target_type: t, target_id: null, ...r }), `حُفظت قاعدة ${TARGET_LABEL[t]}`)} />
           ))}
@@ -179,7 +187,7 @@ export default function AlertsPage() {
                 <tr key={`${u.target_id}-${u.threshold_days}`}>
                   <td><b>{formatDate(u.alert_on)}</b></td>
                   <td>
-                    <Link href={u.target_type === "POLICY" ? `/policies/view?id=${u.target_id}` : "/licenses"}>{u.title}</Link>
+                    <Link href={targetHref(u.target_type, u.target_id)}>{u.title}</Link>
                     <div className="small muted">{TARGET_LABEL[u.target_type] ?? u.target_type} · الاستحقاق {formatDate(u.due_date)}</div>
                   </td>
                   <td>{threshold(u.threshold_days)}</td>

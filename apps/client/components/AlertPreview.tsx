@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  WA_TEMPLATES, countDays, formatDate, renderTemplate, templateFor, templateVars, type AlertsOverview,
+  LABOR_TARGETS, WA_TEMPLATES, countDays, formatDate, renderTemplate, templateFor, templateVars, type AlertsOverview,
 } from "@haseef/shared";
 
 type Sample = { key: string; label: string; target_type: string; title: string; due_date: string; days_left: number };
@@ -25,6 +25,8 @@ export function AlertPreview({ ov, orgName }: { ov: AlertsOverview; orgName: str
       { key: "s1", label: "مثال: ترخيص ينتهي بعد 7 أيام", target_type: "COMPLIANCE_ITEM", title: "رخصة بلدي — الفرع الرئيسي", due_date: addDays(t, 7), days_left: 7 },
       { key: "s2", label: "مثال: ترخيص انتهى منذ يومين", target_type: "COMPLIANCE_ITEM", title: "شهادة الدفاع المدني", due_date: addDays(t, -2), days_left: -2 },
       { key: "s3", label: "مثال: سياسة مستحقة المراجعة بعد 14 يوماً", target_type: "POLICY", title: "سياسة الخصوصية", due_date: addDays(t, 14), days_left: 14 },
+      { key: "s4", label: "مثال: سداد التأمينات بعد 5 أيام", target_type: "LABOR_TASK", title: "سداد اشتراكات التأمينات الاجتماعية", due_date: addDays(t, 5), days_left: 5 },
+      { key: "s5", label: "مثال: إقامة موظف تنتهي بعد 30 يوماً", target_type: "IQAMA", title: "انتهاء الإقامة — محمد رفيق", due_date: addDays(t, 30), days_left: 30 },
     ];
     return [...fromUpcoming, ...fixed];
   }, [ov.upcoming]);
@@ -32,14 +34,17 @@ export function AlertPreview({ ov, orgName }: { ov: AlertsOverview; orgName: str
   const s = samples.find((x) => x.key === sel) ?? samples[0];
 
   const tpl = templateFor(s.target_type, s.days_left);
-  const link = s.target_type === "POLICY" ? "https://app.haseef.sa/policies" : "https://app.haseef.sa/licenses";
+  const labor = LABOR_TARGETS.has(s.target_type);
+  const link = s.target_type === "POLICY" ? "https://app.haseef.sa/policies" : labor ? "https://app.haseef.sa/labor" : "https://app.haseef.sa/licenses";
   const vars = templateVars({ recipient: me?.full_name?.split(" ")[0] ?? "أحمد", title: s.title, orgName, dueDate: s.due_date, daysLeft: s.days_left, link });
   const text = renderTemplate(tpl, vars);
-  const rule = ov.rules[s.target_type === "POLICY" ? "POLICY" : "COMPLIANCE_ITEM"];
+  const rule = ov.rules[s.target_type === "POLICY" ? "POLICY" : s.target_type === "LABOR_TASK" ? "LABOR_TASK" : labor ? "EMPLOYEE_DOC" : "COMPLIANCE_ITEM"]
+    ?? ov.rules.COMPLIANCE_ITEM;
   const thresholds = [...rule.days_before].sort((a, b) => b - a);
   const t0 = today();
   const subject = tpl === "haseef_license_expired" ? `عاجل: انتهت صلاحية ${s.title}`
-    : tpl === "haseef_policy_review_due" ? `تذكير: مراجعة ${s.title} ${vars[3]}` : `تنبيه: ${s.title} تنتهي ${vars[3]}`;
+    : tpl === "haseef_policy_review_due" ? `تذكير: مراجعة ${s.title} ${vars[3]}`
+    : tpl === "haseef_labor_due" ? `تذكير: ${s.title} مستحق ${vars[3]}` : `تنبيه: ${s.title} تنتهي ${vars[3]}`;
 
   return (
     <section className="gov-section">
@@ -77,7 +82,7 @@ export function AlertPreview({ ov, orgName }: { ov: AlertsOverview; orgName: str
           </div>
           <div className="pv-mail-body">
             {text.split("\n").map((line, i) => <p key={i}>{line}</p>)}
-            <a className="btn btn-action" href="#" onClick={(e) => e.preventDefault()}>{s.target_type === "POLICY" ? "افتح السياسة" : "افتح الترخيص في حصيف"}</a>
+            <a className="btn btn-action" href="#" onClick={(e) => e.preventDefault()}>{s.target_type === "POLICY" ? "افتح السياسة" : labor ? "افتح العمل والموظفين" : "افتح الترخيص في حصيف"}</a>
           </div>
         </div>
       </div>

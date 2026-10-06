@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import date
 import binascii
 import json
 import re
@@ -339,3 +340,41 @@ def org_governance(org_id: UUID, a: Admin = Depends(require_perm("orgs.view"))):
             "pending": sum(o["effective_status"] in ("PENDING", "AT_RISK") for o in obligations),
         },
     }
+
+
+# ---------------------------------------------------------------- نسب التأمينات الاجتماعية
+class GosiRateIn(BaseModel):
+    system: Literal["OLD", "NEW", "NON_SAUDI"]
+    effective_from: date
+    employee_annuity: float = Field(ge=0, le=30)
+    employer_annuity: float = Field(ge=0, le=30)
+    employee_saned: float = Field(ge=0, le=5)
+    employer_saned: float = Field(ge=0, le=5)
+    employer_hazards: float = Field(ge=0, le=10)
+    min_base: float = Field(1500, ge=0)
+    max_base: float = Field(45000, gt=0)
+    note: str | None = Field(None, max_length=300)
+
+
+@router.get("/gosi-rates")
+def gosi_rates(a: Admin = Depends(require_perm("content.manage", "content.approve"))):
+    return [{k: (float(v) if hasattr(v, "is_finite") else v) for k, v in dict(r).items()} for r in a.conn.execute(text("""
+        SELECT id, system, effective_from, employee_annuity, employer_annuity, employee_saned, employer_saned, employer_hazards,
+               min_base, max_base, note, updated_at FROM gosi_rates ORDER BY system, effective_from""")).mappings()]
+
+
+@router.put("/gosi-rates")
+def upsert_gosi_rate(body: GosiRateIn, a: Admin = Depends(require_perm("content.manage"))):
+    """إضافة نسبة بتاريخ سريان جديد أو تعديل القائمة لنفس النظام والتاريخ. الحساب يختار الأحدث السارية."""
+    rid = a.conn.execute(text("""
+        INSERT INTO gosi_rates (system, effective_from, employee_annuity, employer_annuity, employee_saned, employer_saned,
+                                employer_hazards, min_base, max_base, note, updated_by)
+        VALUES (:system, :effective_from, :employee_annuity, :employer_annuity, :employee_saned, :employer_saned,
+                :employer_hazards, :min_base, :max_base, :note, :u)
+        ON CONFLICT (system, effective_from) DO UPDATE SET employee_annuity = EXCLUDED.employee_annuity,
+            employer_annuity = EXCLUDED.employer_annuity, employee_saned = EXCLUDED.employee_saned,
+            employer_saned = EXCLUDED.employer_saned, employer_hazards = EXCLUDED.employer_hazards, min_base = EXCLUDED.min_base,
+            max_base = EXCLUDED.max_base, note = EXCLUDED.note, updated_at = now(), updated_by = EXCLUDED.updated_by
+        RETURNING id"""), {**body.model_dump(), "u": a.user_id}).scalar_one()
+    a.audit("ADMIN_GOSI_RATE", "gosi_rates", None, None, body.model_dump(mode="json"))
+    return {"id": rid}

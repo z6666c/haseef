@@ -4,12 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import {
   GOV_DOMAIN_LABEL, LEGAL_TYPE_LABEL, LEVEL_LABEL, LIBRARY_CATEGORY_LABEL, LIBRARY_KIND_LABEL,
   OBLIGATION_DOMAIN_LABEL, OBLIGATION_KIND_LABEL, REVIEW_BADGE, fileSize,
-  type AdminLibraryDoc, type AdminObligation, type AdminStandard,
+  type AdminLibraryDoc, type AdminObligation, type AdminStandard, type GosiRate,
 } from "@haseef/shared";
 import { Dialog, useCan } from "@/components/ui";
 import { api } from "@/lib/session";
 
-type Tab = "library" | "obligations" | "standards";
+type Tab = "library" | "obligations" | "standards" | "gosi";
 
 export default function ContentPage() {
   const can = useCan();
@@ -30,7 +30,7 @@ export default function ContentPage() {
       <h1>المحتوى المرجعي</h1>
       <p className="muted">ما يراه العملاء من مكتبة ومعايير والتزامات. كل عنصر يظهر للعملاء افتراضياً بشارة «{REVIEW_BADGE}» حتى يعتمده من يملك صلاحية الاعتماد. الإخفاء لا يحذف.</p>
       <div className="filters" role="tablist">
-        {([["library", "المكتبة المرجعية"], ["obligations", "الالتزامات والسياسات المطلوبة"], ["standards", "معايير الحوكمة"]] as [Tab, string][]).map(([k, l]) => (
+        {([["library", "المكتبة المرجعية"], ["obligations", "الالتزامات والسياسات المطلوبة"], ["standards", "معايير الحوكمة"], ["gosi", "نسب التأمينات الاجتماعية"]] as [Tab, string][]).map(([k, l]) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -40,6 +40,7 @@ export default function ContentPage() {
       {tab === "library" && <LibraryTab editor={editor} approver={approver} act={act} />}
       {tab === "obligations" && <ObligationsTab editor={editor} approver={approver} act={act} />}
       {tab === "standards" && <StandardsTab editor={editor} approver={approver} act={act} />}
+      {tab === "gosi" && <GosiRatesTab editor={editor} act={act} />}
     </>
   );
 }
@@ -251,5 +252,59 @@ function StandardsTab({ editor, approver, act }: { editor: boolean; approver: bo
         ))}
       </tbody>
     </table>
+  );
+}
+
+// ------------------------------------------------------------------ نسب التأمينات
+const GOSI_SYSTEM: Record<string, string> = { OLD: "السعوديون — النظام السابق", NEW: "السعوديون — النظام الجديد", NON_SAUDI: "غير السعوديين" };
+const EMPTY_RATE: GosiRate = { system: "NEW", effective_from: "", employee_annuity: 11, employer_annuity: 11, employee_saned: 0.75, employer_saned: 0.75,
+  employer_hazards: 2, min_base: 1500, max_base: 45000, note: "" };
+
+function GosiRatesTab({ editor, act }: { editor: boolean; act: Act }) {
+  const [rows, setRows] = useState<(GosiRate & { id: number; updated_at: string })[] | null>(null);
+  const [edit, setEdit] = useState<GosiRate | null>(null);
+  const load = useCallback(() => { api.admin.gosiRates().then(setRows).catch(() => setRows([])); }, []);
+  useEffect(load, [load]);
+  if (!rows) return null;
+  const num = (k: keyof GosiRate, label: string) => edit && (
+    <div className="field"><label>{label}</label><input type="number" step="0.01" min={0} required value={edit[k] as number}
+      onChange={(e) => setEdit({ ...edit, [k]: Number(e.target.value) })} /></div>);
+  return (
+    <>
+      <p className="muted">تُستخدم في حاسبة العملاء ومبالغ مهام السداد الشهرية. عند صدور تعديل نظامي أضف صفاً بتاريخ سريانه، والحساب يختار الأحدث السارية لكل شهر.</p>
+      {editor && <p><button className="btn" type="button" onClick={() => setEdit({ ...EMPTY_RATE })}>+ نسبة بتاريخ سريان</button></p>}
+      <table className="table">
+        <thead><tr><th>الفئة</th><th>يسري من</th><th>الموظف (معاشات + ساند)</th><th>المنشأة (معاشات + ساند + أخطار)</th><th>الأجر الخاضع</th><th><span className="sr-only">إجراء</span></th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id}>
+              <td>{GOSI_SYSTEM[r.system]}{r.note && <div className="muted small">{r.note}</div>}</td>
+              <td>{r.effective_from}</td>
+              <td>{r.employee_annuity}% + {r.employee_saned}% = <b>{+(r.employee_annuity + r.employee_saned).toFixed(2)}%</b></td>
+              <td>{r.employer_annuity}% + {r.employer_saned}% + {r.employer_hazards}% = <b>{+(r.employer_annuity + r.employer_saned + r.employer_hazards).toFixed(2)}%</b></td>
+              <td className="small">{r.min_base.toLocaleString("en-US")} – {r.max_base.toLocaleString("en-US")}</td>
+              <td>{editor && <button className="link-btn" type="button" onClick={() => setEdit({ ...r })}>تعديل</button>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Dialog open={!!edit} title="نسبة التأمينات" onClose={() => setEdit(null)}>
+        {edit && (
+          <form onSubmit={(e) => { e.preventDefault(); act(() => api.admin.setGosiRate(edit), "حُفظت النسبة", load).then(() => setEdit(null)); }}>
+            <div className="grid">
+              <div className="field"><label>الفئة</label><select value={edit.system} onChange={(e) => setEdit({ ...edit, system: e.target.value as GosiRate["system"] })}>
+                {Object.entries(GOSI_SYSTEM).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
+              <div className="field"><label>يسري من</label><input type="date" required value={edit.effective_from} onChange={(e) => setEdit({ ...edit, effective_from: e.target.value })} /></div>
+              {num("employee_annuity", "معاشات — الموظف %")}{num("employer_annuity", "معاشات — المنشأة %")}
+              {num("employee_saned", "ساند — الموظف %")}{num("employer_saned", "ساند — المنشأة %")}
+              {num("employer_hazards", "أخطار مهنية — المنشأة %")}{num("min_base", "الحد الأدنى للأجر")}{num("max_base", "الحد الأعلى للأجر")}
+              <div className="field"><label>ملاحظة</label><input value={edit.note ?? ""} maxLength={300} onChange={(e) => setEdit({ ...edit, note: e.target.value })} /></div>
+            </div>
+            <div className="dialog-actions"><button className="btn" type="submit">حفظ</button>
+              <button className="btn btn-quiet" type="button" onClick={() => setEdit(null)}>إلغاء</button></div>
+          </form>
+        )}
+      </Dialog>
+    </>
   );
 }

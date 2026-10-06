@@ -22,6 +22,10 @@ FRAGMENTS = {
     "_POLICY_COLS": "id, policy_type, title, version, approval_date, review_due_date, status, "
                     "effective_status, days_remaining",
     "cond": "target_id IS NULL",
+    "EMP_COLS": "id, full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, gosi_registered, qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, is_active, left_on",
+    "EMP_INS_COLS": "full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, gosi_registered, qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry",
+    "EMP_INS_VALS": ":full_name, :nationality, :job_title, :start_date, :gosi_system, :basic_wage, :housing_allowance, :gosi_registered, :qiwa_contract_documented, :contract_end_date, :probation_end_date, :iqama_expiry, :work_permit_expiry",
+    "EMP_SETS": "full_name = :full_name, basic_wage = :basic_wage",
     "sets": "id = id",          # تعديل ديناميكي: الأعمدة من نموذج Pydantic
     "', '.join(PROFILE_FIELDS)": "employees_count, fiscal_year_end_month, processes_personal_data, vat_registered, "
                                  "has_bylaws, bylaws_updated_on, auditor_name, auditor_appointed_on, "
