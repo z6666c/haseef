@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  EXPENSE_CATEGORY, EXPENSE_FREQUENCY, INVOICE_KIND, PLAN_CYCLE, INVOICE_SOURCE, INVOICE_STATUS, PLAN_LABEL, periodRange, round2, sar,
+  EXPENSE_CATEGORY, EXPENSE_FREQUENCY, INVOICE_KIND, PLAN_CYCLE, INVOICE_SOURCE, INVOICE_STATUS, PLAN_LABEL, periodRange, round2, sar, type GosiRate,
   type AdminOrg, type Expense, type ExpenseInput, type FinanceSummary, type HaseefProfile, type InvoiceRow, type PaymentPlan,
   type FinanceStatement, type PaymentPlanDetail, type VatReturn,
 } from "@haseef/shared";
@@ -438,7 +438,27 @@ function Expenses() {
         description={del ? `سيُحذف مصروف ${del.vendor} بمبلغ ${sar(del.total)} ويُسجَّل الحذف في سجل التدقيق.` : ""}
         onClose={() => setDel(null)}
         onConfirm={async () => { if (del) { await api.admin.deleteExpense(del.id); setDel(null); setNotice("حُذف المصروف"); load(); } }} />
+      <GosiRatesNote />
     </section>
+  );
+}
+
+/** نسب التأمينات المعتمدة (للاطلاع عند تسجيل مصروف التأمينات لموظفي حصيف). التعديل من «المحتوى المرجعي». */
+function GosiRatesNote() {
+  const [rates, setRates] = useState<GosiRate[] | null>(null);
+  useEffect(() => { api.admin.gosiRates().then(setRates).catch(() => setRates([])); }, []);
+  const today = new Date().toISOString().slice(0, 10);
+  const current = (rates ?? []).filter((r) => r.effective_from <= today)
+    .reduce<Record<string, GosiRate>>((a, r) => ({ ...a, [r.system]: !a[r.system] || a[r.system].effective_from < r.effective_from ? r : a[r.system] }), {});
+  if (!rates?.length) return null;
+  const label: Record<string, string> = { OLD: "سعودي — النظام السابق", NEW: "سعودي — النظام الجديد", NON_SAUDI: "غير سعودي" };
+  return (
+    <details className="gosi-note">
+      <summary>نسب التأمينات الاجتماعية السارية (لاحتساب مصروف «التأمينات الاجتماعية»)</summary>
+      <ul>{Object.values(current).map((r) => (
+        <li key={r.system}>{label[r.system]}: الموظف {+(r.employee_annuity + r.employee_saned).toFixed(2)}% · المنشأة {+(r.employer_annuity + r.employer_saned + r.employer_hazards).toFixed(2)}% من (الأساسي + السكن)، بحد أعلى {r.max_base.toLocaleString("en-US")} ريال</li>
+      ))}</ul>
+    </details>
   );
 }
 

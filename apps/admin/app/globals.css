@@ -248,3 +248,6 @@
 .pay-style span { display: grid; }
 .pay-style small { color: var(--muted); font-size: var(--t-xs); }
 @media (max-width: 600px) { .pay-style { grid-template-columns: 1fr; } }
+.gosi-note { margin-top: 18px; font-size: var(--t-sm); color: var(--muted); }
+.gosi-note summary { cursor: pointer; font-weight: 600; }
+.gosi-note ul { margin: 8px 0 0; padding-inline-start: 20px; display: grid; gap: 4px; }
