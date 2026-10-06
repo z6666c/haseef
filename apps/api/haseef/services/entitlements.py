@@ -10,6 +10,7 @@ from sqlalchemy import Connection, text
 FEATURE_LABEL = {
     "GOVERNANCE": "الحوكمة", "PDPL": "حماية البيانات الشخصية",
     "MULTI_ENTITY": "المنشآت المتعددة والفروع", "BOARD_REPORTS": "تقارير مجلس الإدارة",
+    "LABOR_HR": "العمل والموظفين",
 }
 
 

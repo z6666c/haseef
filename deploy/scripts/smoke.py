@@ -111,6 +111,15 @@ assert lo["enabled"] and len(lo["tasks"]) == 6, lo
 gosi = next(t for t in lo["tasks"] if t["kind"] == "GOSI_PAYMENT")
 call("POST", f"/v1/labor/tasks/{gosi['id']}/done", {"reference": "SADAD-1"}, org_id=o)
 call("POST", f"/v1/labor/tasks/{gosi['id']}/done", {"reference": "again"}, expect=409, org_id=o)
+call("POST", "/v1/labor/employees", {"full_name": "موظف فحص", "nationality": "SAUDI", "start_date": "2025-01-01", "gosi_system": "OLD",
+                                     "basic_wage": 8000, "housing_allowance": 2000, "gosi_registered": True}, expect=201, org_id=o)
+g = call("GET", "/v1/labor/gosi", org_id=o)
+assert g["total"] == 2150 and len(g["lines"]) == 1, g
+c = call("POST", "/v1/labor/calculator", {"nationality": "NON_SAUDI", "basic_wage": 3000, "housing_allowance": 750}, org_id=o)
+assert c["employer"] == 75 and c["employee"] == 0, c
+lo = call("GET", "/v1/labor/overview", org_id=o)
+assert lo["hr"] and lo["indicators"]["employees"] == 1, lo
+step("سجل الموظفين وحاسبة التأمينات في باقة الأساس")
 al = call("GET", "/v1/alerts/overview", org_id=o)
 assert "LABOR_TASK" in al["rules"], al["rules"]
 step(f"تقويم العمل: {len(lo['tasks'])} مهام شهرية، وتأكيد سداد التأمينات، وقواعد التنبيه")
