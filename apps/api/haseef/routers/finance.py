@@ -22,7 +22,7 @@ from ..services import installments_service, invoicing
 
 router = APIRouter(prefix="/admin/finance", tags=["finance"])
 
-Category = Literal["HOSTING", "AI", "MESSAGING", "PAYMENT_FEES", "SALARIES", "LAWYER_FEES", "MARKETING",
+Category = Literal["HOSTING", "AI", "MESSAGING", "PAYMENT_FEES", "SALARIES", "GOSI", "QIWA", "LAWYER_FEES", "MARKETING",
                    "PROFESSIONAL", "GOVERNMENT", "SOFTWARE", "OFFICE", "OTHER"]
 VIEW = ("finance.view",)
 

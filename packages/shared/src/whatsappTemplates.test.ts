@@ -6,6 +6,8 @@ test("template choice matches server", () => {
   assert.equal(templateFor("POLICY", 3), "haseef_policy_review_due");
   assert.equal(templateFor("COMPLIANCE_ITEM", 0), "haseef_license_expiring");
   assert.equal(templateFor("COMPLIANCE_ITEM", -2), "haseef_license_expired");
+  assert.equal(templateFor("IQAMA", 14), "haseef_labor_due");
+  assert.equal(templateFor("LABOR_TASK", -1), "haseef_labor_due");
 });
 
 test("all six variables are filled and none left", () => {

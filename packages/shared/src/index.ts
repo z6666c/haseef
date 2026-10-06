@@ -9,3 +9,4 @@ export * from "./whatsappTemplates.ts";
 export * from "./contractCheck.ts";
 export * from "./finance.ts";
 export * from "./qr.ts";
+export * from "./labor.ts";

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PLAN_LABEL, PLATFORM_LEGAL_PAGES, type Me } from "@haseef/shared";
 import {
-  BellMessage, BookOpen, BuildingBadge, BuildingsGroup, CardReceipt, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, ReportChart, Scales,
+  BellMessage, BookOpen, BuildingBadge, BuildingsGroup, CardReceipt, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, ReportChart, Scales, UsersContract,
 } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { api, getSession, setSession } from "@/lib/session";
@@ -19,6 +19,7 @@ const NAV: { href: string | null; label: string; Icon: typeof Radar; soon?: stri
   { href: "/policies", label: "السياسات الداخلية", Icon: DocSeal },
   { href: "/library", label: "المكتبة المرجعية", Icon: BookOpen },
   { href: "/legal", label: "استشارة محامٍ", Icon: Scales },
+  { href: "/labor", label: "العمل والموظفين", Icon: UsersContract },
   { href: "/pdpl", label: "حماية البيانات PDPL", Icon: FingerprintShield },
   { href: "/alerts", label: "التنبيهات والواتساب", Icon: BellMessage },
   { href: "/group", label: "المجموعة والمنشآت", Icon: BuildingsGroup },

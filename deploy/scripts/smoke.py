@@ -26,9 +26,10 @@ ctx = ssl._create_unverified_context() if args.insecure else None
 token: str | None = None
 
 
-def call(method: str, path: str, body: dict | None = None, expect: int = 200):
+def call(method: str, path: str, body: dict | None = None, expect: int = 200, org_id: str | None = None):
     req = urllib.request.Request(args.base + path, method=method, data=json.dumps(body).encode() if body is not None else None,
-                                 headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {})})
+                                 headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {}),
+                                          **({"X-Org-Id": org_id} if org_id else {})})
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=20) as r:
             code, raw = r.status, r.read()
@@ -92,4 +93,25 @@ assert d["paid_count"] == 2 and d["remaining_net"] == 2495.0, d
 call("POST", "/v1/admin/finance/plans", {"org_id": org["id"], "plan_tier": "ESSENTIAL", "installments": 2,
                                           "starts_on": inv["issued_at"][:10]}, expect=409)
 step(f"اشتراك سنوي بأربعة أقساط: مدفوع قسطان، المتبقي {d['remaining_net']}، وتذكير يدوي، وفاتورة {r['invoice']['number']}")
-print("اكتمل الفحص المالي")
+call("POST", "/v1/admin/finance/expenses", {"spent_on": inv["issued_at"][:10], "category": "GOSI", "vendor": "المؤسسة العامة للتأمينات الاجتماعية",
+                                             "net_amount": 2150, "vat_amount": 0, "frequency": "MONTHLY"}, expect=201)
+step("مصروف التأمينات الاجتماعية لحصيف نفسها")
+
+# العمل والموظفين بحساب العميل: التقويم الشهري لكل الباقات، وسجل الموظفين لباقة الحوكمة فأعلى
+token = call("POST", "/v1/auth/login", {"email": f"owner{cr}@example.com", "password": org["temporary_password"]})["access_token"]
+owner_pw = secrets.token_urlsafe(16)
+call("POST", "/v1/auth/change-password", {"current_password": org["temporary_password"], "new_password": owner_pw}, expect=204)
+token = call("POST", "/v1/auth/login", {"email": f"owner{cr}@example.com", "password": owner_pw})["access_token"]
+o = org["id"]
+lo = call("GET", "/v1/labor/overview", org_id=o)
+assert lo["enabled"] is False and lo["tasks"] == [], lo
+call("PUT", "/v1/labor/profile", {"salary_day": 25}, org_id=o)
+lo = call("GET", "/v1/labor/overview", org_id=o)
+assert lo["enabled"] and len(lo["tasks"]) == 6, lo
+gosi = next(t for t in lo["tasks"] if t["kind"] == "GOSI_PAYMENT")
+call("POST", f"/v1/labor/tasks/{gosi['id']}/done", {"reference": "SADAD-1"}, org_id=o)
+call("POST", f"/v1/labor/tasks/{gosi['id']}/done", {"reference": "again"}, expect=409, org_id=o)
+al = call("GET", "/v1/alerts/overview", org_id=o)
+assert "LABOR_TASK" in al["rules"], al["rules"]
+step(f"تقويم العمل: {len(lo['tasks'])} مهام شهرية، وتأكيد سداد التأمينات، وقواعد التنبيه")
+print("اكتمل الفحص المالي والعمالي")

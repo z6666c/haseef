@@ -6,7 +6,11 @@ import type { ComplianceItem, Dashboard, Me, ScoreReason } from "./types.ts";
 import CONTENT from "./demo-content.json" with { type: "json" };
 import { runCheck, type CkStandard } from "./governanceCheck.ts";
 import { dpiaAssess, dpiaSuggest } from "./dpia.ts";
-import type { DpiaMitigation, DpiaQuestion } from "./api.ts";
+import type { DpiaMitigation, DpiaQuestion, Employee, LaborProfile } from "./api.ts";
+import {
+  EMP_DOC_LABEL, GOSI_RATES, TASK_KINDS, TASK_LABEL, contribution, gosiLatePenalty, monthStart, periodsToPlan, pickRate,
+  qiwaIndicators, rateSystem, taskDueDate, type GosiSystem, type LaborTaskKind, type Nationality,
+} from "./labor.ts";
 import { EXPENSE_CATEGORY, VAT_RATE, invoiceLine, invoiceNumber, periodRange, round2, zatcaTlv, type InvoiceLine } from "./finance.ts";
 
 
@@ -451,6 +455,8 @@ const PERM_RULES: [RegExp, RegExp, string[]][] = [
   [/GET/, /^\/admin\/(team|roles)$/, ["team.view", "team.manage"]],
   [/./, /^\/admin\/(team|roles)/, ["team.manage"]],
   [/GET/, /^\/admin\/audit/, ["audit.view"]],
+  [/PUT/, /^\/admin\/gosi-rates/, ["content.manage"]],
+  [/GET/, /^\/admin\/gosi-rates/, ["content.manage", "content.approve"]],
   [/GET/, /^\/admin\/finance\/plans/, ["finance.view", "billing.manage"]],
   [/./, /^\/admin\/finance\/plans/, ["billing.manage"]],
   [/GET/, /^\/admin\/finance\/invoices/, ["finance.view", "billing.manage"]],
@@ -612,11 +618,13 @@ const expensesDemo: DemoExpense[] = (() => {
     add(d, "MESSAGING", "مزوّد واتساب للأعمال", 12.5, 1.88, "رسائل التنبيهات الخدمية", "MONTHLY");
     add(d + 1, "SOFTWARE", "البريد المهني والأدوات", 90, 13.5, "بريد الفريق وأدوات العمل", "MONTHLY");
     add(d + 2, "PROFESSIONAL", "مكتب محاسبة خارجي", 600, 90, "مسك الدفاتر والإقرار", "MONTHLY");
+    add(30 * k + 10, "GOSI", "المؤسسة العامة للتأمينات الاجتماعية", 2350, 0, "اشتراكات موظف سعودي (حصة المنشأة والموظف)", "MONTHLY", `SADAD-${k + 1}`);
   }
   add(20, "MARKETING", "حملة إعلانات رقمية", 1500, 225, "إعلانات البحث لصفحة حصيف التعريفية");
   add(45, "GOVERNMENT", "وزارة التجارة والغرفة التجارية", 1200, 0, "تجديد السجل والاشتراك", "YEARLY");
   add(50, "SOFTWARE", "نطاق haseef.sa والشهادات", 360, 54, "تجديد سنوي", "YEARLY");
   add(8, "PAYMENT_FEES", "بوابة الدفع", 21.4, 3.21, "2.2% من التحصيل");
+  add(60, "QIWA", "منصة قوى", 100, 0, "توثيق عقد العمل وخدمات المنشأة", "YEARLY");
   return out.sort((a, b) => b.spent_on.localeCompare(a.spent_on));
 })();
 
@@ -994,10 +1002,96 @@ function boardReport(year: number) {
 }
 const savedReports = new Map<number, { snapshot: ReturnType<typeof boardReport>; notes: string | null; saved_at: string; saved_by_name: string }>();
 
-const alertRules: Record<"COMPLIANCE_ITEM" | "POLICY", { target_type: string; days_before: number[]; channels: string[]; is_enabled: boolean; is_default: boolean }> = {
+const alertRules: Record<"COMPLIANCE_ITEM" | "POLICY" | "EMPLOYEE_DOC" | "LABOR_TASK", { target_type: string; days_before: number[]; channels: string[]; is_enabled: boolean; is_default: boolean }> = {
   COMPLIANCE_ITEM: { target_type: "COMPLIANCE_ITEM", days_before: [60, 30, 14, 7, 3, 1, 0], channels: ["WHATSAPP", "EMAIL"], is_enabled: true, is_default: true },
   POLICY: { target_type: "POLICY", days_before: [30, 14, 7, 0], channels: ["EMAIL", "WHATSAPP"], is_enabled: true, is_default: true },
+  EMPLOYEE_DOC: { target_type: "EMPLOYEE_DOC", days_before: [60, 30, 14, 7, 3, 1, 0], channels: ["WHATSAPP", "EMAIL"], is_enabled: true, is_default: true },
+  LABOR_TASK: { target_type: "LABOR_TASK", days_before: [5, 1, 0], channels: ["WHATSAPP", "EMAIL"], is_enabled: true, is_default: true },
 };
+
+// ---------- العمل والموظفين (منشأة النخبة)
+type DemoEmp = Omit<Employee, "basic_wage" | "housing_allowance"> & { basic_wage: number; housing_allowance: number };
+const employeesDemo: DemoEmp[] = (() => {
+  const e = (full_name: string, nationality: Nationality, job_title: string, startDays: number, basic: number, housing: number,
+    o: Partial<DemoEmp> = {}): DemoEmp => ({ id: uid(), full_name, nationality, job_title, start_date: inDays(-startDays), gosi_system: startDays < 820 ? "NEW" : "OLD",
+    basic_wage: basic, housing_allowance: housing, gosi_registered: true, qiwa_contract_documented: true, contract_end_date: null,
+    probation_end_date: null, iqama_expiry: nationality === "NON_SAUDI" ? inDays(200 + startDays % 300) : null,
+    work_permit_expiry: nationality === "NON_SAUDI" ? inDays(200 + startDays % 300) : null, is_active: true, left_on: null, ...o });
+  return [
+    e("أحمد العتيبي", "SAUDI", "المدير العام", 2400, 18000, 4500),
+    e("ريم السبيعي", "SAUDI", "مسؤولة حماية البيانات", 900, 12000, 3000),
+    e("فهد القحطاني", "SAUDI", "مدير المشاريع", 1500, 14000, 3500),
+    e("نورة الدوسري", "SAUDI", "محاسبة", 400, 8000, 2000, { contract_end_date: inDays(45) }),
+    e("سلطان المطيري", "SAUDI", "مهندس موقع", 70, 9000, 2250, { probation_end_date: inDays(20), qiwa_contract_documented: false }),
+    e("عبدالله الشهري", "SAUDI", "مشرف سلامة", 1100, 7000, 1750),
+    e("محمد رفيق", "NON_SAUDI", "فني كهرباء", 1300, 3000, 750, { iqama_expiry: inDays(12), work_permit_expiry: inDays(12) }),
+    e("جون ماثيو", "NON_SAUDI", "مهندس مدني", 950, 9500, 2375, { iqama_expiry: inDays(55), work_permit_expiry: inDays(55) }),
+    e("أحمد حسن", "NON_SAUDI", "مراقب جودة", 600, 5000, 1250, { qiwa_contract_documented: false, contract_end_date: inDays(28) }),
+    e("رامش كومار", "NON_SAUDI", "سائق معدات", 1700, 2500, 625),
+    e("علي منصور", "NON_SAUDI", "نجار", 500, 2800, 700, { gosi_registered: false }),
+    e("كريم يوسف", "NON_SAUDI", "عامل", 300, 1800, 450, { iqama_expiry: inDays(-3), work_permit_expiry: inDays(-3) }),
+  ];
+})();
+let laborProfileDemo: LaborProfile | null = { salary_day: 27, nitaqat_band: "MID_GREEN", nitaqat_checked_on: inDays(-20), gosi_employer_no: "500123456" };
+type DemoTask = { id: string; period: string; kind: LaborTaskKind; due_date: string; amount: number | null; done_at: string | null; reference: string | null; done_by_name: string | null };
+const laborTasksDemo: DemoTask[] = [];
+function gosiMonthDemo(period: string) {
+  const end = addMonthsIso(period, 1);
+  const lines = employeesDemo.filter((x) => x.is_active && x.start_date < end).flatMap((x) => {
+    const r = pickRate(GOSI_RATES, rateSystem(x.nationality, x.gosi_system), period);
+    return r ? [{ employee_id: x.id, full_name: x.full_name, nationality: x.nationality, gosi_system: x.gosi_system, gosi_registered: x.gosi_registered,
+      ...contribution(x.basic_wage, x.housing_allowance, r) }] : [];
+  }).sort((a, b) => a.full_name.localeCompare(b.full_name, "ar"));
+  const employee_total = round2(lines.reduce((a, l) => a + l.employee, 0)), employer_total = round2(lines.reduce((a, l) => a + l.employer, 0));
+  return { period, employee_total, employer_total, total: round2(employee_total + employer_total), lines };
+}
+function ensureLaborTasks() {
+  if (!laborProfileDemo) return;
+  const today = iso(riyadhToday()), cur = monthStart(today);
+  const first = laborTasksDemo.length === 0;
+  const periods = first ? [-3, -2, -1, 0].map((n) => addMonthsIso(cur, n)) : periodsToPlan(today);
+  for (const period of periods) for (const kind of TASK_KINDS) {
+    if (laborTasksDemo.some((t) => t.period === period && t.kind === kind)) continue;
+    const due = taskDueDate(kind, period, laborProfileDemo.salary_day);
+    // مثال تجريبي: ملف حماية الأجور لما قبل الشهر الماضي لم يُرفع بعد (متأخر)
+    const done = first && due < today && !(period === addMonthsIso(cur, -2) && kind === "WPS_UPLOAD");
+    laborTasksDemo.push({ id: uid(), period, kind, due_date: due, amount: kind === "GOSI_PAYMENT" ? gosiMonthDemo(period).total : null,
+      done_at: done ? `${addDays(due, -2)}T09:00:00.000Z` : null, reference: done ? (kind === "GOSI_PAYMENT" ? `SADAD-${period.slice(0, 7).replace("-", "")}` : null) : null,
+      done_by_name: done ? "أحمد العتيبي" : null });
+  }
+}
+function addDays(d: string, n: number) { return iso(new Date(new Date(`${d}T00:00:00Z`).getTime() + n * DAY)); }
+function laborOverviewDemo() {
+  ensureLaborTasks();
+  const today = iso(riyadhToday()), from = addMonthsIso(monthStart(today), -3);
+  const tasks = laborTasksDemo.filter((t) => !t.done_at || t.period >= from)
+    .sort((a, b) => b.period.localeCompare(a.period) || a.due_date.localeCompare(b.due_date))
+    .map((t) => {
+      const left = daysLeft(t.due_date), overdue = !t.done_at && left < 0;
+      return { ...t, label: TASK_LABEL[t.kind], days_left: left, overdue,
+        ...(overdue && t.kind === "GOSI_PAYMENT" && t.amount ? { penalty_estimate: gosiLatePenalty(t.amount, t.due_date, today) } : {}) };
+    });
+  const active = employeesDemo.filter((x) => x.is_active);
+  const documents = active.flatMap((x) => (([["IQAMA", x.iqama_expiry], ["WORK_PERMIT", x.work_permit_expiry], ["CONTRACT_END", x.contract_end_date],
+    ["PROBATION_END", x.probation_end_date]] as [string, string | null][])
+    .filter(([, d]) => d && daysLeft(d) <= 90)
+    .map(([kind, d]) => ({ employee_id: x.id, full_name: x.full_name, kind, label: EMP_DOC_LABEL[kind], due_date: d!, days_left: daysLeft(d!) }))))
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const g = gosiMonthDemo(monthStart(today));
+  return { enabled: !!laborProfileDemo, profile: laborProfileDemo, tasks: laborProfileDemo ? tasks : [], hr: true, can_manage: true, today,
+    indicators: qiwaIndicators(active), documents, gosi_month: { period: g.period, employee_total: g.employee_total, employer_total: g.employer_total, total: g.total } };
+}
+function empInput(b: Record<string, unknown>): Omit<DemoEmp, "id" | "is_active" | "left_on"> {
+  const name = String(b.full_name ?? "").trim();
+  if (name.length < 2) throw new DemoError(422, "اكتب اسم الموظف");
+  if (!b.start_date) throw new DemoError(422, "حدد تاريخ المباشرة");
+  const saudi = b.nationality === "SAUDI";
+  return { full_name: name, nationality: saudi ? "SAUDI" : "NON_SAUDI", job_title: (b.job_title as string) || null, start_date: String(b.start_date),
+    gosi_system: b.gosi_system === "NEW" ? "NEW" : "OLD", basic_wage: Number(b.basic_wage) || 0, housing_allowance: Number(b.housing_allowance) || 0,
+    gosi_registered: !!b.gosi_registered, qiwa_contract_documented: !!b.qiwa_contract_documented,
+    contract_end_date: (b.contract_end_date as string) || null, probation_end_date: (b.probation_end_date as string) || null,
+    iqama_expiry: saudi ? null : (b.iqama_expiry as string) || null, work_permit_expiry: saudi ? null : (b.work_permit_expiry as string) || null };
+}
 const recipients = [
   { membership_id: "rcp-ahmad", full_name: "أحمد العتيبي", email: "demo@haseef.sa", phone: "+966500000001", role: "ORG_ADMIN", receives_alerts: true, alert_channels: ["EMAIL", "WHATSAPP"], is_me: true },
   { membership_id: "rcp-reem", full_name: "ريم السبيعي", email: "reem@nukhba.example", phone: "+966500000011", role: "DPO", receives_alerts: true, alert_channels: ["EMAIL"], is_me: false },
@@ -1006,8 +1100,8 @@ const recipients = [
 function alertsOverview() {
   const today = riyadhToday().getTime();
   const upcoming: { target_type: string; target_id: string; title: string; due_date: string; alert_on: string; threshold_days: number; channels: string[] }[] = [];
-  const add = (type: "COMPLIANCE_ITEM" | "POLICY", id: string, title: string, due: string) => {
-    const rule = alertRules[type];
+  const add = (type: string, id: string, title: string, due: string, ruleKey: keyof typeof alertRules = type as keyof typeof alertRules) => {
+    const rule = alertRules[ruleKey];
     if (!rule.is_enabled) return;
     const left = daysLeft(due);
     const t = [...rule.days_before].sort((a, b) => b - a).find((x) => x <= left);
@@ -1017,6 +1111,9 @@ function alertsOverview() {
   };
   for (const i of items) add("COMPLIANCE_ITEM", i.id, i.title, i.expiry_date);
   for (const x of policies) if (x.status === "ACTIVE") add("POLICY", x.id, x.title, x.review_due_date);
+  const lab = laborOverviewDemo();
+  for (const d of lab.documents) add(d.kind, d.employee_id, `${d.label} — ${d.full_name}`, d.due_date, "EMPLOYEE_DOC");
+  for (const t of lab.tasks) if (!t.done_at) add("LABOR_TASK", t.id, `${t.label} لشهر ${t.period.slice(5, 7)}/${t.period.slice(0, 4)}`, t.due_date);
   upcoming.sort((a, b) => a.alert_on.localeCompare(b.alert_on));
   const log = dispatches().items.filter((x) => x.org_name === "مؤسسة النخبة للمقاولات").map((x, k) => ({
     id: x.id, target_type: x.target_type, title: items[k % items.length]?.title ?? null, due_date: x.due_date, threshold_days: x.threshold_days,
@@ -1061,6 +1158,18 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     if (p === "/admin/me") return { user_id: TEAM_ME[role].id, role, role_name: adminRoles.find((r) => r.code === role)?.name ?? role, permissions: permsOf(role) };
     actor = { name: TEAM_ME[role]?.full_name ?? role, role };
     requirePerm(role, method, p, body);
+    if (p === "/admin/gosi-rates" && method === "GET") return GOSI_RATES.map((r, i) => ({ ...r, id: i + 1, updated_at: ts(-30) }));
+    if (p === "/admin/gosi-rates" && method === "PUT") {
+      const r = body as unknown as (typeof GOSI_RATES)[number];
+      if (!r.effective_from || !["OLD", "NEW", "NON_SAUDI"].includes(r.system)) throw new DemoError(422, "أكمل النظام وتاريخ السريان");
+      const k = GOSI_RATES.findIndex((x) => x.system === r.system && x.effective_from === r.effective_from);
+      const row = { ...r, employee_annuity: +r.employee_annuity, employer_annuity: +r.employer_annuity, employee_saned: +r.employee_saned,
+        employer_saned: +r.employer_saned, employer_hazards: +r.employer_hazards, min_base: +(r.min_base ?? 1500), max_base: +(r.max_base ?? 45000) };
+      if (k >= 0) GOSI_RATES[k] = row; else GOSI_RATES.push(row);
+      GOSI_RATES.sort((a, b) => a.system.localeCompare(b.system) || a.effective_from.localeCompare(b.effective_from));
+      log("ADMIN_GOSI_RATE", null, row);
+      return { id: k >= 0 ? k + 1 : GOSI_RATES.length };
+    }
     if (p === "/admin/overview") { const ov = overview(); return canDo(role, "finance.view") ? ov : { ...ov, kpis: { ...ov.kpis, mrr_sar: null } }; }
     if (p === "/admin/organizations" && method === "GET") return orgs.map(orgRow).map((r) => canDo(role, "orgs.view") ? r : { ...r, haseef_score: null });
     if (p === "/admin/organizations" && method === "POST") {
@@ -1419,10 +1528,55 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     return { saved: true };
   }
 
+  // ---------- العمل والموظفين
+  if (p === "/labor/overview") return laborOverviewDemo();
+  if (p === "/labor/rates") return GOSI_RATES;
+  if (p === "/labor/profile" && method === "PUT") {
+    const d = Number(body.salary_day);
+    if (!(d >= 1 && d <= 28)) throw new DemoError(422, "يوم الرواتب بين 1 و28");
+    laborProfileDemo = { salary_day: d, nitaqat_band: (body.nitaqat_band as string) || null, nitaqat_checked_on: (body.nitaqat_checked_on as string) || null,
+      gosi_employer_no: (body.gosi_employer_no as string) || null };
+    for (const t of laborTasksDemo) if (t.kind === "SALARY_PAYMENT" && !t.done_at) t.due_date = taskDueDate("SALARY_PAYMENT", t.period, d);
+    return { ok: true };
+  }
+  if ((m = p.match(/^\/labor\/tasks\/([^/]+)\/(done|reopen)$/))) {
+    const t = laborTasksDemo.find((x) => x.id === m![1]); if (!t) throw new DemoError(404, "المهمة غير موجودة");
+    if (m[2] === "done") {
+      if (t.done_at) throw new DemoError(409, "المهمة منجزة");
+      t.done_at = new Date().toISOString(); t.reference = (body.reference as string) || null; t.done_by_name = "أحمد العتيبي";
+      if (body.amount != null && body.amount !== "") t.amount = Number(body.amount);
+    } else {
+      if (!t.done_at) throw new DemoError(409, "المهمة غير منجزة");
+      t.done_at = null; t.done_by_name = null;
+    }
+    return { ok: true };
+  }
+  if (p === "/labor/employees" && method === "GET") return { employees: [...employeesDemo].sort((a, b) => Number(b.is_active) - Number(a.is_active) || a.full_name.localeCompare(b.full_name, "ar")), show_wages: true };
+  if (p === "/labor/employees" && method === "POST") { const x = { id: uid(), ...empInput(body), is_active: true, left_on: null }; employeesDemo.push(x); return { id: x.id }; }
+  if (p === "/labor/employees/bulk") {
+    const rows = (body.employees as Record<string, unknown>[]) ?? [];
+    if (!rows.length) throw new DemoError(422, "لا صفوف للاستيراد");
+    const parsed = rows.map(empInput);
+    for (const r of parsed) employeesDemo.push({ id: uid(), ...r, is_active: true, left_on: null });
+    return { imported: parsed.length };
+  }
+  if ((m = p.match(/^\/labor\/employees\/([^/]+)(\/leave)?$/))) {
+    const x = employeesDemo.find((e) => e.id === m![1]); if (!x) throw new DemoError(404, "الموظف غير موجود");
+    if (m[2]) { x.is_active = false; x.left_on = String(body.left_on); } else Object.assign(x, empInput(body));
+    return { ok: true };
+  }
+  if (p === "/labor/gosi") return gosiMonthDemo(q.get("month") ? `${q.get("month")}-01` : monthStart(iso(riyadhToday())));
+  if (p === "/labor/calculator") {
+    const on = (body.on as string) || iso(riyadhToday());
+    const r = pickRate(GOSI_RATES, rateSystem(body.nationality as Nationality, body.gosi_system as GosiSystem), on);
+    if (!r) throw new DemoError(422, "لا توجد نسبة سارية في هذا التاريخ");
+    return { ...contribution(Number(body.basic_wage) || 0, Number(body.housing_allowance) || 0, r), on };
+  }
+
   // ---------- التنبيهات
   if (p === "/alerts/overview") return alertsOverview();
   if (p === "/alert-rules" && method === "PUT") {
-    const t = String(body.target_type) as "COMPLIANCE_ITEM" | "POLICY";
+    const t = String(body.target_type) as keyof typeof alertRules;
     const days = (body.days_before as number[]).filter((x) => Number.isInteger(x) && x >= 0);
     if (!days.length) throw new DemoError(422, "حدد موعداً واحداً على الأقل");
     alertRules[t] = { target_type: t, days_before: [...new Set(days)].sort((a, b) => b - a), channels: body.channels as string[],
