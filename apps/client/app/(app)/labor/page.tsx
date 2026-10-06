@@ -15,7 +15,7 @@ const monthName = (period: string) =>
   new Intl.DateTimeFormat("ar-SA-u-nu-latn-ca-gregory", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${period}T00:00:00Z`));
 const SYSTEM_LABEL: Record<string, string> = { OLD: "النظام السابق", NEW: "النظام الجديد", NON_SAUDI: "غير السعوديين" };
 const NAT_LABEL: Record<string, string> = { SAUDI: "سعودي", NON_SAUDI: "غير سعودي" };
-const UPSELL = "سجل الموظفين وحاسبة التأمينات ومؤشرات قوى ضمن باقة الحوكمة والنمو وباقة كبار العملاء. التقويم الشهري والتنبيهات متاحة في باقتك الحالية.";
+const UPSELL = "سجل الموظفين وحاسبة التأمينات ومؤشرات قوى غير مفعّلة لمنشأتك. تواصل مع فريق حصيف لتفعيلها.";
 
 function taskState(t: LaborTask): { s: string; label: string } {
   if (t.done_at) return { s: "IN_PLACE", label: "تم" };

@@ -456,7 +456,7 @@ const PERM_RULES: [RegExp, RegExp, string[]][] = [
   [/./, /^\/admin\/(team|roles)/, ["team.manage"]],
   [/GET/, /^\/admin\/audit/, ["audit.view"]],
   [/PUT/, /^\/admin\/gosi-rates/, ["content.manage"]],
-  [/GET/, /^\/admin\/gosi-rates/, ["content.manage", "content.approve"]],
+  [/GET/, /^\/admin\/gosi-rates/, ["content.manage", "content.approve", "finance.view", "expenses.manage"]],
   [/GET/, /^\/admin\/finance\/plans/, ["finance.view", "billing.manage"]],
   [/./, /^\/admin\/finance\/plans/, ["billing.manage"]],
   [/GET/, /^\/admin\/finance\/invoices/, ["finance.view", "billing.manage"]],

@@ -357,7 +357,7 @@ class GosiRateIn(BaseModel):
 
 
 @router.get("/gosi-rates")
-def gosi_rates(a: Admin = Depends(require_perm("content.manage", "content.approve"))):
+def gosi_rates(a: Admin = Depends(require_perm("content.manage", "content.approve", "finance.view", "expenses.manage"))):
     return [{k: (float(v) if hasattr(v, "is_finite") else v) for k, v in dict(r).items()} for r in a.conn.execute(text("""
         SELECT id, system, effective_from, employee_annuity, employer_annuity, employee_saned, employer_saned, employer_hazards,
                min_base, max_base, note, updated_at FROM gosi_rates ORDER BY system, effective_from""")).mappings()]
