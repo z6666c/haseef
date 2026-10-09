@@ -55,7 +55,7 @@ jobs:
         run: |
           # أظهر آخر خطأ في الخادم كتنبيه في صفحة الفحص (السجلات الكاملة قد لا تكون متاحة للقراءة)
           docker compose -f docker-compose.prod.yml logs --no-color --tail 300 api > /tmp/api.log 2>&1 || true
-          tb=$(grep -n "Traceback" /tmp/api.log | tail -1 | cut -d: -f1)
+          tb=$( (grep -n "Traceback" /tmp/api.log || true) | tail -1 | cut -d: -f1)
           if [ -n "$tb" ]; then
             msg=$(tail -n +"$tb" /tmp/api.log | head -40 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
             echo "::error title=API traceback::$msg"

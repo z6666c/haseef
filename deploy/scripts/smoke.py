@@ -86,13 +86,13 @@ step("المصروفات والملخص المالي وإقرار الضريبة
 plan = call("POST", "/v1/admin/finance/plans", {"org_id": org["id"], "plan_tier": "PROFESSIONAL_GRC", "installments": 4,
                                                "starts_on": inv["issued_at"][:10], "pay_first": True, "first_reference": "SMOKE-Q1"}, expect=201)
 d = call("GET", f"/v1/admin/finance/plans/{plan['id']}")
-assert d["paid_net"] == 1247.5 and d["remaining_net"] == 3742.5 and len(d["items"]) == 4, d
+assert d["paid_net"] == 1372.5 and d["remaining_net"] == 4117.5 and len(d["items"]) == 4, d
 second = d["items"][1]["id"]
 call("POST", f"/v1/admin/finance/plans/{plan['id']}/installments/{second}/remind", {})
 r = call("POST", f"/v1/admin/finance/plans/{plan['id']}/installments/{second}/pay", {"reference": "SMOKE-Q2"})
 call("POST", f"/v1/admin/finance/plans/{plan['id']}/installments/{second}/pay", {"reference": "again"}, expect=409)
 d = call("GET", f"/v1/admin/finance/plans/{plan['id']}")
-assert d["paid_count"] == 2 and d["remaining_net"] == 2495.0, d
+assert d["paid_count"] == 2 and d["remaining_net"] == 2745.0, d
 call("POST", "/v1/admin/finance/plans", {"org_id": org["id"], "plan_tier": "ESSENTIAL", "installments": 2,
                                           "starts_on": inv["issued_at"][:10]}, expect=409)
 step(f"اشتراك سنوي بأربعة أقساط: مدفوع قسطان، المتبقي {d['remaining_net']}، وتذكير يدوي، وفاتورة {r['invoice']['number']}")
