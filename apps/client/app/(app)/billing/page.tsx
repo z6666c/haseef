@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { INVOICE_KIND, PLAN_LABEL, formatDate, round2, sar, type BillingOverview } from "@haseef/shared";
+import { PayPanel } from "@/components/PayPanel";
 import { api } from "@/lib/session";
 
 const STATUS: Record<string, string> = { ACTIVE: "فعّال", TRIAL: "تجربة مجانية", PAST_DUE: "متأخر السداد", CANCELED: "ملغى", EXPIRED: "منتهٍ" };
@@ -31,7 +32,9 @@ export default function BillingPage() {
           <div><span className="muted small">الاشتراك</span><b>{s.billing_cycle === "YEARLY" ? "سنوي" : "شهري"} · {STATUS[s.billing_status] ?? s.billing_status}</b></div>
           <div><span className="muted small">المدة</span><b>{formatDate(s.starts_at.slice(0, 10))} — {formatDate(s.ends_at.slice(0, 10))}</b></div>
         </section>
-      ) : <p className="empty">لا يوجد اشتراك قائم. تواصل مع فريق حصيف للاشتراك.</p>}
+      ) : <p className="empty">لا يوجد اشتراك قائم. اشترك من خيارات الدفع أدناه.</p>}
+
+      <PayPanel />
 
       {p && (
         <section className="bill-plan">
@@ -62,7 +65,7 @@ export default function BillingPage() {
             </tbody>
           </table>
           <p className="hint-box">يصلك تذكير بالبريد والواتساب قبل موعد كل قسط بـ7 أيام، ويوم الاستحقاق، وبعد 3 أيام إن لم يُسجَّل الدفع.
-            للسداد أو تعديل الخطة تواصل مع فريق حصيف.</p>
+            ادفع القسط إلكترونياً من الأعلى، ولتعديل الخطة تواصل مع فريق حصيف.</p>
         </section>
       )}
 

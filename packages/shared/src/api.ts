@@ -1,5 +1,6 @@
 import type { ComplianceItem, ComplianceItemInput, Dashboard, Me } from "./types.ts";
 import type { GosiRate, GosiSystem, LaborTaskKind, Nationality, qiwaIndicators } from "./labor.ts";
+import type { TaxKind } from "./tax.ts";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -123,6 +124,48 @@ export function createApi(
       req<{ updated: boolean }>(`/pdpl/incidents/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
 
     // ---------- طلب تجربة (عام، بلا دخول)
+    // ---------- التسجيل الذاتي والإعداد
+    publicPricing: () => req<PublicPricing>("/public/pricing", { org: false }),
+    signup: (b: SignupInput) => req<{ access_token: string; org_id: string; trial_days: number }>("/public/signup", { method: "POST", org: false, body: JSON.stringify(b) }),
+    verifyEmail: (token: string) => req<{ verified: boolean }>("/public/verify-email", { method: "POST", org: false, body: JSON.stringify({ token }) }),
+    resendVerification: () => req<{ sent?: boolean; verified?: boolean }>("/auth/resend-verification", { method: "POST", org: false, body: "{}" }),
+    onboarding: () => req<OnboardingState>("/onboarding"),
+    completeOnboarding: (b: OnboardingInput) => req<{ ok: boolean }>("/onboarding", { method: "POST", body: JSON.stringify(b) }),
+
+    // ---------- الدفع الإلكتروني
+    checkoutOptions: () => req<CheckoutOptions>("/billing/checkout/options"),
+    checkout: (b: { purpose: "SUBSCRIPTION" | "INSTALLMENT" | "ADDON"; plan_tier?: string; billing_cycle?: "MONTHLY" | "YEARLY"; installment_id?: string; addon_code?: string }) =>
+      req<{ intent_id: string; checkout_url: string; total: number }>("/billing/checkout", { method: "POST", body: JSON.stringify(b) }),
+    checkoutStatus: (id: string) => req<PaymentIntent>(`/billing/checkout/${id}`),
+    sandboxPay: (id: string) => req<PaymentIntent>(`/billing/checkout/${id}/sandbox-pay`, { method: "POST", body: "{}" }),
+    myPayments: () => req<PaymentIntent[]>("/billing/payments"),
+
+    // ---------- الزكاة والضريبة
+    taxOverview: () => req<TaxOverview>("/tax/overview"),
+    setTaxProfile: (b: TaxProfile) => req<{ ok: boolean }>("/tax/profile", { method: "PUT", body: JSON.stringify(b) }),
+    taxDone: (id: string, b: { reference: string | null; amount?: number | null }) => req<{ ok: boolean }>(`/tax/tasks/${id}/done`, { method: "POST", body: JSON.stringify(b) }),
+    taxReopen: (id: string) => req<{ ok: boolean }>(`/tax/tasks/${id}/reopen`, { method: "POST", body: "{}" }),
+
+    // ---------- مزامنة التقويم
+    calendarFeed: () => req<{ active: boolean; include_people?: boolean; created_at?: string; can_manage: boolean }>("/calendar/feed"),
+    createCalendarFeed: (include_people: boolean) => req<{ url: string; include_people: boolean; ics?: string }>("/calendar/feed", { method: "POST", body: JSON.stringify({ include_people }) }),
+    deleteCalendarFeed: () => req<void>("/calendar/feed", { method: "DELETE" }),
+
+    // ---------- بوت الموظفين
+    botOverview: () => req<BotOverview>("/bot/overview"),
+    botSettings: (b: { enabled: boolean; welcome_text: string | null; hr_contact: string | null; require_approval: boolean }) =>
+      req<{ ok: boolean }>("/bot/settings", { method: "PUT", body: JSON.stringify(b) }),
+    botRotateCode: () => req<{ invite_code: string }>("/bot/invite-code/rotate", { method: "POST", body: "{}" }),
+    botAddMember: (b: { full_name: string; phone: string; employee_id?: string | null }) => req<{ id: string }>("/bot/members", { method: "POST", body: JSON.stringify(b) }),
+    botApprove: (id: string) => req<{ ok: boolean }>(`/bot/members/${id}/approve`, { method: "POST", body: "{}" }),
+    botRemove: (id: string) => req<void>(`/bot/members/${id}`, { method: "DELETE" }),
+    botAddFaq: (b: { question: string; answer: string; is_active?: boolean }) => req<{ id: string }>("/bot/faqs", { method: "POST", body: JSON.stringify(b) }),
+    botEditFaq: (id: string, b: { question: string; answer: string; is_active: boolean }) => req<{ ok: boolean }>(`/bot/faqs/${id}`, { method: "PUT", body: JSON.stringify(b) }),
+    botDeleteFaq: (id: string) => req<void>(`/bot/faqs/${id}`, { method: "DELETE" }),
+    botSharePolicy: (id: string, b: { shared: boolean; employee_summary: string | null }) => req<{ ok: boolean }>(`/bot/policies/${id}`, { method: "PATCH", body: JSON.stringify(b) }),
+    botSimulate: (text: string, member_id?: string | null) => req<{ reply: string; intent: string; sources: { kind: string; title: string }[] }>("/bot/simulate", { method: "POST", body: JSON.stringify({ text, member_id: member_id ?? null }) }),
+    botAcks: () => req<{ policy_id: string; title: string; version: string; member_id: string; full_name: string; acknowledged_at: string | null }[]>("/bot/acknowledgments"),
+
     submitTrial: (b: TrialInput) => req<{ received: boolean }>("/public/trial-requests", { method: "POST", org: false, body: JSON.stringify(b) }),
 
     // ---------- تقييم الأثر (DPIA)
@@ -176,6 +219,11 @@ export function createApi(
       req<{ status: string }>(`/policies/${id}/approve`, { method: "POST", body: JSON.stringify({ review_months }) }),
 
     admin: {
+      pricing: () => req<PublicPricing>("/admin/pricing", { org: false }),
+      setPlanPrice: (tier: string, b: { monthly_price_sar: number; yearly_price_sar: number; monthly_whatsapp_alerts: number | null }) =>
+        req<{ ok: boolean }>(`/admin/pricing/plans/${tier}`, { method: "PUT", org: false, body: JSON.stringify(b) }),
+      setAddon: (code: string, b: { monthly_price: number; included_tiers: string[]; members: number | null; questions: number | null; included_unlimited: boolean; is_active: boolean }) =>
+        req<{ ok: boolean }>(`/admin/pricing/addons/${code}`, { method: "PUT", org: false, body: JSON.stringify(b) }),
       gosiRates: () => req<(GosiRate & { id: number; updated_at: string })[]>("/admin/gosi-rates", { org: false }),
       setGosiRate: (b: GosiRate) => req<{ id: number }>("/admin/gosi-rates", { method: "PUT", org: false, body: JSON.stringify(b) }),
       overview: () => req<AdminOverview>("/admin/overview", { org: false }),
@@ -631,13 +679,13 @@ export interface BoardReportResponse {
 }
 
 // ---------- التنبيهات
-export type AlertTargetType = "COMPLIANCE_ITEM" | "POLICY" | "EMPLOYEE_DOC" | "LABOR_TASK";
+export type AlertTargetType = "COMPLIANCE_ITEM" | "POLICY" | "EMPLOYEE_DOC" | "LABOR_TASK" | "TAX_TASK";
 export interface AlertRuleView { target_type: string; days_before: number[]; channels: string[]; is_enabled: boolean; is_default: boolean }
 export interface AlertsOverview {
   plan: { tier: string | null; name: string | null; active: boolean };
   whatsapp: { provider: string; live: boolean; limit: number | null; used: number; remaining: number | null };
   send_hour: number;
-  rules: Record<AlertTargetType, AlertRuleView>; custom_rules: number;
+  rules: Partial<Record<AlertTargetType, AlertRuleView>> & Record<"COMPLIANCE_ITEM" | "POLICY", AlertRuleView>; custom_rules: number;
   recipients: { membership_id: string; full_name: string; email: string | null; phone: string | null; role: string;
     receives_alerts: boolean; alert_channels: string[]; is_me: boolean }[];
   upcoming: { target_type: string; target_id: string; title: string; due_date: string; alert_on: string; threshold_days: number; channels: string[] }[];
@@ -681,4 +729,53 @@ export interface GosiCalcResult { base: number; employee: number; employer: numb
 export interface GosiMonth {
   period: string; employee_total: number; employer_total: number; total: number;
   lines: (GosiCalcResult & { employee_id: string; full_name: string; nationality: Nationality; gosi_system: GosiSystem; gosi_registered: boolean })[];
+}
+
+// ---------- التسعير والتسجيل والدفع
+export interface PlanPrice { tier: string; name_ar: string; monthly_price_sar: number; yearly_price_sar: number; monthly_whatsapp_alerts: number | null }
+export interface AddonPrice { code: string; name: string; monthly_price: number; included_tiers: string[];
+  limits: { members?: number | null; questions?: number | null; included_unlimited?: boolean; extra_members_block?: number; extra_block_price?: number }; is_active: boolean }
+export interface PublicPricing { plans: PlanPrice[]; addons: AddonPrice[] }
+export interface SignupInput {
+  company_name: string; cr_number: string; entity_legal_type: string; full_name: string; email: string; phone_number: string | null;
+  password: string; plan_tier: string; consent: boolean; website?: string;
+}
+export interface OnboardingState {
+  name: string; entity_legal_type: string; commercial_size: string | null; industry_type: string | null; onboarded_at: string | null;
+  signup_source: string; email_verified: boolean; phone_number: string | null; plan_tier: string | null; billing_status: string | null;
+  ends_at: string | null; needs_onboarding: boolean;
+}
+export interface OnboardingInput {
+  commercial_size: "MICRO" | "SMALL" | "MEDIUM"; industry_type: string | null; employees_count: number; labor_enabled: boolean; salary_day: number;
+  vat_registered: boolean; vat_frequency: "MONTHLY" | "QUARTERLY"; withholding_applies: boolean; fiscal_year_end_month: number; alert_phone: string | null;
+}
+export interface AddonAccess { code: string; name: string; price: number | null; via: "PLAN" | "ADDON" | null; paid_until: string | null;
+  limits: { members?: number | null; questions?: number | null }; plan_tier: string | null }
+export interface CheckoutOptions {
+  plans: PlanPrice[]; addons: AddonPrice[]; vat_rate: number; provider: string; can_pay: boolean;
+  subscription: { plan_tier: string; billing_cycle: string; billing_status: string; ends_at: string } | null;
+  next_installment: { id: string; seq: number; due_date: string; amount_net: number; installments: number } | null;
+  bot: AddonAccess;
+}
+export interface PaymentIntent { id: string; purpose: string; description: string; amount_net: number; vat_amount: number; total: number;
+  status: "INITIATED" | "PAID" | "FAILED" | "EXPIRED"; created_at: string; paid_at: string | null; invoice_id: string | null; provider: string }
+
+// ---------- الزكاة والضريبة
+export interface TaxProfile { vat_registered: boolean; vat_frequency: "MONTHLY" | "QUARTERLY"; withholding_applies: boolean; zakat_applies: boolean; fiscal_year_end_month: number }
+export interface TaxTask { id: string; kind: TaxKind; period_start: string; period_end: string; due_date: string; amount: number | null;
+  done_at: string | null; reference: string | null; done_by_name: string | null; label: string; period_label: string; days_left: number; overdue: boolean }
+export interface TaxOverview { enabled: boolean; profile: TaxProfile | null; tasks: TaxTask[]; can_manage: boolean; today: string }
+
+// ---------- بوت الموظفين
+export interface BotMember { id: string; full_name: string; phone: string; status: "INVITED" | "PENDING" | "ACTIVE"; joined_via: string;
+  consent_at: string | null; created_at: string; employee_id: string | null; acks: number }
+export interface BotOverview {
+  access: AddonAccess; can_manage: boolean; live: boolean;
+  settings?: { enabled: boolean; invite_code: string; welcome_text: string | null; hr_contact: string | null; require_approval: boolean };
+  members?: BotMember[];
+  policies?: { id: string; title: string; version: string; shared_with_employees: boolean; employee_summary: string | null; acks: number }[];
+  faqs?: { id: string; question: string; answer: string; is_active: boolean }[];
+  log?: { id: number; direction: "IN" | "OUT"; body: string; intent: string | null; simulated: boolean; created_at: string; full_name: string | null }[];
+  unanswered?: { body: string; created_at: string; full_name: string | null }[];
+  stats?: { members_active: number; members_total: number; questions_month: number; shared_policies: number };
 }

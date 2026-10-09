@@ -186,3 +186,22 @@ export const CardReceipt = (p: P) => (
     <path d="M6.5 15h4" stroke={A} />
   </Svg>
 );
+
+/** الزكاة والضريبة — إيصال بنسبة مئوية */
+export const ReceiptPercent = (p: P) => (
+  <Svg {...p}>
+    <path d="M6 3.5h12v17l-2.4-1.5-2.4 1.5-2.4-1.5L8.4 20.5 6 19Z" />
+    <path d="m9.2 14.8 5.6-5.6" stroke={A} />
+    <circle cx="9.6" cy="9.6" r="1" fill={A} stroke="none" />
+    <circle cx="14.4" cy="14.4" r="1" fill={A} stroke="none" />
+  </Svg>
+);
+
+/** بوت الموظفين — فقاعة محادثة */
+export const ChatBot = (p: P) => (
+  <Svg {...p}>
+    <path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H11l-4 3.5v-3.5h-.5a2 2 0 0 1-2-2Z" />
+    <circle cx="9.5" cy="10.5" r="1" fill={A} stroke="none" />
+    <circle cx="14.5" cy="10.5" r="1" fill={A} stroke="none" />
+  </Svg>
+);

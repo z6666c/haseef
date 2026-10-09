@@ -97,3 +97,15 @@ docker compose -f docker-compose.prod.yml ps              # حالة الخدم�
 docker compose -f docker-compose.prod.yml logs -f api     # سجلات الخادم
 docker compose -f docker-compose.prod.yml logs -f worker  # سجلات التنبيهات
 ```
+
+## الدفع الإلكتروني والبريد وبوت الموظفين (الإصدار 0017)
+
+| الميزة | الإعداد في `deploy/.env` | ملاحظات |
+|---|---|---|
+| الدفع الإلكتروني (ميسّر) | `HASEEF_PAYMENT_PROVIDER=moyasar` و`HASEEF_MOYASAR_SECRET_KEY` | سجّل عنوان الإشعارات في لوحة ميسّر: `https://app.<النطاق>/api/v1/payments/moyasar/callback`. حصيف لا يعتمد الإشعار بل يسأل ميسّر عن الحالة والمبلغ قبل اعتماد الدفع. بدون مفتاح يبقى الدفع الإلكتروني متوقفاً (رسالة للعميل) وتسجّل المحاسبة الدفعات يدوياً. |
+| البريد | `HASEEF_EMAIL_PROVIDER=smtp` و`HASEEF_SMTP_*` | لتفعيل البريد ورسائل التحقق والإيصالات والتنبيهات بالبريد. |
+| بوت الموظفين | `HASEEF_WHATSAPP_PROVIDER=meta` و`HASEEF_META_VERIFY_TOKEN` و`HASEEF_META_APP_SECRET` | عنوان الويبهوك: `https://app.<النطاق>/api/v1/webhooks/whatsapp` (حقل messages). التوقيع إلزامي في الإنتاج. |
+| التسجيل الذاتي | `HASEEF_SIGNUP_ENABLED=true` | حد 5 تسجيلات لكل عنوان في الساعة. أوقفه بـ `false` إن أردت التجارب بطلب فقط. |
+| التسعير | من غرفة العمليات ← «التسعير» | أسعار الباقات والإضافات وحصص الرسائل، دون إعادة نشر. |
+
+قوالب واتساب الجديدة للتقديم إلى Meta: `haseef_tax_due` و`haseef_bot_invite` (التفاصيل في `docs/whatsapp-templates.md`).

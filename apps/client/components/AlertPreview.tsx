@@ -44,7 +44,7 @@ export function AlertPreview({ ov, orgName }: { ov: AlertsOverview; orgName: str
   const t0 = today();
   const subject = tpl === "haseef_license_expired" ? `عاجل: انتهت صلاحية ${s.title}`
     : tpl === "haseef_policy_review_due" ? `تذكير: مراجعة ${s.title} ${vars[3]}`
-    : tpl === "haseef_labor_due" ? `تذكير: ${s.title} مستحق ${vars[3]}` : `تنبيه: ${s.title} تنتهي ${vars[3]}`;
+    : tpl === "haseef_labor_due" || tpl === "haseef_tax_due" ? `تذكير: ${s.title} مستحق ${vars[3]}` : `تنبيه: ${s.title} تنتهي ${vars[3]}`;
 
   return (
     <section className="gov-section">

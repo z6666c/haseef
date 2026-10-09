@@ -17,15 +17,17 @@ const CHANNELS: Channel[] = ["WHATSAPP", "EMAIL"];
 const TARGET_LABEL: Record<string, string> = {
   COMPLIANCE_ITEM: "التراخيص والوثائق", POLICY: "مراجعة السياسات", EMPLOYEE_DOC: "وثائق الموظفين", LABOR_TASK: "التأمينات وحماية الأجور والرواتب",
   IQAMA: "الإقامات", WORK_PERMIT: "رخص العمل", CONTRACT_END: "عقود العمل", PROBATION_END: "فترات التجربة",
+  TAX_TASK: "الزكاة والضريبة",
 };
 const LABOR_TARGETS = new Set(["LABOR_TASK", "IQAMA", "WORK_PERMIT", "CONTRACT_END", "PROBATION_END"]);
 const targetHref = (type: string, id: string) =>
-  type === "POLICY" ? `/policies/view?id=${id}` : LABOR_TARGETS.has(type) ? "/labor" : "/licenses";
+  type === "POLICY" ? `/policies/view?id=${id}` : type === "TAX_TASK" ? "/tax" : LABOR_TARGETS.has(type) ? "/labor" : "/licenses";
 const TARGET_HINT: Record<string, string> = {
   COMPLIANCE_ITEM: "تذكير قبل انتهاء السجل التجاري والرخص والشهادات وكل وثيقة لها تاريخ انتهاء.",
   POLICY: "تذكير قبل موعد المراجعة الدورية لكل سياسة معتمدة.",
   EMPLOYEE_DOC: "تذكير قبل انتهاء إقامات الموظفين ورخص العمل وعقود العمل المحددة المدة وفترات التجربة.",
   LABOR_TASK: "تذكير قبل موعد سداد التأمينات (15 من الشهر التالي) ورفع ملف الأجور في مُدد وصرف الرواتب، حتى تأكيد الإنجاز.",
+  TAX_TASK: "تذكير قبل مواعيد إقرارات القيمة المضافة والاستقطاع والزكاة، حتى تأكيد التقديم.",
 };
 const DISPATCH_TONE: Record<string, string> = {
   SENT: "IN_PLACE", DELIVERED: "IN_PLACE", READ: "IN_PLACE", QUEUED: "PENDING", SENDING: "PENDING", FAILED: "FAIL",
@@ -106,14 +108,16 @@ export default function AlertsPage() {
 
       <AlertPreview ov={ov} orgName={orgName} />
 
+      <CalendarSync canManage={ov.can_manage} />
+
       <section className="gov-section">
         <div className="section-head">
           <h2>قواعد التنبيه</h2>
           {!ov.can_manage && <p className="muted">يعدّلها مدير المنشأة أو مسؤول الامتثال.</p>}
         </div>
         <div className="rule-grid">
-          {(["COMPLIANCE_ITEM", "POLICY", "EMPLOYEE_DOC", "LABOR_TASK"] as Target[]).filter((t) => ov.rules[t]).map((t) => (
-            <RuleEditor key={t + JSON.stringify(ov.rules[t])} target={t} rule={ov.rules[t]} canManage={ov.can_manage}
+          {(["COMPLIANCE_ITEM", "POLICY", "EMPLOYEE_DOC", "LABOR_TASK", "TAX_TASK"] as Target[]).filter((t) => ov.rules[t]).map((t) => (
+            <RuleEditor key={t + JSON.stringify(ov.rules[t])} target={t} rule={ov.rules[t]!} canManage={ov.can_manage}
               onSave={(r) => act(() => api.setAlertRule({ target_type: t, target_id: null, ...r }), `حُفظت قاعدة ${TARGET_LABEL[t]}`)} />
           ))}
         </div>
@@ -293,5 +297,48 @@ function RuleEditor({ target, rule, canManage, onSave }: {
         </div>
       )}
     </div>
+  );
+}
+
+/** مزامنة المواعيد مع تقويم جوجل وأوتلوك والآيفون (رابط اشتراك سري). */
+function CalendarSync({ canManage }: { canManage: boolean }) {
+  const [st, setSt] = useState<{ active: boolean; include_people?: boolean; created_at?: string } | null>(null);
+  const [people, setPeople] = useState(false);
+  const [url, setUrl] = useState<string | null>(null);
+  const [ics, setIcs] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => { api.calendarFeed().then((x) => { setSt(x); setPeople(!!x.include_people); }).catch(() => {}); }, []);
+  useEffect(load, [load]);
+  if (!st) return null;
+  async function create() {
+    setErr(null);
+    try { const r = await api.createCalendarFeed(people); setUrl(r.url); setIcs(r.ics ?? null); load(); }
+    catch (e) { setErr(e instanceof Error ? e.message : "تعذّر"); }
+  }
+  return (
+    <section className="gov-section">
+      <div className="section-head">
+        <h2>مزامنة التقويم</h2>
+        <p className="muted">كل مواعيدك (التراخيص، السياسات، التأمينات والأجور، الزكاة والضريبة) في تقويم جوجل أو أوتلوك أو الآيفون، وتتحدث تلقائياً.</p>
+      </div>
+      {url ? (
+        <div className="panel inline-form">
+          <p className="small"><b>انسخ الرابط الآن</b> — لن يظهر مرة أخرى. في تقويم جوجل: «إضافة تقويم» ← «من عنوان URL». في الآيفون: الإعدادات ← التقويم ← الحسابات ← إضافة تقويم مشترك.</p>
+          <div className="feed-url"><input readOnly value={url} onFocus={(e) => e.currentTarget.select()} />
+            <button className="btn btn-quiet btn-xs" type="button" onClick={() => navigator.clipboard?.writeText(url)}>نسخ</button></div>
+          {ics && <a className="btn btn-quiet btn-xs" download="haseef.ics" href={`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`}>تنزيل ملف التقويم (.ics)</a>}
+        </div>
+      ) : st.active ? (
+        <p className="small">رابط التقويم مفعّل منذ {st.created_at ? fmtTime(st.created_at) : "—"}{st.include_people ? " ويتضمن أسماء الموظفين" : " دون أسماء الموظفين"}.</p>
+      ) : <p className="small muted">لا يوجد رابط تقويم بعد.</p>}
+      {canManage && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+          <label className="checks-inline"><input type="checkbox" checked={people} onChange={(e) => setPeople(e.target.checked)} /> إظهار أسماء الموظفين في التقويم الخارجي</label>
+          <button className="btn btn-action btn-xs" type="button" onClick={create}>{st.active ? "إنشاء رابط جديد (يُبطل السابق)" : "إنشاء رابط التقويم"}</button>
+          {st.active && <button className="btn btn-quiet btn-xs" type="button" onClick={() => api.deleteCalendarFeed().then(() => { setUrl(null); load(); })}>إيقاف الرابط</button>}
+        </div>
+      )}
+      {err && <p className="error">{err}</p>}
+    </section>
   );
 }

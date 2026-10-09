@@ -6,7 +6,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import (admin, admin_catalog, admin_ops, alerts, auth, billing, compliance, dashboard, finance, governance, group, labor, legal,
+from .routers import (admin, admin_catalog, admin_ops, alerts, auth, billing, bot, calendar, compliance, dashboard, finance, governance, group,
+                      labor, legal, payments, pricing, signup, tax, webhooks,
                       pdpl, reminders, reports, trials)
 
 logging.basicConfig(level=logging.INFO)
@@ -39,7 +40,8 @@ def create_app() -> FastAPI:
     app.add_middleware(CORSMiddleware, allow_origins=s.cors_origins, allow_credentials=True,
                        allow_methods=["*"], allow_headers=["Authorization", "Content-Type", "X-Org-Id"])
     for r in (auth.router, compliance.router, reminders.router, dashboard.router, governance.router, pdpl.router, legal.router,
-              group.router, reports.router, alerts.router, trials.router, admin.router, admin_ops.router, admin_catalog.router, finance.router, billing.router, labor.router):
+              group.router, reports.router, alerts.router, trials.router, admin.router, admin_ops.router, admin_catalog.router, finance.router, billing.router, labor.router,
+              tax.router, calendar.router, payments.router, pricing.router, signup.router, bot.router, webhooks.router):
         app.include_router(r, prefix="/v1")
 
     @app.get("/health")

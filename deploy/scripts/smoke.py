@@ -26,19 +26,21 @@ ctx = ssl._create_unverified_context() if args.insecure else None
 token: str | None = None
 
 
-def call(method: str, path: str, body: dict | None = None, expect: int = 200, org_id: str | None = None):
+def call(method: str, path: str, body: dict | None = None, expect: int = 200, org_id: str | None = None, raw: bool = False):
     req = urllib.request.Request(args.base + path, method=method, data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {}),
                                           **({"X-Org-Id": org_id} if org_id else {})})
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=20) as r:
-            code, raw = r.status, r.read()
+            code, body_bytes = r.status, r.read()
     except urllib.error.HTTPError as e:
-        code, raw = e.code, e.read()
+        code, body_bytes = e.code, e.read()
     if code != expect:
-        print(f"::error::{method} {path} → {code}: {raw[:400].decode(errors='replace')}")
+        print(f"::error::{method} {path} → {code}: {body_bytes[:400].decode(errors='replace')}")
         sys.exit(1)
-    return json.loads(raw) if raw else None
+    if raw:
+        return body_bytes.decode()
+    return json.loads(body_bytes) if body_bytes else None
 
 
 def step(name: str):
@@ -49,6 +51,7 @@ token = call("POST", "/v1/auth/login", {"email": args.email, "password": args.pa
 new_pw = secrets.token_urlsafe(16)
 call("POST", "/v1/auth/change-password", {"current_password": args.password, "new_password": new_pw}, expect=204)
 token = call("POST", "/v1/auth/login", {"email": args.email, "password": new_pw})["access_token"]
+admin_token = token
 step("تغيير كلمة المرور المؤقتة")
 
 call("PUT", "/v1/admin/finance/profile", {"legal_name": "حصيف لتقنية المعلومات", "trade_name": "حصيف", "vat_registered": True,
@@ -123,4 +126,53 @@ step("سجل الموظفين وحاسبة التأمينات في باقة ال
 al = call("GET", "/v1/alerts/overview", org_id=o)
 assert "LABOR_TASK" in al["rules"], al["rules"]
 step(f"تقويم العمل: {len(lo['tasks'])} مهام شهرية، وتأكيد سداد التأمينات، وقواعد التنبيه")
-print("اكتمل الفحص المالي والعمالي")
+# التسجيل الذاتي ← معالج الإعداد ← الزكاة والضريبة ← التقويم ← الدفع ← البوت
+token = None
+scr = "71" + str(secrets.randbelow(10**8)).zfill(8)
+su = call("POST", "/v1/public/signup", {"company_name": "منشأة تسجيل ذاتي", "cr_number": scr, "entity_legal_type": "LLC",
+                                         "full_name": "مسجّل تجريبي", "email": f"self{scr}@example.com", "password": secrets.token_urlsafe(14),
+                                         "plan_tier": "ESSENTIAL", "consent": True}, expect=201)
+token, so = su["access_token"], su["org_id"]
+call("POST", "/v1/public/signup", {"company_name": "مكرر", "cr_number": scr, "entity_legal_type": "LLC", "full_name": "س",
+                                   "email": f"dup{scr}@example.com", "password": "x" * 12, "consent": True}, expect=409)
+ob = call("GET", "/v1/onboarding", org_id=so)
+assert ob["needs_onboarding"] and ob["billing_status"] == "TRIAL" and not ob["email_verified"], ob
+call("POST", "/v1/onboarding", {"commercial_size": "SMALL", "industry_type": "تجزئة", "employees_count": 8, "labor_enabled": True, "salary_day": 25,
+                                "vat_registered": True, "vat_frequency": "QUARTERLY", "withholding_applies": True, "fiscal_year_end_month": 12,
+                                "alert_phone": None}, org_id=so)
+assert not call("GET", "/v1/onboarding", org_id=so)["needs_onboarding"]
+tx = call("GET", "/v1/tax/overview", org_id=so)
+kinds = {t["kind"] for t in tx["tasks"]}
+assert tx["enabled"] and kinds == {"VAT_RETURN", "WHT_RETURN", "ZAKAT_RETURN"}, tx
+vat = next(t for t in tx["tasks"] if t["kind"] == "VAT_RETURN")
+call("POST", f"/v1/tax/tasks/{vat['id']}/done", {"reference": "ZATCA-1"}, org_id=so)
+step(f"تسجيل ذاتي بتجربة 14 يوماً، ومعالج الإعداد، و{len(tx['tasks'])} مهام زكاة وضريبة")
+feed = call("POST", "/v1/calendar/feed", {"include_people": False}, expect=201, org_id=so)
+ics = call("GET", "/v1/public/calendar/" + feed["url"].rsplit("/", 1)[1], raw=True)
+assert ics.startswith("BEGIN:VCALENDAR") and "VEVENT" in ics, ics[:200]
+call("GET", "/v1/public/calendar/not-a-real-token.ics", expect=404)
+step("رابط تقويم ICS يعمل ويرفض الرموز غير الصحيحة")
+call("POST", "/v1/billing/checkout", {"purpose": "SUBSCRIPTION", "plan_tier": "ESSENTIAL", "billing_cycle": "MONTHLY"}, expect=503, org_id=so)
+assert call("GET", "/v1/bot/overview", org_id=so)["access"]["via"] is None
+call("PUT", "/v1/bot/settings", {"enabled": True}, expect=402, org_id=so)
+step("الدفع الإلكتروني متوقف بأمان دون مفتاح البوابة، والبوت مقفل لباقة الأساس")
+# التسعير من غرفة العمليات: شمول البوت لباقة الأساس ثم إعادته
+token = admin_token
+pr = call("GET", "/v1/admin/pricing")
+bot = next(a for a in pr["addons"] if a["code"] == "WA_BOT")
+assert bot["monthly_price"] == 99 and bot["included_tiers"] == ["ENTERPRISE"], bot
+call("PUT", "/v1/admin/pricing/addons/WA_BOT", {"monthly_price": 99, "included_tiers": ["ENTERPRISE", "ESSENTIAL"], "members": 50,
+                                                 "questions": 1000, "included_unlimited": True, "is_active": True})
+token = su["access_token"]
+assert call("GET", "/v1/bot/overview", org_id=so)["access"]["via"] == "PLAN"
+call("POST", "/v1/bot/faqs", {"question": "متى تصرف الرواتب؟", "answer": "يوم 27 من كل شهر."}, expect=201, org_id=so)
+r = call("POST", "/v1/bot/simulate", {"text": "متى تصرف الرواتب"}, org_id=so)
+assert r["intent"] == "ANSWER" and "27" in r["reply"], r
+assert call("POST", "/v1/bot/simulate", {"text": "كم راتب زميلي؟"}, org_id=so)["intent"] == "SENSITIVE"
+call("POST", "/v1/bot/members", {"full_name": "موظف تجريبي", "phone": "+9665" + str(secrets.randbelow(10**8)).zfill(8)}, expect=201, org_id=so)
+token = admin_token
+call("PUT", "/v1/admin/pricing/addons/WA_BOT", {"monthly_price": 99, "included_tiers": ["ENTERPRISE"], "members": 50,
+                                                 "questions": 1000, "included_unlimited": True, "is_active": True})
+assert call("GET", "/v1/public/pricing")["addons"][0]["monthly_price"] == 99
+step("التسعير من غرفة العمليات، وبوت الموظفين يجيب من الأسئلة الشائعة ويرفض الأسئلة الحساسة")
+print("اكتمل الفحص المالي والعمالي والتسجيل والبوت")

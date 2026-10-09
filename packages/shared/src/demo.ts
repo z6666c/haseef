@@ -6,11 +6,14 @@ import type { ComplianceItem, Dashboard, Me, ScoreReason } from "./types.ts";
 import CONTENT from "./demo-content.json" with { type: "json" };
 import { runCheck, type CkStandard } from "./governanceCheck.ts";
 import { dpiaAssess, dpiaSuggest } from "./dpia.ts";
-import type { DpiaMitigation, DpiaQuestion, Employee, LaborProfile } from "./api.ts";
+import type { DpiaMitigation, DpiaQuestion, Employee, LaborProfile, TaxProfile } from "./api.ts";
 import {
   EMP_DOC_LABEL, GOSI_RATES, TASK_KINDS, TASK_LABEL, contribution, gosiLatePenalty, monthStart, periodsToPlan, pickRate,
   qiwaIndicators, rateSystem, taskDueDate, type GosiSystem, type LaborTaskKind, type Nationality,
 } from "./labor.ts";
+import { TAX_LABEL, addDaysIso, taxPeriodLabel, taxPlan, type TaxKind } from "./tax.ts";
+import { buildIcs } from "./ics.ts";
+import { botHandle, type BotState } from "./bot.ts";
 import { EXPENSE_CATEGORY, VAT_RATE, invoiceLine, invoiceNumber, periodRange, round2, zatcaTlv, type InvoiceLine } from "./finance.ts";
 
 
@@ -456,6 +459,8 @@ const PERM_RULES: [RegExp, RegExp, string[]][] = [
   [/./, /^\/admin\/(team|roles)/, ["team.manage"]],
   [/GET/, /^\/admin\/audit/, ["audit.view"]],
   [/PUT/, /^\/admin\/gosi-rates/, ["content.manage"]],
+  [/GET/, /^\/admin\/pricing/, ["finance.view", "billing.manage"]],
+  [/./, /^\/admin\/pricing/, ["billing.manage"]],
   [/GET/, /^\/admin\/gosi-rates/, ["content.manage", "content.approve", "finance.view", "expenses.manage"]],
   [/GET/, /^\/admin\/finance\/plans/, ["finance.view", "billing.manage"]],
   [/./, /^\/admin\/finance\/plans/, ["billing.manage"]],
@@ -1002,11 +1007,12 @@ function boardReport(year: number) {
 }
 const savedReports = new Map<number, { snapshot: ReturnType<typeof boardReport>; notes: string | null; saved_at: string; saved_by_name: string }>();
 
-const alertRules: Record<"COMPLIANCE_ITEM" | "POLICY" | "EMPLOYEE_DOC" | "LABOR_TASK", { target_type: string; days_before: number[]; channels: string[]; is_enabled: boolean; is_default: boolean }> = {
+const alertRules: Record<"COMPLIANCE_ITEM" | "POLICY" | "EMPLOYEE_DOC" | "LABOR_TASK" | "TAX_TASK", { target_type: string; days_before: number[]; channels: string[]; is_enabled: boolean; is_default: boolean }> = {
   COMPLIANCE_ITEM: { target_type: "COMPLIANCE_ITEM", days_before: [60, 30, 14, 7, 3, 1, 0], channels: ["WHATSAPP", "EMAIL"], is_enabled: true, is_default: true },
   POLICY: { target_type: "POLICY", days_before: [30, 14, 7, 0], channels: ["EMAIL", "WHATSAPP"], is_enabled: true, is_default: true },
   EMPLOYEE_DOC: { target_type: "EMPLOYEE_DOC", days_before: [60, 30, 14, 7, 3, 1, 0], channels: ["WHATSAPP", "EMAIL"], is_enabled: true, is_default: true },
   LABOR_TASK: { target_type: "LABOR_TASK", days_before: [5, 1, 0], channels: ["WHATSAPP", "EMAIL"], is_enabled: true, is_default: true },
+  TAX_TASK: { target_type: "TAX_TASK", days_before: [10, 3, 1, 0], channels: ["WHATSAPP", "EMAIL"], is_enabled: true, is_default: true },
 };
 
 // ---------- العمل والموظفين (منشأة النخبة)
@@ -1114,6 +1120,7 @@ function alertsOverview() {
   const lab = laborOverviewDemo();
   for (const d of lab.documents) add(d.kind, d.employee_id, `${d.label} — ${d.full_name}`, d.due_date, "EMPLOYEE_DOC");
   for (const t of lab.tasks) if (!t.done_at) add("LABOR_TASK", t.id, `${t.label} لشهر ${t.period.slice(5, 7)}/${t.period.slice(0, 4)}`, t.due_date);
+  for (const t of taxOverviewDemo().tasks) if (!t.done_at) add("TAX_TASK", t.id, `${t.label} عن ${t.period_label}`, t.due_date);
   upcoming.sort((a, b) => a.alert_on.localeCompare(b.alert_on));
   const log = dispatches().items.filter((x) => x.org_name === "مؤسسة النخبة للمقاولات").map((x, k) => ({
     id: x.id, target_type: x.target_type, title: items[k % items.length]?.title ?? null, due_date: x.due_date, threshold_days: x.threshold_days,
@@ -1126,6 +1133,297 @@ function alertsOverview() {
 
 const findOrg = (id: string) => { const o = orgs.find((x) => x.id === id); if (!o) throw new DemoError(404, "المنشأة غير موجودة"); return o; };
 const TEMP_PW = "Demo-Temp-2026";
+
+// ---------- النمو: التسعير والتسجيل الذاتي والدفع والضريبة والتقويم والبوت (نسخة العرض) ----------
+const QUOTA: Record<string, number | null> = { ESSENTIAL: 200, PROFESSIONAL_GRC: 1000, ENTERPRISE: null };
+const addonCatalog = [{ code: "WA_BOT", name: "بوت واتساب للموظفين", monthly_price: 99, included_tiers: ["ENTERPRISE"],
+  limits: { members: 50 as number | null, questions: 1000 as number | null, included_unlimited: true, extra_members_block: 50, extra_block_price: 49 }, is_active: true }];
+const pricingView = () => ({
+  plans: Object.entries(PRICES).map(([tier, [m, y]]) => ({ tier, name_ar: PLAN_AR[tier], monthly_price_sar: m, yearly_price_sar: y, monthly_whatsapp_alerts: QUOTA[tier] }))
+    .sort((a, b) => a.monthly_price_sar - b.monthly_price_sar),
+  addons: addonCatalog.map((a) => ({ ...a, included_tiers: [...a.included_tiers], limits: { ...a.limits } })),
+});
+let botPaidUntil: string | null = ts(21);
+function botAccess() {
+  const o = orgs.find((x) => x.id === ORG_A)!; const a = addonCatalog[0];
+  const tier = o.sub?.plan_tier ?? null;
+  const base = { code: a.code, name: a.name, price: a.monthly_price, via: null as "PLAN" | "ADDON" | null, paid_until: null as string | null, limits: {}, plan_tier: tier };
+  if (!a.is_active || !tier) return base;
+  if (a.included_tiers.includes(tier)) return { ...base, via: "PLAN" as const, limits: a.limits.included_unlimited ? {} : { members: a.limits.members, questions: a.limits.questions } };
+  if (botPaidUntil && botPaidUntil > new Date().toISOString()) return { ...base, via: "ADDON" as const, paid_until: botPaidUntil, limits: { members: a.limits.members, questions: a.limits.questions } };
+  return base;
+}
+
+// التسجيل والإعداد
+let onboardingNeeded = false;
+let emailVerified = true;
+const onboardingState = () => {
+  const o = orgs.find((x) => x.id === ORG_A)!;
+  return { name: o.name, entity_legal_type: o.legal, commercial_size: o.size, industry_type: o.industry, onboarded_at: onboardingNeeded ? null : o.created_at,
+    signup_source: onboardingNeeded ? "SELF" : "ADMIN", email_verified: emailVerified, phone_number: "+966500000001", plan_tier: o.sub?.plan_tier ?? null,
+    billing_status: o.sub?.billing_status ?? null, ends_at: o.sub?.ends_at ?? null, needs_onboarding: onboardingNeeded };
+};
+
+// الدفع الإلكتروني
+type DemoIntent = { id: string; purpose: "SUBSCRIPTION" | "INSTALLMENT" | "ADDON"; plan_tier: string | null; billing_cycle: string | null; installment_id: string | null;
+  addon_code: string | null; description: string; amount_net: number; vat_amount: number; total: number; status: "INITIATED" | "PAID" | "FAILED" | "EXPIRED";
+  created_at: string; paid_at: string | null; invoice_id: string | null; provider: string };
+const intents: DemoIntent[] = [];
+const intentOut = (i: DemoIntent) => ({ id: i.id, purpose: i.purpose, description: i.description, amount_net: i.amount_net, vat_amount: i.vat_amount,
+  total: i.total, status: i.status, created_at: i.created_at, paid_at: i.paid_at, invoice_id: i.invoice_id, provider: i.provider });
+function confirmIntent(it: DemoIntent) {
+  if (it.status === "PAID") return it;
+  const o = orgs.find((x) => x.id === ORG_A)!;
+  const ref = `SANDBOX:${it.id.slice(-8)}`;
+  let inv: DemoInvoice;
+  if (it.purpose === "INSTALLMENT") {
+    const plan = plansDemo.find((x) => x.items.some((i) => i.id === it.installment_id))!;
+    inv = payInst(plan, plan.items.find((i) => i.id === it.installment_id)!, ref, "دفع إلكتروني");
+  } else if (it.purpose === "SUBSCRIPTION") {
+    const months = it.billing_cycle === "YEARLY" ? 12 : 1;
+    const now = new Date();
+    const from = o.sub && o.sub.billing_status !== "TRIAL" && new Date(o.sub.ends_at) > now ? new Date(o.sub.ends_at) : now;
+    const ends = new Date(from); ends.setUTCMonth(ends.getUTCMonth() + months);
+    o.sub = { id: o.sub?.id ?? uid(), plan_tier: it.plan_tier!, billing_cycle: it.billing_cycle!, billing_status: "ACTIVE",
+      starts_at: o.sub?.billing_status === "TRIAL" || !o.sub ? now.toISOString() : o.sub.starts_at, ends_at: ends.toISOString() };
+    o.billing.unshift({ event_type: "PAYMENT", plan_tier: it.plan_tier, amount_sar: it.amount_net, period_months: months, reference: ref, note: "دفع إلكتروني",
+      created_at: now.toISOString(), actor: "دفع إلكتروني" });
+    inv = subscriptionInvoice(o, it.plan_tier!, it.amount_net, months, ref);
+  } else {
+    const base = botPaidUntil && botPaidUntil > new Date().toISOString() ? new Date(botPaidUntil) : new Date();
+    base.setUTCMonth(base.getUTCMonth() + 1); botPaidUntil = base.toISOString();
+    inv = issueInvoice({ source: "SUBSCRIPTION", org: o, ref, lines: [invoiceLine(`${addonCatalog[0].name} — اشتراك شهر`, 1, it.amount_net)], cycle: "MONTHLY" });
+  }
+  Object.assign(it, { status: "PAID", paid_at: new Date().toISOString(), invoice_id: inv.id });
+  return it;
+}
+
+// الزكاة والضريبة
+let taxProfileDemo: TaxProfile | null = { vat_registered: true, vat_frequency: "QUARTERLY", withholding_applies: true, zakat_applies: true, fiscal_year_end_month: 12 };
+type DemoTaxTask = { id: string; kind: TaxKind; period_start: string; period_end: string; due_date: string; amount: number | null; done_at: string | null; reference: string | null; done_by_name: string | null };
+const taxTasksDemo: DemoTaxTask[] = [];
+function ensureTaxTasks() {
+  if (!taxProfileDemo) return;
+  const today = iso(riyadhToday());
+  const first = taxTasksDemo.length === 0;
+  for (const t of taxPlan(today, taxProfileDemo)) {
+    if (taxTasksDemo.some((x) => x.kind === t.kind && x.period_start === t.start)) continue;
+    const done = first && (t.due < today || (t.kind === "WHT_RETURN" && t.end < today));
+    taxTasksDemo.push({ id: uid(), kind: t.kind, period_start: t.start, period_end: t.end, due_date: t.due, amount: null,
+      done_at: done ? `${addDaysIso(t.due, -3)}T09:00:00.000Z` : null, reference: done ? `ZATCA-${t.end.slice(0, 7).replace("-", "")}` : null, done_by_name: done ? "أحمد العتيبي" : null });
+  }
+}
+function taxOverviewDemo() {
+  ensureTaxTasks();
+  const today = iso(riyadhToday());
+  return { enabled: !!taxProfileDemo, profile: taxProfileDemo, can_manage: true, today,
+    tasks: [...taxTasksDemo].sort((a, b) => b.due_date.localeCompare(a.due_date)).map((t) => {
+      const left = daysLeft(t.due_date);
+      return { ...t, label: TAX_LABEL[t.kind], period_label: taxPeriodLabel(t.kind, t.period_start, t.period_end), days_left: left, overdue: !t.done_at && left < 0 };
+    }) };
+}
+
+// رابط التقويم
+let calFeed: { include_people: boolean; created_at: string } | null = null;
+
+// بوت الموظفين
+type DemoBotMember = { id: string; full_name: string; phone: string; status: "INVITED" | "PENDING" | "ACTIVE" | "REMOVED"; joined_via: string; consent_at: string | null;
+  created_at: string; employee_id: string | null };
+const botSettingsDemo = { enabled: true, invite_code: "nk7q2m", welcome_text: null as string | null, hr_contact: "الموارد البشرية — تحويلة 120", require_approval: true };
+const botMembers: DemoBotMember[] = [
+  { id: uid(), full_name: "سلطان المطيري", phone: "+966500000021", status: "ACTIVE", joined_via: "INVITE", consent_at: ts(-12), created_at: ts(-13), employee_id: null },
+  { id: uid(), full_name: "نورة الدوسري", phone: "+966500000022", status: "ACTIVE", joined_via: "INVITE", consent_at: ts(-11), created_at: ts(-13), employee_id: null },
+  { id: uid(), full_name: "جون ماثيو", phone: "+966500000023", status: "ACTIVE", joined_via: "CODE", consent_at: ts(-6), created_at: ts(-6), employee_id: null },
+  { id: uid(), full_name: "عبدالله الشهري", phone: "+966500000024", status: "INVITED", joined_via: "INVITE", consent_at: null, created_at: ts(-2), employee_id: null },
+  { id: uid(), full_name: "علي منصور", phone: "+966500000025", status: "PENDING", joined_via: "CODE", consent_at: ts(-1), created_at: ts(-1), employee_id: null },
+];
+const botFaqs = [
+  { id: uid(), question: "كيف أطلب إجازة؟", answer: "قدّم الطلب من نموذج الإجازات لدى الموارد البشرية قبل أسبوعين على الأقل، ويعتمده مديرك المباشر.", is_active: true },
+  { id: uid(), question: "ما ساعات الدوام؟", answer: "من الأحد إلى الخميس، من 8 صباحاً حتى 5 مساءً، وفي رمضان 6 ساعات يومياً.", is_active: true },
+  { id: uid(), question: "متى تُصرف الرواتب؟", answer: "تُصرف الرواتب يوم 27 من كل شهر، وإذا صادف إجازة تُصرف في آخر يوم عمل قبله.", is_active: true },
+];
+const LEAVE_POLICY = { id: uid(), source: null, policy_type: "OTHER", title: "سياسة الإجازات", version: "1.0", approval_date: inDays(-90), review_due_date: inDays(275), status: "ACTIVE",
+  body_md: "# الإجازة السنوية\nيستحق الموظف إجازة سنوية مدتها 21 يوماً، وتصبح 30 يوماً بعد خمس سنوات خدمة متصلة.\n\n# الإجازة المرضية\nتُقدَّم الإجازة المرضية بتقرير طبي معتمد من منصة صحتي خلال يومين من الغياب.\n\n# إجازة الزواج والمولود\nللموظف إجازة زواج خمسة أيام، وإجازة ثلاثة أيام عند ولادة مولود له." };
+policies.push(LEAVE_POLICY);
+const policyShare = new Map<string, { shared: boolean; summary: string | null }>([[LEAVE_POLICY.id, { shared: true, summary: null }]]);
+const acksDemo: { policy_id: string; member_id: string; version: string; at: string }[] = [
+  { policy_id: LEAVE_POLICY.id, member_id: botMembers[0].id, version: "1.0", at: ts(-10) },
+  { policy_id: LEAVE_POLICY.id, member_id: botMembers[1].id, version: "1.0", at: ts(-9) },
+];
+type DemoBotMsg = { id: number; member_id: string | null; direction: "IN" | "OUT"; body: string; intent: string | null; simulated: boolean; created_at: string };
+const botLog: DemoBotMsg[] = [];
+let botMsgSeq = 0;
+function botStateFor(member: DemoBotMember | null): BotState {
+  const shared = policies.filter((x) => x.status === "ACTIVE" && policyShare.get(x.id)?.shared).sort((a, b) => a.title.localeCompare(b.title, "ar"));
+  const acc = botAccess();
+  const q = (acc.limits as { questions?: number | null }).questions;
+  const used = botLog.filter((x) => x.direction === "OUT" && !x.simulated && ["ANSWER", "NO_ANSWER", "SENSITIVE"].includes(x.intent ?? "")).length;
+  return { member_status: member ? (member.status === "REMOVED" ? "REMOVED" : member.status) : "ACTIVE", member_name: member ? member.full_name.split(" ")[0] : "تجربة",
+    org_name: orgs.find((x) => x.id === ORG_A)!.name, hr_contact: botSettingsDemo.hr_contact, welcome: botSettingsDemo.welcome_text,
+    policies: shared.map((x) => ({ id: x.id, title: x.title, version: x.version, body: x.body_md ?? "", summary: policyShare.get(x.id)?.summary ?? null })),
+    faqs: botFaqs.filter((f) => f.is_active).map((f) => [f.id, f.question, f.answer] as [string, string, string]),
+    acknowledged: new Set(member ? acksDemo.filter((a) => a.member_id === member.id && policies.find((x) => x.id === a.policy_id)?.version === a.version).map((a) => a.policy_id) : []),
+    quota_left: q == null ? null : q - used };
+}
+// محادثات سابقة للعرض
+(() => {
+  for (const [mi, q, ago] of [[0, "كم مدة الإجازة السنوية؟", -5], [2, "متى تصرف الرواتب", -3], [1, "كم راتب فهد؟", -2], [0, "هل يوجد بدل سفر؟", -1]] as [number, string, number][]) {
+    const m = botMembers[mi]; const r = botHandle(q, botStateFor(m));
+    botLog.unshift({ id: ++botMsgSeq, member_id: m.id, direction: "IN", body: q, intent: null, simulated: false, created_at: ts(ago) });
+    botLog.unshift({ id: ++botMsgSeq, member_id: m.id, direction: "OUT", body: r.text, intent: r.intent, simulated: false, created_at: ts(ago) });
+  }
+})();
+function botOverviewDemo() {
+  const access = botAccess();
+  const out = { access, can_manage: true, live: false };
+  if (!access.via) return out;
+  const name = (id: string | null) => botMembers.find((m) => m.id === id)?.full_name ?? null;
+  const unanswered: { body: string; created_at: string; full_name: string | null }[] = [];
+  botLog.forEach((x, i) => { if (x.intent === "NO_ANSWER" && !x.simulated) { const q = botLog.slice(i + 1).find((y) => y.direction === "IN" && y.member_id === x.member_id); if (q) unanswered.push({ body: q.body, created_at: q.created_at, full_name: name(q.member_id) }); } });
+  const active = botMembers.filter((m) => m.status !== "REMOVED");
+  return { ...out, settings: { ...botSettingsDemo },
+    members: active.map((m) => ({ ...m, acks: acksDemo.filter((a) => a.member_id === m.id).length })),
+    policies: policies.filter((x) => x.status === "ACTIVE").map((x) => ({ id: x.id, title: x.title, version: x.version, shared_with_employees: !!policyShare.get(x.id)?.shared,
+      employee_summary: policyShare.get(x.id)?.summary ?? null, acks: acksDemo.filter((a) => a.policy_id === x.id && a.version === x.version).length })),
+    faqs: botFaqs.map((f) => ({ ...f })), log: botLog.slice(0, 60).map((x) => ({ ...x, full_name: name(x.member_id) })), unanswered: unanswered.slice(0, 20),
+    stats: { members_active: active.filter((m) => m.status === "ACTIVE").length, members_total: active.length,
+      questions_month: botLog.filter((x) => x.direction === "OUT" && !x.simulated && ["ANSWER", "NO_ANSWER", "SENSITIVE"].includes(x.intent ?? "")).length,
+      shared_policies: policies.filter((x) => x.status === "ACTIVE" && policyShare.get(x.id)?.shared).length } };
+}
+
+function growthRoute(method: string, p: string, body: Record<string, unknown>): unknown {
+  let m: RegExpMatchArray | null;
+  // الإعداد
+  if (p === "/onboarding" && method === "GET") return onboardingState();
+  if (p === "/onboarding" && method === "POST") {
+    const o = orgs.find((x) => x.id === ORG_A)!;
+    o.size = String(body.commercial_size); if (body.industry_type) o.industry = String(body.industry_type);
+    if (body.labor_enabled) laborProfileDemo = { ...(laborProfileDemo ?? { nitaqat_band: null, nitaqat_checked_on: null, gosi_employer_no: null }), salary_day: Number(body.salary_day) || 27 };
+    taxProfileDemo = { vat_registered: !!body.vat_registered, vat_frequency: body.vat_frequency === "MONTHLY" ? "MONTHLY" : "QUARTERLY",
+      withholding_applies: !!body.withholding_applies, zakat_applies: true, fiscal_year_end_month: Number(body.fiscal_year_end_month) || 12 };
+    taxTasksDemo.splice(0); onboardingNeeded = false; return { ok: true };
+  }
+  if (p === "/auth/resend-verification") return { sent: true };
+  // الدفع
+  if (p === "/billing/checkout/options") {
+    const o = orgs.find((x) => x.id === ORG_A)!;
+    const plan = plansDemo.find((x) => x.org_id === ORG_A && x.status === "ACTIVE");
+    const next = plan?.items.find((i) => !i.paid_at);
+    return { ...pricingView(), vat_rate: finProfile.vat_registered ? VAT_RATE : 0, provider: "fake", can_pay: true,
+      subscription: o.sub ? { plan_tier: o.sub.plan_tier, billing_cycle: o.sub.billing_cycle, billing_status: o.sub.billing_status, ends_at: o.sub.ends_at } : null,
+      next_installment: plan && next ? { id: next.id, seq: next.seq, due_date: next.due_date, amount_net: next.amount_net, installments: plan.installments } : null,
+      bot: botAccess() };
+  }
+  if (p === "/billing/checkout" && method === "POST") {
+    const o = orgs.find((x) => x.id === ORG_A)!;
+    const rate = finProfile.vat_registered ? VAT_RATE : 0;
+    let net: number, desc: string; const extra: Partial<DemoIntent> = {};
+    if (body.purpose === "SUBSCRIPTION") {
+      if (plansDemo.some((x) => x.org_id === ORG_A && x.status === "ACTIVE")) throw new DemoError(409, "لديك خطة أقساط سنوية فعّالة؛ ادفع القسط المستحق بدلاً من ذلك");
+      const tier = String(body.plan_tier ?? o.sub?.plan_tier); const cycle = body.billing_cycle === "YEARLY" ? "YEARLY" : "MONTHLY";
+      net = PRICES[tier][cycle === "YEARLY" ? 1 : 0]; desc = `اشتراك ${PLAN_AR[tier]} — ${cycle === "YEARLY" ? "سنة" : "شهر"}`;
+      Object.assign(extra, { plan_tier: tier, billing_cycle: cycle });
+    } else if (body.purpose === "INSTALLMENT") {
+      const plan = plansDemo.find((x) => x.org_id === ORG_A && x.status === "ACTIVE");
+      const it = plan?.items.find((i) => i.id === body.installment_id);
+      if (!plan || !it || it.paid_at) throw new DemoError(409, "القسط غير موجود أو مدفوع");
+      net = it.amount_net; desc = `اشتراك سنوي ${PLAN_AR[plan.plan_tier]} — القسط ${it.seq} من ${plan.installments}`;
+      Object.assign(extra, { installment_id: it.id, plan_tier: plan.plan_tier, billing_cycle: "YEARLY" });
+    } else {
+      const acc = botAccess();
+      if (acc.via === "PLAN") throw new DemoError(409, "هذه الإضافة مشمولة في باقتك مجاناً");
+      net = addonCatalog[0].monthly_price; desc = `${addonCatalog[0].name} — اشتراك شهر`; extra.addon_code = "WA_BOT";
+    }
+    const vat = round2(net * rate);
+    const it: DemoIntent = { id: uid(), purpose: body.purpose as DemoIntent["purpose"], plan_tier: null, billing_cycle: null, installment_id: null, addon_code: null,
+      ...extra, description: desc, amount_net: net, vat_amount: vat, total: round2(net + vat), status: "INITIATED", created_at: new Date().toISOString(),
+      paid_at: null, invoice_id: null, provider: "FAKE" };
+    intents.unshift(it);
+    return { intent_id: it.id, checkout_url: `/billing/pay/?intent=${it.id}&sandbox=1`, total: it.total };
+  }
+  if ((m = p.match(/^\/billing\/checkout\/([^/]+)(\/sandbox-pay)?$/))) {
+    const it = intents.find((x) => x.id === m![1]); if (!it) throw new DemoError(404, "عملية الدفع غير موجودة");
+    return intentOut(m[2] ? confirmIntent(it) : it);
+  }
+  if (p === "/billing/payments") return intents.map(intentOut);
+  // الضريبة
+  if (p === "/tax/overview") return taxOverviewDemo();
+  if (p === "/tax/profile" && method === "PUT") {
+    taxProfileDemo = { vat_registered: !!body.vat_registered, vat_frequency: body.vat_frequency === "MONTHLY" ? "MONTHLY" : "QUARTERLY",
+      withholding_applies: !!body.withholding_applies, zakat_applies: body.zakat_applies !== false, fiscal_year_end_month: Number(body.fiscal_year_end_month) || 12 };
+    for (let i = taxTasksDemo.length - 1; i >= 0; i--) if (!taxTasksDemo[i].done_at) taxTasksDemo.splice(i, 1);
+    ensureTaxTasks(); return { ok: true };
+  }
+  if ((m = p.match(/^\/tax\/tasks\/([^/]+)\/(done|reopen)$/))) {
+    const t = taxTasksDemo.find((x) => x.id === m![1]); if (!t) throw new DemoError(404, "الإقرار غير موجود");
+    if (m[2] === "done") { if (t.done_at) throw new DemoError(409, "الإقرار مؤكَّد مسبقاً"); Object.assign(t, { done_at: new Date().toISOString(), reference: (body.reference as string) || null, done_by_name: "أحمد العتيبي" }); if (body.amount != null && body.amount !== "") t.amount = Number(body.amount); }
+    else { if (!t.done_at) throw new DemoError(409, "الإقرار غير مؤكَّد"); Object.assign(t, { done_at: null, done_by_name: null }); }
+    return { ok: true };
+  }
+  // التقويم
+  if (p === "/calendar/feed" && method === "GET") return { active: !!calFeed, ...(calFeed ?? {}), can_manage: true };
+  if (p === "/calendar/feed" && method === "POST") {
+    calFeed = { include_people: !!body.include_people, created_at: new Date().toISOString() };
+    const al = alertsOverview() as { upcoming: { target_type: string; target_id: string; title: string; due_date: string }[] };
+    const seen = new Set<string>();
+    const events = al.upcoming.filter((u) => { const k = `${u.target_type}${u.target_id}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    return { url: `https://app.haseef.sa/api/v1/public/calendar/${uid().slice(-12)}${uid().slice(-12)}.ics`, include_people: calFeed.include_people,
+      ics: buildIcs(orgs.find((x) => x.id === ORG_A)!.name, events, calFeed.include_people) };
+  }
+  if (p === "/calendar/feed" && method === "DELETE") { calFeed = null; return undefined; }
+  // البوت
+  if (p === "/bot/overview") return botOverviewDemo();
+  if (p.startsWith("/bot/") && !botAccess().via) throw new DemoError(402, "بوت الموظفين غير مفعّل. اشترك فيه من صفحة «بوت الموظفين».");
+  if (p === "/bot/settings") { Object.assign(botSettingsDemo, { enabled: !!body.enabled, welcome_text: (body.welcome_text as string) || null, hr_contact: (body.hr_contact as string) || null, require_approval: !!body.require_approval }); return { ok: true }; }
+  if (p === "/bot/invite-code/rotate") { botSettingsDemo.invite_code = uid().slice(-6); return { invite_code: botSettingsDemo.invite_code }; }
+  if (p === "/bot/members" && method === "POST") {
+    const phone = String(body.phone ?? "");
+    if (!/^\+9665\d{8}$/.test(phone)) throw new DemoError(422, "رقم الجوال بصيغة ‎+9665XXXXXXXX");
+    if (String(body.full_name ?? "").trim().length < 2) throw new DemoError(422, "اكتب اسم الموظف");
+    if (botMembers.some((x) => x.phone === phone && x.status !== "REMOVED")) throw new DemoError(409, "هذا الرقم مضاف مسبقاً");
+    const lim = (botAccess().limits as { members?: number | null }).members;
+    if (lim != null && botMembers.filter((x) => x.status !== "REMOVED").length >= lim) throw new DemoError(409, `بلغت الحد (${lim} موظفاً) في اشتراكك الحالي`);
+    const x: DemoBotMember = { id: uid(), full_name: String(body.full_name), phone, status: "INVITED", joined_via: "INVITE", consent_at: null, created_at: new Date().toISOString(), employee_id: (body.employee_id as string) ?? null };
+    botMembers.push(x); return { id: x.id };
+  }
+  if ((m = p.match(/^\/bot\/members\/([^/]+)(\/approve)?$/))) {
+    const x = botMembers.find((y) => y.id === m![1]); if (!x) throw new DemoError(404, "الموظف غير موجود");
+    if (m[2]) { if (x.status !== "PENDING") throw new DemoError(409, "لا يوجد طلب انضمام بانتظار الموافقة"); x.status = "ACTIVE"; x.consent_at ??= new Date().toISOString(); return { ok: true }; }
+    x.status = "REMOVED"; return undefined;
+  }
+  if (p === "/bot/faqs" && method === "POST") {
+    if (String(body.question ?? "").trim().length < 3 || String(body.answer ?? "").trim().length < 2) throw new DemoError(422, "اكتب السؤال والإجابة");
+    const f = { id: uid(), question: String(body.question), answer: String(body.answer), is_active: body.is_active !== false }; botFaqs.push(f); return { id: f.id };
+  }
+  if ((m = p.match(/^\/bot\/faqs\/([^/]+)$/))) {
+    const k = botFaqs.findIndex((f) => f.id === m![1]); if (k < 0) throw new DemoError(404, "السؤال غير موجود");
+    if (method === "DELETE") { botFaqs.splice(k, 1); return undefined; }
+    Object.assign(botFaqs[k], { question: String(body.question), answer: String(body.answer), is_active: !!body.is_active }); return { ok: true };
+  }
+  if ((m = p.match(/^\/bot\/policies\/([^/]+)$/))) {
+    if (!policies.some((x) => x.id === m![1] && x.status === "ACTIVE")) throw new DemoError(404, "السياسة غير موجودة أو غير معتمدة");
+    policyShare.set(m[1], { shared: !!body.shared, summary: (body.employee_summary as string) || null }); return { ok: true };
+  }
+  if (p === "/bot/simulate") {
+    const member = body.member_id ? botMembers.find((x) => x.id === body.member_id) ?? null : null;
+    const r = botHandle(String(body.text ?? ""), botStateFor(member));
+    if (member && r.action) {
+      if (r.action.consent) Object.assign(member, { status: "ACTIVE", consent_at: new Date().toISOString() });
+      if (r.action.opt_out) member.status = "REMOVED";
+      if (r.action.ack) acksDemo.push({ policy_id: String(r.action.ack), member_id: member.id, version: String(r.action.version), at: new Date().toISOString() });
+    }
+    botLog.unshift({ id: ++botMsgSeq, member_id: member?.id ?? null, direction: "IN", body: String(body.text ?? ""), intent: null, simulated: true, created_at: new Date().toISOString() });
+    botLog.unshift({ id: ++botMsgSeq, member_id: member?.id ?? null, direction: "OUT", body: r.text, intent: r.intent, simulated: true, created_at: new Date().toISOString() });
+    return { reply: r.text, intent: r.intent, sources: r.sources };
+  }
+  if (p === "/bot/acknowledgments") {
+    const shared = policies.filter((x) => x.status === "ACTIVE" && policyShare.get(x.id)?.shared);
+    return shared.flatMap((x) => botMembers.filter((y) => y.status === "ACTIVE").map((y) => ({ policy_id: x.id, title: x.title, version: x.version, member_id: y.id, full_name: y.full_name,
+      acknowledged_at: acksDemo.find((a) => a.policy_id === x.id && a.member_id === y.id && a.version === x.version)?.at ?? null })));
+  }
+  return NO_ROUTE;
+}
+const NO_ROUTE = Symbol("no-route");
 
 function route(method: string, path: string, body: Record<string, unknown>, token: string | null): unknown {
   const p = path.split("?")[0];
@@ -1147,6 +1445,22 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       source: (body.source as string) ?? "landing", status: "NEW", notes: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), handled_by_name: null });
     return { received: true };
   }
+  if (p === "/public/pricing") return pricingView();
+  if (method === "POST" && p === "/public/signup") {
+    if (!body.consent) throw new DemoError(422, "يلزم الموافقة على الشروط وسياسة الخصوصية");
+    if (!/^\d{10}$/.test(String(body.cr_number ?? ""))) throw new DemoError(422, "السجل التجاري 10 أرقام");
+    if (String(body.password ?? "").length < 10) throw new DemoError(422, "كلمة المرور 10 أحرف على الأقل");
+    if (!/^\S+@\S+\.\S+$/.test(String(body.email ?? ""))) throw new DemoError(422, "البريد الإلكتروني غير صحيح");
+    if (orgs.some((o) => o.cr === body.cr_number)) throw new DemoError(409, "هذا السجل التجاري مسجّل في حصيف. اطلب من مدير منشأتك دعوتك، أو تواصل معنا.");
+    // نسخة العرض: تُفتح منشأة العرض نفسها بمعالج الإعداد، وتُعرض بيانات التسجيل كما أُدخلت
+    const o = orgs.find((x) => x.id === ORG_A)!;
+    o.name = String(body.company_name || o.name); o.legal = String(body.entity_legal_type || o.legal);
+    o.sub = { id: o.sub?.id ?? uid(), plan_tier: String(body.plan_tier ?? "PROFESSIONAL_GRC"), billing_cycle: "MONTHLY", billing_status: "TRIAL", starts_at: new Date().toISOString(), ends_at: ts(14) };
+    for (const pl of plansDemo) if (pl.org_id === ORG_A && pl.status === "ACTIVE") pl.status = "CANCELED";
+    onboardingNeeded = true; emailVerified = false;
+    return { access_token: "demo-client", org_id: ORG_A, trial_days: 14 };
+  }
+  if (method === "POST" && p === "/public/verify-email") { emailVerified = true; return { verified: true }; }
   if (!token) throw new DemoError(401, "سجّل الدخول أولاً");
   const role = TEAM_ROLE[token];
   const isAdmin = !!role;
@@ -1158,6 +1472,21 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     if (p === "/admin/me") return { user_id: TEAM_ME[role].id, role, role_name: adminRoles.find((r) => r.code === role)?.name ?? role, permissions: permsOf(role) };
     actor = { name: TEAM_ME[role]?.full_name ?? role, role };
     requirePerm(role, method, p, body);
+    if (p === "/admin/pricing" && method === "GET") return pricingView();
+    if ((m = p.match(/^\/admin\/pricing\/plans\/([A-Z_]+)$/))) {
+      const tier = m[1]; if (!PRICES[tier]) throw new DemoError(404, "الباقة غير موجودة");
+      const mo = Number(body.monthly_price_sar), yr = Number(body.yearly_price_sar);
+      if (!(mo > 0 && yr > 0)) throw new DemoError(422, "السعر يجب أن يكون أكبر من صفر");
+      PRICES[tier] = [mo, yr]; QUOTA[tier] = body.monthly_whatsapp_alerts == null || body.monthly_whatsapp_alerts === "" ? null : Number(body.monthly_whatsapp_alerts);
+      log("ADMIN_PLAN_PRICE", null, { tier, monthly: mo, yearly: yr }); return { ok: true };
+    }
+    if ((m = p.match(/^\/admin\/pricing\/addons\/([A-Z_]+)$/))) {
+      const a = addonCatalog.find((x) => x.code === m![1]); if (!a) throw new DemoError(404, "الإضافة غير موجودة");
+      const price = Number(body.monthly_price); if (!(price >= 0)) throw new DemoError(422, "سعر غير صحيح");
+      Object.assign(a, { monthly_price: price, included_tiers: [...new Set((body.included_tiers as string[]) ?? [])], is_active: body.is_active !== false });
+      Object.assign(a.limits, { members: body.members == null ? null : Number(body.members), questions: body.questions == null ? null : Number(body.questions), included_unlimited: !!body.included_unlimited });
+      log("ADMIN_ADDON_PRICE", null, { code: a.code, price }); return { ok: true };
+    }
     if (p === "/admin/gosi-rates" && method === "GET") return GOSI_RATES.map((r, i) => ({ ...r, id: i + 1, updated_at: ts(-30) }));
     if (p === "/admin/gosi-rates" && method === "PUT") {
       const r = body as unknown as (typeof GOSI_RATES)[number];
@@ -1527,6 +1856,8 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     savedReports.set(year, { snapshot: boardReport(year), notes: (body.notes as string) ?? null, saved_at: new Date().toISOString(), saved_by_name: "أحمد العتيبي" });
     return { saved: true };
   }
+
+  { const g = growthRoute(method, p, body); if (g !== NO_ROUTE) return g; }
 
   // ---------- العمل والموظفين
   if (p === "/labor/overview") return laborOverviewDemo();

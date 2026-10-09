@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PLAN_LABEL, PLATFORM_LEGAL_PAGES, type Me } from "@haseef/shared";
+import { PLAN_LABEL, PLATFORM_LEGAL_PAGES, countDays, type Me, type OnboardingState } from "@haseef/shared";
 import {
-  BellMessage, BookOpen, BuildingBadge, BuildingsGroup, CardReceipt, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, ReportChart, Scales, UsersContract,
+  BellMessage, BookOpen, BuildingBadge, BuildingsGroup, CardReceipt, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, ReceiptPercent, ReportChart, Scales, UsersContract, ChatBot,
 } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { api, getSession, setSession } from "@/lib/session";
@@ -20,6 +20,8 @@ const NAV: { href: string | null; label: string; Icon: typeof Radar; soon?: stri
   { href: "/library", label: "المكتبة المرجعية", Icon: BookOpen },
   { href: "/legal", label: "استشارة محامٍ", Icon: Scales },
   { href: "/labor", label: "العمل والموظفين", Icon: UsersContract },
+  { href: "/tax", label: "الزكاة والضريبة", Icon: ReceiptPercent },
+  { href: "/bot", label: "بوت الموظفين", Icon: ChatBot },
   { href: "/pdpl", label: "حماية البيانات PDPL", Icon: FingerprintShield },
   { href: "/alerts", label: "التنبيهات والواتساب", Icon: BellMessage },
   { href: "/group", label: "المجموعة والمنشآت", Icon: BuildingsGroup },
@@ -28,12 +30,19 @@ const NAV: { href: string | null; label: string; Icon: typeof Radar; soon?: stri
   { href: "/contracts", label: "فاحص العقود", Icon: FileSparkle },
 ];
 
+function trialLeft(ends: string): string {
+  const d = Math.ceil((new Date(ends).getTime() - Date.now()) / 86_400_000);
+  return d <= 0 ? "اليوم" : d === 1 ? "غداً" : `بعد ${countDays(d)}`;
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const path = usePathname();
   const [me, setMe] = useState<Me | null>(null);
   const [orgId, setOrgId] = useState<string | undefined>();
   const [plan, setPlan] = useState<{ tier: string | null; active: boolean } | null>(null);
+  const [ob, setOb] = useState<OnboardingState | null>(null);
+  const [resent, setResent] = useState(false);
 
   useEffect(() => {
     const s = getSession();
@@ -44,7 +53,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setOrgId(s.orgId);
     api.me().then(setMe).catch(() => router.replace("/login"));
     api.dashboard().then((d) => setPlan({ tier: d.plan_tier, active: d.automation_active })).catch(() => {});
+    api.onboarding().then(setOb).catch(() => {});
   }, [router]);
+
+  useEffect(() => {
+    if (ob?.needs_onboarding && !path.startsWith("/onboarding")) router.replace("/onboarding");
+  }, [ob, path, router]);
 
   function switchOrg(id: string) {
     const s = getSession();
@@ -112,7 +126,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {PLATFORM_LEGAL_PAGES.map((p) => <Link key={p.key} href={p.href}>{p.short}</Link>)}
         </nav>
       </aside>
-      <main className="content">{children}</main>
+      <main className="content">
+        {ob && !ob.email_verified && (
+          <p className="top-banner">فعّل بريدك الإلكتروني من الرابط الذي أرسلناه لك، حتى تصلك التنبيهات والفواتير.{" "}
+            <button type="button" className="link-btn" disabled={resent} onClick={() => api.resendVerification().then(() => setResent(true)).catch(() => {})}>
+              {resent ? "أُرسل رابط جديد" : "أرسل الرابط مرة أخرى"}</button></p>
+        )}
+        {ob?.billing_status === "TRIAL" && ob.ends_at && !path.startsWith("/billing") && (
+          <p className="top-banner trial">تجربتك المجانية تنتهي {trialLeft(ob.ends_at)}. <Link href="/billing">اشترك الآن</Link> لتستمر التنبيهات دون انقطاع.</p>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

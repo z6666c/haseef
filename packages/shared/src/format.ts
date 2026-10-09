@@ -107,6 +107,8 @@ export const AUDIT_ACTION_LABEL: Record<string, string> = {
   LOGIN: "تسجيل دخول", LOGIN_FAILED: "محاولة دخول فاشلة", CHANGE_PASSWORD: "تغيير كلمة المرور",
   CREATE: "إنشاء", UPDATE: "تعديل", ARCHIVE: "أرشفة", RENEW: "تجديد", REMIND: "تذكير يدوي", UPSERT: "ضبط قاعدة",
   ADMIN_CREATE_ORG: "إنشاء منشأة", ADMIN_UPDATE_ORG: "تعديل منشأة",
+  SELF_SIGNUP: "تسجيل ذاتي", ONBOARDING_DONE: "إكمال الإعداد", ONLINE_PAYMENT: "دفع إلكتروني",
+  ADMIN_PLAN_PRICE: "تعديل سعر باقة", ADMIN_ADDON_PRICE: "تعديل تسعير إضافة", ADMIN_GOSI_RATE: "تعديل نسب التأمينات",
   ADMIN_SUSPEND_ORG: "تعليق منشأة", ADMIN_REACTIVATE_ORG: "إعادة تفعيل منشأة",
   ADMIN_CHANGE_PLAN: "تغيير الباقة", ADMIN_EXTEND_TRIAL: "تمديد التجربة",
   ADMIN_RECORD_PAYMENT: "تسجيل دفعة", ADMIN_CANCEL_SUBSCRIPTION: "إلغاء اشتراك",

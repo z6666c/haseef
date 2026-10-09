@@ -8,6 +8,7 @@ test("template choice matches server", () => {
   assert.equal(templateFor("COMPLIANCE_ITEM", -2), "haseef_license_expired");
   assert.equal(templateFor("IQAMA", 14), "haseef_labor_due");
   assert.equal(templateFor("LABOR_TASK", -1), "haseef_labor_due");
+  assert.equal(templateFor("TAX_TASK", 3), "haseef_tax_due");
 });
 
 test("all six variables are filled and none left", () => {
@@ -16,6 +17,6 @@ test("all six variables are filled and none left", () => {
   for (const k of Object.keys(WA_TEMPLATES) as (keyof typeof WA_TEMPLATES)[]) {
     const out = renderTemplate(k, vars);
     assert.ok(!/\{\{\d\}\}/.test(out), k);
-    assert.ok(out.includes("أحمد") && out.includes("النخبة"), k);
+    assert.ok(out.includes("أحمد") && (!WA_TEMPLATES[k].body.includes("{{3}}") || out.includes("النخبة")), k);
   }
 });

@@ -24,7 +24,8 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 DEFAULTS = {"COMPLIANCE_ITEM": {"days_before": [60, 30, 14, 7, 3, 1, 0], "channels": ["WHATSAPP", "EMAIL"]},
             "POLICY": {"days_before": [30, 14, 7, 0], "channels": ["EMAIL", "WHATSAPP"]},
             "EMPLOYEE_DOC": {"days_before": [60, 30, 14, 7, 3, 1, 0], "channels": ["WHATSAPP", "EMAIL"]},
-            "LABOR_TASK": {"days_before": [5, 1, 0], "channels": ["WHATSAPP", "EMAIL"]}}
+            "LABOR_TASK": {"days_before": [5, 1, 0], "channels": ["WHATSAPP", "EMAIL"]},
+            "TAX_TASK": {"days_before": [10, 3, 1, 0], "channels": ["WHATSAPP", "EMAIL"]}}
 HORIZON_DAYS = 60
 
 
@@ -73,13 +74,16 @@ def overview(t: Tenant = Depends(get_tenant)):
 
     log = [dict(r) for r in c.execute(text("""
         SELECT d.id, d.target_type, COALESCE(ci.title, p.title, e.full_name, CASE lt.kind WHEN 'GOSI_PAYMENT' THEN 'سداد التأمينات الاجتماعية'
-                 WHEN 'WPS_UPLOAD' THEN 'رفع ملف حماية الأجور' WHEN 'SALARY_PAYMENT' THEN 'صرف الرواتب' END) AS title, d.due_date, d.threshold_days, d.channel,
+                 WHEN 'WPS_UPLOAD' THEN 'رفع ملف حماية الأجور' WHEN 'SALARY_PAYMENT' THEN 'صرف الرواتب' END,
+                 CASE tx.kind WHEN 'VAT_RETURN' THEN 'إقرار ضريبة القيمة المضافة' WHEN 'WHT_RETURN' THEN 'إقرار ضريبة الاستقطاع'
+                 WHEN 'ZAKAT_RETURN' THEN 'الإقرار الزكوي' END) AS title, d.due_date, d.threshold_days, d.channel,
                d.status, d.skip_reason, d.scheduled_for, d.sent_at, d.delivered_at, u.full_name AS recipient_name
         FROM alert_dispatches d
         LEFT JOIN compliance_items ci ON d.target_type = 'COMPLIANCE_ITEM' AND ci.id = d.target_id
         LEFT JOIN internal_policies p ON d.target_type = 'POLICY' AND p.id = d.target_id
         LEFT JOIN org_employees e ON d.target_type IN ('IQAMA','WORK_PERMIT','CONTRACT_END','PROBATION_END') AND e.id = d.target_id
         LEFT JOIN labor_tasks lt ON d.target_type = 'LABOR_TASK' AND lt.id = d.target_id
+        LEFT JOIN tax_tasks tx ON d.target_type = 'TAX_TASK' AND tx.id = d.target_id
         LEFT JOIN users u ON u.id = d.recipient_user_id
         ORDER BY d.created_at DESC LIMIT 100""")).mappings()]
 

@@ -23,6 +23,7 @@ x-api: &api
     HASEEF_REDIS_URL: redis://redis:6379/0
     HASEEF_CORS_ORIGINS: '["https://app.${HASEEF_DOMAIN}","https://admin.${HASEEF_DOMAIN}"]'
     HASEEF_CLIENT_BASE_URL: https://app.${HASEEF_DOMAIN}
+    HASEEF_API_PUBLIC_URL: https://app.${HASEEF_DOMAIN}/api
   volumes: [storage:/app/storage]
   networks: [internal, public]        # public: للخروج إلى مزوّد الواتساب والبريد فقط، لا منافذ مفتوحة
   restart: unless-stopped
