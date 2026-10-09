@@ -23,12 +23,15 @@ Tier = Literal["ESSENTIAL", "PROFESSIONAL_GRC", "ENTERPRISE"]
 @router.get("/public/pricing")
 def public_pricing():
     with platform_tx() as c:
-        return {"plans": pricing.plans(c), "addons": [a for a in pricing.addons(c) if a["is_active"]]}
+        promo = pricing.promo_status(c, "HR_LAUNCH")
+        return {"plans": pricing.plans(c), "addons": [a for a in pricing.addons(c) if a["is_active"]],
+                "promo": {k: promo[k] for k in ("code", "name", "free_months", "remaining", "active")} if promo else None}
 
 
 @router.get("/admin/pricing")
 def admin_pricing(a: Admin = Depends(require_perm("finance.view", "billing.manage"))):
-    return {"plans": pricing.plans(a.conn), "addons": pricing.addons(a.conn)}
+    promos = [pricing.promo_status(a.conn, r[0]) for r in a.conn.execute(text("SELECT code FROM promotions ORDER BY created_at"))]
+    return {"plans": pricing.plans(a.conn), "addons": pricing.addons(a.conn), "promotions": promos, "hr_mix": pricing.hr_mix(a.conn)}
 
 
 class PlanPriceIn(BaseModel):
@@ -67,3 +70,22 @@ def set_addon(code: str, body: AddonIn, a: Admin = Depends(require_perm("billing
                    {"p": body.monthly_price, "t": sorted(set(body.included_tiers)), "l": json.dumps(limits), "act": body.is_active, "c": code})
     a.audit("ADMIN_ADDON_PRICE", "addon", None, None, {"code": code, **body.model_dump()})
     return {"ok": True}
+
+
+class PromoIn(BaseModel):
+    is_active: bool
+    max_redemptions: int = Field(ge=1, le=100000)
+    free_months: int = Field(1, ge=1, le=12)
+
+
+@router.put("/admin/pricing/promotions/{code}")
+def set_promo(code: str, body: PromoIn, a: Admin = Depends(require_perm("billing.manage"))):
+    used = a.conn.execute(text("SELECT count(*) FROM promotion_redemptions WHERE promo_code = :c"), {"c": code}).scalar_one()
+    if body.max_redemptions < used:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"استفاد {used} مشتركاً بالفعل؛ لا يقل الحد عنهم")
+    if not a.conn.execute(text("UPDATE promotions SET is_active = :act, max_redemptions = :m, free_months = :f WHERE code = :c"),
+                          {"act": body.is_active, "m": body.max_redemptions, "f": body.free_months, "c": code}).rowcount:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "العرض غير موجود")
+    a.audit("ADMIN_PROMO", "promotion", None, None, {"code": code, **body.model_dump()})
+    return {"ok": True}
+

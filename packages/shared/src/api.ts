@@ -135,6 +135,7 @@ export function createApi(
 
     // ---------- الدفع الإلكتروني
     checkoutOptions: () => req<CheckoutOptions>("/billing/checkout/options"),
+    claimPromo: (code: string) => req<{ addon_code: string; addon_name: string; paid_until: string }>(`/billing/promo/${code}/claim`, { method: "POST", body: "{}" }),
     checkout: (b: { purpose: "SUBSCRIPTION" | "INSTALLMENT" | "ADDON"; plan_tier?: string; billing_cycle?: "MONTHLY" | "YEARLY"; installment_id?: string; addon_code?: string }) =>
       req<{ intent_id: string; checkout_url: string; total: number }>("/billing/checkout", { method: "POST", body: JSON.stringify(b) }),
     checkoutStatus: (id: string) => req<PaymentIntent>(`/billing/checkout/${id}`),
@@ -270,7 +271,9 @@ export function createApi(
       events: () => req<{ events: AnnualEvent[]; orgs_enabled: number }>("/admin/events", { org: false }),
       addEvent: (b: AnnualEventInput) => req<{ id: string }>("/admin/events", { method: "POST", org: false, body: JSON.stringify(b) }),
       editEvent: (id: string, b: AnnualEventInput) => req<{ ok: boolean }>(`/admin/events/${id}`, { method: "PUT", org: false, body: JSON.stringify(b) }),
-      pricing: () => req<PublicPricing>("/admin/pricing", { org: false }),
+      pricing: () => req<PublicPricing & { promotions: PromoStatus[]; hr_mix: HrMix }>("/admin/pricing", { org: false }),
+      setPromo: (code: string, b: { is_active: boolean; max_redemptions: number; free_months: number }) =>
+        req<{ ok: boolean }>(`/admin/pricing/promotions/${code}`, { method: "PUT", org: false, body: JSON.stringify(b) }),
       setPlanPrice: (tier: string, b: { monthly_price_sar: number; yearly_price_sar: number; monthly_whatsapp_alerts: number | null }) =>
         req<{ ok: boolean }>(`/admin/pricing/plans/${tier}`, { method: "PUT", org: false, body: JSON.stringify(b) }),
       setAddon: (code: string, b: { monthly_price: number; included_tiers: string[]; members: number | null; questions: number | null; included_unlimited: boolean; is_active: boolean }) =>
@@ -788,7 +791,10 @@ export interface PlanPrice { tier: string; name_ar: string; monthly_price_sar: n
 export interface AddonPrice { code: string; name: string; monthly_price: number; included_tiers: string[];
   limits: { members?: number | null; questions?: number | null; included_unlimited?: boolean; extra_members_block?: number; extra_block_price?: number;
     /** إضافات تشملها هذه (شريحة أكبر أو حزمة) */ grants?: string[] }; is_active: boolean }
-export interface PublicPricing { plans: PlanPrice[]; addons: AddonPrice[] }
+export interface PromoStatus { code: string; name: string; free_months: number; remaining: number; active: boolean; is_active?: boolean; max?: number; used?: number;
+  eligible?: boolean; reason?: string | null; tier_code?: string; tier_name?: string }
+export interface HrMix { bundle: number; hr_only: number; bundle_share: number; threshold: number; suggest_raise: boolean; suggested_bundle_price: number }
+export interface PublicPricing { plans: PlanPrice[]; addons: AddonPrice[]; promo?: PromoStatus | null }
 export interface SignupInput {
   company_name: string; cr_number: string; entity_legal_type: string; full_name: string; email: string; phone_number: string | null;
   password: string; plan_tier: string; consent: boolean; website?: string;
@@ -812,6 +818,8 @@ export interface CheckoutOptions {
   attendance?: AddonAccess;
   addon_access?: Record<string, AddonAccess>;
   employees?: number;
+  hr_tier?: string | null;
+  promo?: PromoStatus | null;
 }
 export interface PaymentIntent { id: string; purpose: string; description: string; amount_net: number; vat_amount: number; total: number;
   status: "INITIATED" | "PAID" | "FAILED" | "EXPIRED"; created_at: string; paid_at: string | null; invoice_id: string | null; provider: string }

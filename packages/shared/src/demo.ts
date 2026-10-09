@@ -6,6 +6,7 @@ import type { ComplianceItem, Dashboard, Me, ScoreReason } from "./types.ts";
 import CONTENT from "./demo-content.json" with { type: "json" };
 import { runCheck, type CkStandard } from "./governanceCheck.ts";
 import { dpiaAssess, dpiaSuggest } from "./dpia.ts";
+import type { PromoStatus } from "./api.ts";
 import type { AnnualEvent, DeductionSuggestion, LeaveRow, AttendanceSettings, DpiaMitigation, DpiaQuestion, Employee, LaborProfile, SiteInput, TaxProfile } from "./api.ts";
 import {
   EMP_DOC_LABEL, GOSI_RATES, TASK_KINDS, TASK_LABEL, contribution, gosiLatePenalty, monthStart, periodsToPlan, pickRate,
@@ -1155,6 +1156,8 @@ const addonCatalog = [{ code: "WA_BOT", name: "بوت واتساب للموظف�
     limits: { members: 25 as number | null, questions: null as number | null, included_unlimited: true } as DemoAddonLimits, is_active: true },
   { code: "ATTENDANCE_75", name: "الموارد البشرية — حتى 75 موظفاً", monthly_price: 249, included_tiers: ["ENTERPRISE"],
     limits: { members: 75, questions: null, included_unlimited: true, grants: ["ATTENDANCE"] } as DemoAddonLimits, is_active: true },
+  { code: "ATTENDANCE_200", name: "الموارد البشرية — حتى 200 موظف", monthly_price: 399, included_tiers: ["ENTERPRISE"],
+    limits: { members: 200, questions: null, included_unlimited: true, grants: ["ATTENDANCE"] } as DemoAddonLimits, is_active: true },
   { code: "STAFF_BUNDLE", name: "حزمة الموظفين: الموارد البشرية + بوت الواتساب — حتى 25 موظفاً", monthly_price: 199, included_tiers: ["ENTERPRISE"],
     limits: { members: 25, questions: 1000, included_unlimited: true, grants: ["ATTENDANCE", "WA_BOT"] } as DemoAddonLimits, is_active: true }];
 const pricingView = () => ({
@@ -1163,6 +1166,30 @@ const pricingView = () => ({
   addons: addonCatalog.map((a) => ({ ...a, included_tiers: [...a.included_tiers], limits: { ...a.limits, ...(a.limits.grants ? { grants: [...a.limits.grants] } : {}) } })),
 });
 const addonPaidUntil: Record<string, string | null> = { WA_BOT: ts(21), ATTENDANCE: ts(15) };
+// عرض الإطلاق (نسخة العرض): مرة واحدة لكل منشأة، لأول 50 مشتركاً
+const promoDemo = { code: "HR_LAUNCH", name: "عرض الإطلاق: شهر مجاني على الموارد البشرية لأول 50 مشتركاً", free_months: 1, max: 50, used: 7, is_active: true,
+  claimed: false };
+const hrTiersDemo = () => addonCatalog.filter((a) => a.is_active && (a.code === "ATTENDANCE" || (a.limits.grants?.length === 1 && a.limits.grants[0] === "ATTENDANCE")))
+  .sort((a, b) => (a.limits.members ?? 1e9) - (b.limits.members ?? 1e9));
+const tierForDemo = (n: number) => hrTiersDemo().find((a) => (a.limits.members ?? 1e9) >= n) ?? null;
+function promoView(withOrg: boolean): PromoStatus {
+  const active = promoDemo.is_active && promoDemo.used < promoDemo.max;
+  const base = { code: promoDemo.code, name: promoDemo.name, free_months: promoDemo.free_months, remaining: Math.max(promoDemo.max - promoDemo.used, 0), active,
+    max: promoDemo.max, used: promoDemo.used, is_active: promoDemo.is_active };
+  if (!withOrg) return base;
+  const o = orgs.find((x) => x.id === ORG_A)!;
+  const n = employeesDemo.filter((e) => e.is_active).length, tier = tierForDemo(n);
+  const reason = promoDemo.claimed ? "استفدت من العرض مسبقاً" : !active ? "انتهى العرض" : o.sub?.billing_status !== "ACTIVE" ? "العرض للمشتركين باشتراك مدفوع ساري"
+    : addonAccess("ATTENDANCE").via === "PLAN" ? "الموارد البشرية مشمولة في باقتك"
+    : ["ATTENDANCE", "ATTENDANCE_75", "ATTENDANCE_200", "STAFF_BUNDLE"].some((c) => addonPaidUntil[c]) ? "العرض لمن لم يشترك في الموارد البشرية من قبل"
+    : !tier ? `عدد موظفيك (${n}) أكبر من شرائح الإضافة؛ باقة كبار العملاء تشملها بلا حد` : null;
+  return { ...base, eligible: !reason, reason, ...(tier && !reason ? { tier_code: tier.code, tier_name: tier.name } : {}) };
+}
+function hrMixDemo() {
+  const now = new Date().toISOString(), live = (c: string) => (addonPaidUntil[c] ?? "") > now;
+  const bundle = live("STAFF_BUNDLE") ? 1 : 0, hr = ["ATTENDANCE", "ATTENDANCE_75", "ATTENDANCE_200"].some(live) ? 1 : 0;
+  return { bundle, hr_only: hr, bundle_share: bundle + hr ? Math.round((bundle / (bundle + hr)) * 1000) / 1000 : 0, threshold: 0.6, suggest_raise: false, suggested_bundle_price: 229 };
+}
 function addonAccess(code: string) {
   const o = orgs.find((x) => x.id === ORG_A)!; const a = addonCatalog.find((x) => x.code === code)!;
   const tier = o.sub?.plan_tier ?? null;
@@ -1345,7 +1372,16 @@ function growthRoute(method: string, p: string, body: Record<string, unknown>): 
       subscription: o.sub ? { plan_tier: o.sub.plan_tier, billing_cycle: o.sub.billing_cycle, billing_status: o.sub.billing_status, ends_at: o.sub.ends_at } : null,
       next_installment: plan && next ? { id: next.id, seq: next.seq, due_date: next.due_date, amount_net: next.amount_net, installments: plan.installments } : null,
       bot: botAccess(), attendance: addonAccess("ATTENDANCE"),
-      addon_access: Object.fromEntries(addonCatalog.map((a) => [a.code, addonAccess(a.code)])), employees: employeesDemo.filter((e) => e.is_active).length };
+      addon_access: Object.fromEntries(addonCatalog.map((a) => [a.code, addonAccess(a.code)])), employees: employeesDemo.filter((e) => e.is_active).length,
+      hr_tier: tierForDemo(employeesDemo.filter((e) => e.is_active).length)?.code ?? null, promo: promoView(true) };
+  }
+  if ((m = p.match(/^\/billing\/promo\/([A-Z_]+)\/claim$/)) && method === "POST") {
+    if (m[1] !== promoDemo.code) throw new DemoError(404, "العرض غير موجود");
+    const st = promoView(true);
+    if (!st.eligible || !st.tier_code) throw new DemoError(409, st.reason ?? "غير مؤهل للعرض");
+    const until = new Date(); until.setUTCMonth(until.getUTCMonth() + promoDemo.free_months);
+    addonPaidUntil[st.tier_code] = until.toISOString(); promoDemo.used++; promoDemo.claimed = true;
+    return { addon_code: st.tier_code, addon_name: st.tier_name, paid_until: until.toISOString() };
   }
   if (p === "/billing/checkout" && method === "POST") {
     const o = orgs.find((x) => x.id === ORG_A)!;
@@ -2029,7 +2065,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       source: (body.source as string) ?? "landing", status: "NEW", notes: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), handled_by_name: null });
     return { received: true };
   }
-  if (p === "/public/pricing") return pricingView();
+  if (p === "/public/pricing") { const pr = promoView(false); return { ...pricingView(), promo: { code: pr.code, name: pr.name, free_months: pr.free_months, remaining: pr.remaining, active: pr.active } }; }
   if (method === "POST" && p === "/public/signup") {
     if (!body.consent) throw new DemoError(422, "يلزم الموافقة على الشروط وسياسة الخصوصية");
     if (!/^\d{10}$/.test(String(body.cr_number ?? ""))) throw new DemoError(422, "السجل التجاري 10 أرقام");
@@ -2057,7 +2093,14 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     if (p === "/admin/me") return { user_id: TEAM_ME[role].id, role, role_name: adminRoles.find((r) => r.code === role)?.name ?? role, permissions: permsOf(role) };
     actor = { name: TEAM_ME[role]?.full_name ?? role, role };
     requirePerm(role, method, p, body);
-    if (p === "/admin/pricing" && method === "GET") return pricingView();
+    if (p === "/admin/pricing" && method === "GET") return { ...pricingView(), promotions: [promoView(false)], hr_mix: hrMixDemo() };
+    if ((m = p.match(/^\/admin\/pricing\/promotions\/([A-Z_]+)$/)) && method === "PUT") {
+      if (m![1] !== promoDemo.code) throw new DemoError(404, "العرض غير موجود");
+      const mx = Number(body.max_redemptions); if (!(mx >= 1)) throw new DemoError(422, "حد غير صحيح");
+      if (mx < promoDemo.used) throw new DemoError(422, `استفاد ${promoDemo.used} مشتركاً بالفعل؛ لا يقل الحد عنهم`);
+      Object.assign(promoDemo, { is_active: body.is_active !== false, max: mx, free_months: Math.min(Math.max(Number(body.free_months) || 1, 1), 12) });
+      log("ADMIN_PROMO", null, { code: promoDemo.code }); return { ok: true };
+    }
     { const g = adminEventsRoute(method, p, body); if (g !== NO_ROUTE) return g; }
     if ((m = p.match(/^\/admin\/pricing\/plans\/([A-Z_]+)$/))) {
       const tier = m[1]; if (!PRICES[tier]) throw new DemoError(404, "الباقة غير موجودة");
