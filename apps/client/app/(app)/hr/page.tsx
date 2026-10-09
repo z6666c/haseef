@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   KIND_LABEL, LEAVE_LABEL, PAY_MODE_LABEL, LEAVE_STATUS, LEAVE_TYPES, NOTICE_STATUS, fmtDays, formatDate, sar,
-  type DeductionKind, type PayMode, type DeductionSuggestion, type HrDeductions, type HrOverview, type LeaveAttachment, type LeaveRow, type LeaveType,
+  NATURE_LABEL, WAGE_BASE_LABEL, type DeductionKind, type Nature, type NoticeInput, type PayMode, type WageBase, type DeductionSuggestion, type HrDeductions, type HrOverview, type LeaveAttachment, type LeaveRow, type LeaveType,
 } from "@haseef/shared";
 import { AttachPicker } from "@/components/AttachPicker";
 import { api } from "@/lib/session";
@@ -277,7 +277,7 @@ function DeductionsTab({ ov, act }: { ov: HrOverview; act: Act }) {
   const [month, setMonth] = useState(today().slice(0, 7));
   const [d, setD] = useState<HrDeductions | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [issue, setIssue] = useState<Partial<DeductionSuggestion> & { amount?: number } | null>(null);
+  const [issue, setIssue] = useState<{ kind: DeductionKind; incident_date: string } | null>(null);
   const [decide, setDecide] = useState<{ id: string; name: string; confirm: boolean } | null>(null);
   const [note, setNote] = useState("");
   const load = useCallback(() => { setD(null); api.hrDeductions(month).then(setD).catch((e: Error) => setErr(e.message)); }, [month]);
@@ -306,12 +306,13 @@ function DeductionsTab({ ov, act }: { ov: HrOverview; act: Act }) {
       {!d ? <div className="boot" aria-busy="true" /> : <>
         <h2 style={{ marginTop: 16 }}>إشعارات الشهر</h2>
         <table className="deadlines labor-table">
-          <thead><tr><th>الموظف</th><th>الواقعة</th><th>المبلغ</th><th>الحالة</th><th /></tr></thead>
+          <thead><tr><th>الموظف</th><th>الواقعة</th><th>النوع والمبلغ</th><th>الحالة</th><th /></tr></thead>
           <tbody>{d.notices.map((n) => (
             <tr key={n.id}>
               <td><b>{n.full_name}</b><div className="small muted">{n.seen_at ? "اطّلع عليه" : "لم يطّلع بعد"}</div></td>
-              <td>{n.kind_label}<div className="small muted">{formatDate(n.incident_date)} · {n.description}</div></td>
-              <td>{sar(n.amount)}</td>
+              <td>{n.kind_label}<div className="small muted">{formatDate(n.incident_date)} · {n.description}</div>
+                {n.bracket_label && <div className="small muted">{n.bracket_label}{n.occurrence ? ` · المرة ${n.occurrence}` : ""}{n.disrupted ? " · مع تعطيل الآخرين" : ""}</div>}</td>
+              <td><span className={`tag ${n.nature === "WAGE" ? "tag-quiet" : ""}`}>{n.nature_label}</span><div>{n.nature === "WARNING" ? "—" : sar(n.amount)}</div></td>
               <td><span className="status-chip" data-s={CHIP[n.status]}>{NOTICE_STATUS[n.status]}</span>
                 {n.objection_text && <div className="small" style={{ marginTop: 4 }}>اعتراضه: «{n.objection_text}»</div>}
                 {n.decision_note && <div className="small muted">{n.decision_note}</div>}</td>
@@ -323,8 +324,9 @@ function DeductionsTab({ ov, act }: { ov: HrOverview; act: Act }) {
         </table>
         {d.summary.length > 0 && <>
           <h2 style={{ marginTop: 20 }}>ملخص الشهر لكل موظف</h2>
-          <table className="deadlines labor-table"><thead><tr><th>الموظف</th><th>الغرامات / السقف</th><th>مجموع الحسم / نصف الأجر</th><th>المؤكد</th></tr></thead>
-            <tbody>{d.summary.map((s) => <tr key={s.employee_id}><td>{s.full_name}</td><td>{sar(s.fines)} / {sar(s.fine_cap)}</td><td>{sar(s.total)} / {sar(s.half_wage)}</td><td><b>{sar(s.confirmed)}</b></td></tr>)}</tbody></table>
+          <table className="deadlines labor-table"><thead><tr><th>الموظف</th><th>حسم أجر المدة</th><th>الجزاءات / سقف 5 أيام</th><th>إنذارات</th><th>المجموع / نصف الأجر</th><th>المؤكد</th></tr></thead>
+            <tbody>{d.summary.map((s) => <tr key={s.employee_id}><td>{s.full_name}</td><td>{sar(s.wage)}</td><td>{sar(s.fines)} / {sar(s.fine_cap)}</td><td>{s.warnings}</td>
+              <td>{sar(s.total)} / {sar(s.half_wage)}</td><td><b>{sar(s.confirmed)}</b></td></tr>)}</tbody></table>
         </>}
         {d.unpaid_leaves.length > 0 && <>
           <h2 style={{ marginTop: 20 }}>إجازات بدون أجر هذا الشهر</h2>
@@ -334,14 +336,11 @@ function DeductionsTab({ ov, act }: { ov: HrOverview; act: Act }) {
               <td>{u.days}</td><td><b>{sar(u.amount)}</b></td></tr>)}</tbody></table>
         </>}
         <h2 style={{ marginTop: 20 }}>اقتراحات من سجل الحضور والمباشرة</h2>
-        <p className="small muted">لا يصدر شيء تلقائياً: راجع كل اقتراح، ولك أن تكتفي بالتنبيه أو الإنذار وفق لائحة تنظيم العمل في منشأتك.</p>
-        <table className="deadlines labor-table">
-          <thead><tr><th>الموظف</th><th>الواقعة</th><th>المبلغ المقترح</th><th /></tr></thead>
-          <tbody>{d.suggestions.map((s, i) => (
-            <tr key={i}><td>{s.full_name}</td><td>{s.kind_label}<div className="small muted">{s.description}</div></td><td>{sar(s.amount)}</td>
-              <td>{ov.can_manage && <button className="btn btn-xs" type="button" onClick={() => setIssue(s)}>إصدار إشعار</button>}</td></tr>))}
-            {d.suggestions.length === 0 && <tr><td colSpan={4} className="muted">لا اقتراحات.</td></tr>}</tbody>
-        </table>
+        <p className="small muted">{d.method === "REGULATION"
+          ? `وفق جدول لائحة تنظيم العمل: حسم أجر المدة + الجزاء المتدرج برقم التكرار (التأخر خلال ${d.late_repeat_days} يوماً، والغياب خلال السنة العقدية). راجع كل واقعة وعدّلها قبل الإصدار.`
+          : "طريقة المنشأة: حسم أجر المدة فقط دون جزاء متدرج. غيّرها من الإعدادات."} لا يصدر شيء تلقائياً.</p>
+        {d.suggestions.length === 0 ? <p className="muted small">لا اقتراحات.</p>
+          : <div className="sugg-list">{d.suggestions.map((g) => <SuggestionCard key={`${g.employee_id}|${g.kind}|${g.incident_date}`} g={g} month={month} canManage={ov.can_manage} act={wrap} />)}</div>}
       </>}
       {issue && <IssueModal ov={ov} s={issue} month={month} act={wrap} onClose={() => setIssue(null)} />}
       {decide && (
@@ -359,25 +358,27 @@ function DeductionsTab({ ov, act }: { ov: HrOverview; act: Act }) {
   );
 }
 
-function IssueModal({ ov, s, month, act, onClose }: { ov: HrOverview; s: Partial<DeductionSuggestion>; month: string; act: Act; onClose: () => void }) {
-  const [v, setV] = useState({ employee_id: s.employee_id ?? ov.people[0]?.id ?? "", kind: (s.kind ?? "VIOLATION") as DeductionKind, incident_date: s.incident_date ?? today(),
-    description: s.description ?? "", amount: s.amount != null ? String(s.amount) : "", payroll_month: (s.incident_date ?? month).slice(0, 7) });
+function IssueModal({ ov, s, month, act, onClose }: { ov: HrOverview; s: { kind: DeductionKind; incident_date: string }; month: string; act: Act; onClose: () => void }) {
+  const [v, setV] = useState({ employee_id: ov.people[0]?.id ?? "", kind: s.kind, nature: "PENALTY" as Nature, incident_date: s.incident_date,
+    description: "", amount: "", payroll_month: (s.incident_date ?? month).slice(0, 7) });
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <form className="modal modal-wide" onSubmit={async (e) => { e.preventDefault();
-        if (await act(() => api.hrAddNotice({ ...v, amount: Number(v.amount), leave_request_id: s.leave_request_id ?? null }), "صدر الإشعار وأُبلغ الموظف")) onClose(); }}>
-        <h2>إشعار خصم</h2>
+        if (await act(() => api.hrAddNotice({ ...v, amount: v.nature === "WARNING" ? 0 : Number(v.amount) }), "صدر الإشعار وأُبلغ الموظف")) onClose(); }}>
+        <h2>إشعار للموظف</h2>
         <div className="grid">
-          <div className="field"><label htmlFor="ie">الموظف</label><select id="ie" value={v.employee_id} disabled={!!s.employee_id} onChange={(e) => setV({ ...v, employee_id: e.target.value })}>
+          <div className="field"><label htmlFor="ie">الموظف</label><select id="ie" value={v.employee_id} onChange={(e) => setV({ ...v, employee_id: e.target.value })}>
             {ov.people.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</select></div>
           <div className="field"><label htmlFor="ik">النوع</label><select id="ik" value={v.kind} onChange={(e) => setV({ ...v, kind: e.target.value as DeductionKind })}>
             {(Object.keys(KIND_LABEL) as DeductionKind[]).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></div>
           <div className="field"><label htmlFor="id">تاريخ الواقعة</label><input id="id" type="date" required max={today()} value={v.incident_date} onChange={(e) => setV({ ...v, incident_date: e.target.value })} /></div>
           <div className="field"><label htmlFor="im">يُخصم في رواتب شهر</label><input id="im" type="month" required value={v.payroll_month} onChange={(e) => setV({ ...v, payroll_month: e.target.value })} /></div>
-          <div className="field"><label htmlFor="ia">المبلغ (ريال)</label><input id="ia" type="number" step="0.01" min={0.01} required value={v.amount} onChange={(e) => setV({ ...v, amount: e.target.value })} /></div>
+          <div className="field"><label htmlFor="in">الطبيعة</label><select id="in" value={v.nature} onChange={(e) => setV({ ...v, nature: e.target.value as Nature })}>
+            {(Object.keys(NATURE_LABEL) as Nature[]).map((k) => <option key={k} value={k}>{NATURE_LABEL[k]}</option>)}</select></div>
+          {v.nature !== "WARNING" && <div className="field"><label htmlFor="ia">المبلغ (ريال)</label><input id="ia" type="number" step="0.01" min={0.01} required value={v.amount} onChange={(e) => setV({ ...v, amount: e.target.value })} /></div>}
           <div className="field field-wide"><label htmlFor="ix">وصف الواقعة</label><textarea id="ix" rows={2} required minLength={3} maxLength={1000} value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} /></div>
         </div>
-        <p className="small muted">يصل الموظف إشعار بالخصم وسببه، ويستطيع الاعتراض من رابطه الشخصي قبل أن تؤكده.</p>
+        <p className="small muted">الجزاء المالي لا يتجاوز أجر خمسة أيام ولا يُوقَّع بعد 30 يوماً من الواقعة؛ حسم أجر المدة مقابل وقت لم يُعمل. يصل الموظف الإشعار وسببه، ويستطيع الاعتراض من رابطه الشخصي قبل أن تؤكده.</p>
         <div className="modal-actions"><button className="btn btn-action" type="submit">إصدار</button><button className="btn btn-quiet" type="button" onClick={onClose}>إلغاء</button></div>
       </form>
     </div>
@@ -398,6 +399,21 @@ function SettingsTab({ ov, act }: { ov: HrOverview; act: Act }) {
           تُحسب أيام الإجازة على أيام العمل فقط (دون العطلة الأسبوعية والعطل الرسمية). الإجازة المرضية تُحسب بالأيام التقويمية دائماً.</label>
         <label className="checks-inline"><input type="checkbox" disabled={dis} checked={s.notify_employees} onChange={(e) => setS({ ...s, notify_employees: e.target.checked })} />
           إشعار الموظف على واتساب بقرارات الإجازة والخصم (يلزم جواله في سجله أو ربطه ببوت الموظفين)</label>
+        <fieldset className="field"><legend>طريقة الخصم على التأخر والغياب</legend>
+          <label className="checks-inline"><input type="radio" name="dm" disabled={dis} checked={s.deduction_method === "REGULATION"} onChange={() => setS({ ...s, deduction_method: "REGULATION" })} />
+            وفق جدول لائحة تنظيم العمل (موصى به): حسم أجر المدة + جزاء متدرج حسب التكرار (إنذار ثم نسبة من الأجر اليومي)</label>
+          <label className="checks-inline"><input type="radio" name="dm" disabled={dis} checked={s.deduction_method === "DURATION"} onChange={() => setS({ ...s, deduction_method: "DURATION" })} />
+            حسم أجر المدة فقط (دقائق التأخر وأيام الغياب) دون جزاء</label>
+        </fieldset>
+        <div className="grid">
+          <div className="field"><label htmlFor="wb">أجر اليوم يُحسب من</label>
+            <select id="wb" disabled={dis} value={s.wage_base} onChange={(e) => setS({ ...s, wage_base: e.target.value as WageBase })}>
+              {(Object.keys(WAGE_BASE_LABEL) as WageBase[]).map((k) => <option key={k} value={k}>{WAGE_BASE_LABEL[k]}</option>)}</select></div>
+          <div className="field"><label htmlFor="lr2">احتساب تكرار التأخر خلال (يوم)</label>
+            <input id="lr2" type="number" min={30} max={365} disabled={dis} value={s.late_repeat_days} onChange={(e) => setS({ ...s, late_repeat_days: Number(e.target.value) })} /></div>
+        </div>
+        <p className="small muted">أجر اليوم = الأجر الشهري ÷ 30. البدلات الأخرى (النقل وغيره) تُدخل في سجل الموظف. جدول اللائحة إرشادي وفق اللائحة النموذجية؛
+          اعتمد لائحة منشأتك من الوزارة، ولك تعديل أي جزاء قبل إصداره.</p>
         <div className="field" style={{ maxWidth: 260 }}><label htmlFor="od">مهلة اعتراض الموظف على الخصم (يوم)</label>
           <input id="od" type="number" min={1} max={60} disabled={dis} value={s.objection_days} onChange={(e) => setS({ ...s, objection_days: Number(e.target.value) })} /></div>
         {!dis && <div><button className="btn btn-action" type="submit">حفظ</button></div>}
@@ -428,5 +444,56 @@ function PolicyCard({ p, dis, act }: { p: HrOverview["policies"][number]; dis: b
       {p.leave_type === "EMERGENCY" && <p className="small muted">تُقبل حتى 3 أيام بعد بدايتها.</p>}
       {!dis && <button className="btn btn-xs" type="submit">حفظ</button>}
     </form>
+  );
+}
+
+
+/** واقعة مقترحة: سطر حسم أجر المدة، وسطر الجزاء المقترح من جدول اللائحة. تعدّلهما الموارد البشرية ثم تصدرهما معاً. */
+function SuggestionCard({ g, month, canManage, act }: { g: DeductionSuggestion; month: string; canManage: boolean; act: Act }) {
+  const p = g.penalty;
+  const [useWage, setUseWage] = useState(!!g.wage);
+  const [wage, setWage] = useState(g.wage ? String(g.wage.amount) : "");
+  const [disrupted, setDisrupted] = useState(false);
+  const cur = p && disrupted && p.alt_disrupted ? p.alt_disrupted : p;
+  const [pen, setPen] = useState<"SUGGESTED" | "WARNING" | "NONE">(p && p.nature !== "ACTION" ? "SUGGESTED" : "NONE");
+  const [penAmount, setPenAmount] = useState(p ? String(p.amount) : "");
+  const effNature: Nature | null = pen === "NONE" || !cur || cur.nature === "ACTION" ? null : pen === "WARNING" || cur.nature === "WARNING" ? "WARNING" : "PENALTY";
+  function items(): NoticeInput[] {
+    const base = { employee_id: g.employee_id, kind: g.kind, incident_date: g.incident_date, payroll_month: g.incident_date.slice(0, 7) || month,
+      leave_request_id: g.leave_request_id ?? null };
+    const out: NoticeInput[] = [];
+    if (useWage && g.wage && Number(wage) > 0) out.push({ ...base, nature: "WAGE", amount: Number(wage), description: `${g.description} — ${g.wage.label}` });
+    if (effNature && p) out.push({ ...base, nature: effNature, bracket: p.bracket, occurrence: p.occurrence, disrupted,
+      amount: effNature === "WARNING" ? 0 : Number(penAmount), description: `${g.description} — ${p.bracket_label}، ${p.occurrence_label}` });
+    return out;
+  }
+  const list = items();
+  return (
+    <div className="panel sugg-card">
+      <div className="res-head"><strong>{g.full_name}</strong><span className="tag tag-quiet">{g.kind_label}</span></div>
+      <p className="small" style={{ margin: "4px 0" }}>{g.description}</p>
+      {g.wage && <label className="checks-inline"><input type="checkbox" checked={useWage} disabled={!canManage} onChange={(e) => setUseWage(e.target.checked)} />
+        حسم أجر المدة ({g.wage.label}):
+        <input type="number" step="0.01" min={0.01} value={wage} disabled={!canManage || !useWage} onChange={(e) => setWage(e.target.value)} style={{ width: 100 }} /> ريال</label>}
+      {p && <div className="sugg-pen">
+        <div className="small"><b>{p.bracket_label}</b> · {p.occurrence_label} ← المقترح: <b>{cur!.label}</b>{cur!.nature === "PENALTY" ? ` (${sar(cur!.amount)})` : ""}</div>
+        {p.alt_disrupted && <label className="checks-inline small"><input type="checkbox" checked={disrupted} disabled={!canManage}
+          onChange={(e) => { setDisrupted(e.target.checked); const c = e.target.checked ? p.alt_disrupted! : p; setPenAmount(String(c.amount)); }} /> ترتب على التأخر تعطيل عمل آخرين</label>}
+        {cur!.nature !== "ACTION" && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <select value={pen} disabled={!canManage} onChange={(e) => setPen(e.target.value as typeof pen)}>
+            <option value="SUGGESTED">{cur!.nature === "WARNING" ? "إصدار الإنذار المقترح" : "الجزاء المقترح"}</option>
+            {cur!.nature !== "WARNING" && <option value="WARNING">الاكتفاء بإنذار كتابي</option>}
+            <option value="NONE">بلا جزاء</option>
+          </select>
+          {pen === "SUGGESTED" && cur!.nature === "PENALTY" && <><input type="number" step="0.01" min={0.01} value={penAmount} disabled={!canManage}
+            onChange={(e) => setPenAmount(e.target.value)} style={{ width: 100 }} /> ريال</>}
+        </div>}
+      </div>}
+      {g.notes.map((n) => <p key={n} className="hint-box small" style={{ margin: "6px 0 0" }}>{n}</p>)}
+      {canManage && <div style={{ marginTop: 8 }}>
+        <button className="btn btn-action btn-xs" type="button" disabled={!list.length}
+          onClick={() => act(() => api.hrIssueBatch(list), `صدر لـ${g.full_name}: ${list.map((i) => (i.nature === "WARNING" ? "إنذار" : `${NATURE_LABEL[i.nature!]} ${sar(i.amount)}`)).join(" + ")}`)}>
+          إصدار ({list.length})</button></div>}
+    </div>
   );
 }

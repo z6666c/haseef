@@ -16,7 +16,9 @@ import { TAX_LABEL, addDaysIso, taxPeriodLabel, taxPlan, type TaxKind } from "./
 import { buildIcs } from "./ics.ts";
 import { botHandle, type BotState } from "./bot.ts";
 import { ATT_FLAG, ATT_REASON, evaluateAttendance, type AttResult } from "./attendance.ts";
-import { resolvePaid, type PayMode } from "./hr.ts";
+import { monthlyWage, natureOf, resolvePaid, type Nature, type PayMode, type WageBase } from "./hr.ts";
+import { BRACKET_LABEL, absenceBracket, lateBracket, suggestPenalty, type Bracket, type PenaltySuggestion } from "./penalties.ts";
+import { NATURE_LABEL } from "./hr.ts";
 import { DEFAULT_POLICIES, FINE_KINDS, KIND_LABEL, LEAVE_LABEL, LEAVE_TYPES, addDays as isoAddDays, annualEntitlement, countLeaveDays, dailyWage, diffDays, fmtDays, holidayDates,
   lateAmount, lateReturnDays, sickNote, validateDeduction, validateLeave, weekday0, type DeductionKind, type LeavePolicy, type LeaveType } from "./hr.ts";
 import { EXPENSE_CATEGORY, VAT_RATE, invoiceLine, invoiceNumber, periodRange, round2, zatcaTlv, type InvoiceLine } from "./finance.ts";
@@ -1022,11 +1024,11 @@ const alertRules: Record<"COMPLIANCE_ITEM" | "POLICY" | "EMPLOYEE_DOC" | "LABOR_
 };
 
 // ---------- العمل والموظفين (منشأة النخبة)
-type DemoEmp = Omit<Employee, "basic_wage" | "housing_allowance"> & { basic_wage: number; housing_allowance: number };
+type DemoEmp = Omit<Employee, "basic_wage" | "housing_allowance" | "other_allowances"> & { basic_wage: number; housing_allowance: number; other_allowances: number };
 const employeesDemo: DemoEmp[] = (() => {
   const e = (full_name: string, nationality: Nationality, job_title: string, startDays: number, basic: number, housing: number,
     o: Partial<DemoEmp> = {}): DemoEmp => ({ id: uid(), full_name, nationality, job_title, start_date: inDays(-startDays), gosi_system: startDays < 820 ? "NEW" : "OLD",
-    basic_wage: basic, housing_allowance: housing, gosi_registered: true, qiwa_contract_documented: true, contract_end_date: null,
+    basic_wage: basic, housing_allowance: housing, other_allowances: Math.round(basic * 0.1), gosi_registered: true, qiwa_contract_documented: true, contract_end_date: null,
     probation_end_date: null, iqama_expiry: nationality === "NON_SAUDI" ? inDays(200 + startDays % 300) : null,
     work_permit_expiry: nationality === "NON_SAUDI" ? inDays(200 + startDays % 300) : null, is_active: true, left_on: null, ...o });
   return [
@@ -1106,7 +1108,7 @@ function empInput(b: Record<string, unknown>): Omit<DemoEmp, "id" | "is_active" 
   const saudi = b.nationality === "SAUDI";
   return { full_name: name, nationality: saudi ? "SAUDI" : "NON_SAUDI", job_title: (b.job_title as string) || null, start_date: String(b.start_date),
     gosi_system: b.gosi_system === "NEW" ? "NEW" : "OLD", basic_wage: Number(b.basic_wage) || 0, housing_allowance: Number(b.housing_allowance) || 0,
-    gosi_registered: !!b.gosi_registered, qiwa_contract_documented: !!b.qiwa_contract_documented,
+    other_allowances: Number(b.other_allowances) || 0, gosi_registered: !!b.gosi_registered, qiwa_contract_documented: !!b.qiwa_contract_documented,
     contract_end_date: (b.contract_end_date as string) || null, probation_end_date: (b.probation_end_date as string) || null,
     iqama_expiry: saudi ? null : (b.iqama_expiry as string) || null, work_permit_expiry: saudi ? null : (b.work_permit_expiry as string) || null,
     mobile: mobileOf(b.mobile) };
@@ -1673,10 +1675,21 @@ type DemoLeave = { id: string; employee_id: string; leave_type: LeaveType; start
   medical_ref: string | null; status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED"; source: "LINK" | "BOT" | "HR"; decision_note: string | null;
   decided_at: string | null; return_date: string | null; return_submitted_at: string | null; return_confirmed_at: string | null; created_at: string;
   attachment?: { name: string; mime: string; b64: string } | null; is_paid: boolean };
-type DemoNotice = { id: string; employee_id: string; kind: DeductionKind; incident_date: string; description: string; amount: number; payroll_month: string;
+type DemoNotice = { id: string; employee_id: string; kind: DeductionKind; nature: Nature; bracket: string | null; occurrence: number | null; disrupted: boolean;
+  incident_date: string; description: string; amount: number; payroll_month: string;
   status: "ISSUED" | "OBJECTED" | "CONFIRMED" | "CANCELLED"; seen_at: string | null; objection_text: string | null; objected_at: string | null;
   decision_note: string | null; decided_at: string | null; created_at: string; leave_request_id: string | null };
-const hrSettingsDemo = { count_workdays_only: true, objection_days: 15, notify_employees: true };
+const hrSettingsDemo = { count_workdays_only: true, objection_days: 15, notify_employees: true,
+  deduction_method: "REGULATION" as "REGULATION" | "DURATION", wage_base: "TOTAL" as WageBase, late_repeat_days: 180 };
+const dwOf = (e: DemoEmp) => dailyWage(e.basic_wage, e.housing_allowance, e.other_allowances, hrSettingsDemo.wage_base);
+const mwOf = (e: DemoEmp) => monthlyWage(e.basic_wage, e.housing_allowance, e.other_allowances);
+/** بداية السنة العقدية (ذكرى المباشرة) التي تقع فيها الواقعة. */
+function contractYearStart(start: string, on: string) { const y = `${on.slice(0, 4)}${start.slice(4)}`; return y <= on ? y : `${Number(on.slice(0, 4)) - 1}${start.slice(4)}`; }
+function priorOccDemo(e: DemoEmp, bracket: string, incident: string) {
+  const since = bracket.startsWith("LATE") ? isoAddDays(incident, -hrSettingsDemo.late_repeat_days) : contractYearStart(e.start_date, incident);
+  return noticesDemo.filter((n) => n.employee_id === e.id && n.bracket === bracket && (n.nature === "PENALTY" || n.nature === "WARNING")
+    && n.status !== "CANCELLED" && n.incident_date >= since && n.incident_date < incident).length;
+}
 const hrPoliciesDemo: Record<LeaveType, LeavePolicy & { is_active: boolean }> = Object.fromEntries(
   LEAVE_TYPES.map((t) => [t, { ...DEFAULT_POLICIES[t], is_active: true }])) as Record<LeaveType, LeavePolicy & { is_active: boolean }>;
 const leavesDemo: DemoLeave[] = [];
@@ -1772,24 +1785,28 @@ function workMinutes() { const [a, b] = [attSettings.work_start, attSettings.wor
 const monthOf = (iso: string) => `${iso.slice(0, 7)}-01`;
 function monthSums(empId: string, month: string) {
   const live = noticesDemo.filter((n) => n.employee_id === empId && n.payroll_month === month && ["ISSUED", "OBJECTED", "CONFIRMED"].includes(n.status));
-  return { fines: live.filter((n) => FINE_KINDS.includes(n.kind)).reduce((a, n) => a + n.amount, 0), total: live.reduce((a, n) => a + n.amount, 0) };
+  return { fines: live.filter((n) => n.nature === "PENALTY").reduce((a, n) => a + n.amount, 0), total: live.reduce((a, n) => a + n.amount, 0) };
 }
 function createNoticeDemo(b: Record<string, unknown>) {
   const e = hrEmp(String(b.employee_id));
   const kind = String(b.kind) as DeductionKind;
   if (!KIND_LABEL[kind]) throw new DemoError(422, "نوع الخصم غير معروف");
+  const nature = (["WAGE", "PENALTY", "WARNING"].includes(String(b.nature)) ? b.nature : natureOf(kind)) as Nature;
   const month = `${String(b.payroll_month ?? "")}-01`;
   if (!/^\d{4}-\d{2}-01$/.test(month)) throw new DemoError(422, "حدد شهر الرواتب");
   if (String(b.description ?? "").trim().length < 3) throw new DemoError(422, "اكتب وصف الواقعة");
+  const bracket = (b.bracket as string) || null;
+  if (bracket && !(bracket in BRACKET_LABEL)) throw new DemoError(422, "شريحة غير معروفة");
   const amount = Math.round(Number(b.amount) * 100) / 100;
   const s = monthSums(e.id, month);
-  const err = validateDeduction({ kind, amount, incident: String(b.incident_date), today: hrToday(), dwage: dailyWage(e.basic_wage, e.housing_allowance),
-    monthlyWage: e.basic_wage + e.housing_allowance, monthFines: s.fines, monthTotal: s.total });
+  const err = validateDeduction({ kind, nature, amount, incident: String(b.incident_date), today: hrToday(), dwage: dwOf(e), monthlyWage: mwOf(e),
+    monthFines: s.fines, monthTotal: s.total });
   if (err) throw new DemoError(422, err);
-  const n: DemoNotice = { id: uid(), employee_id: e.id, kind, incident_date: String(b.incident_date), description: String(b.description), amount, payroll_month: month,
-    status: "ISSUED", seen_at: null, objection_text: null, objected_at: null, decision_note: null, decided_at: null, created_at: new Date().toISOString(),
-    leave_request_id: (b.leave_request_id as string) || null };
-  noticesDemo.unshift(n); return { id: n.id };
+  const occurrence = bracket ? (Number(b.occurrence) || priorOccDemo(e, bracket, String(b.incident_date)) + 1) : null;
+  const n: DemoNotice = { id: uid(), employee_id: e.id, kind, nature, bracket, occurrence, disrupted: !!b.disrupted, incident_date: String(b.incident_date),
+    description: String(b.description), amount, payroll_month: month, status: "ISSUED", seen_at: null, objection_text: null, objected_at: null,
+    decision_note: null, decided_at: null, created_at: new Date().toISOString(), leave_request_id: (b.leave_request_id as string) || null };
+  noticesDemo.unshift(n); return { id: n.id, occurrence };
 }
 (() => {
   const by = (n: string) => employeesDemo.find((e) => e.full_name === n)!;
@@ -1812,15 +1829,17 @@ function createNoticeDemo(b: Record<string, unknown>) {
   const late = attRecords.find((r) => r.kind === "IN" && (r.late_minutes ?? 0) > 0);
   if (late) {
     const e = hrEmp(late.employee_id); const day = riyadhIso(new Date(new Date(late.at).getTime() + 3 * 3600e3)).slice(0, 10);
-    noticesDemo.push({ id: uid(), employee_id: e.id, kind: "LATE", incident_date: day, description: `تأخر ${late.late_minutes} دقيقة عن بداية الدوام يوم ${day}`,
-      amount: lateAmount(late.late_minutes ?? 0, dailyWage(e.basic_wage, e.housing_allowance), workMinutes()), payroll_month: monthOf(day), status: "OBJECTED",
+    const fromStart = (late.late_minutes ?? 0) + attSettings.grace_minutes;
+    noticesDemo.push({ id: uid(), employee_id: e.id, kind: "LATE", nature: "WARNING", bracket: lateBracket(fromStart), occurrence: 1, disrupted: false,
+      incident_date: day, description: `تأخر ${fromStart} دقيقة عن بداية الدوام يوم ${day}`,
+      amount: 0, payroll_month: monthOf(day), status: "OBJECTED",
       seen_at: ts(-2), objection_text: "تأخرت بسبب حادث مروري على الطريق، ومعي إثبات من نجم.", objected_at: ts(-1), decision_note: null, decided_at: null,
       created_at: ts(-3), leave_request_id: null });
     late.late_minutes = late.late_minutes;
   }
   const v = by("عبدالله الشهري");
-  noticesDemo.push({ id: uid(), employee_id: v.id, kind: "VIOLATION", incident_date: d(-4), description: "عدم ارتداء معدات السلامة في الموقع (إنذار سابق بتاريخ سابق)",
-    amount: Math.round(dailyWage(v.basic_wage, v.housing_allowance) * 0.25 * 100) / 100, payroll_month: monthOf(t), status: "ISSUED", seen_at: null, objection_text: null,
+  noticesDemo.push({ id: uid(), employee_id: v.id, kind: "VIOLATION", nature: "PENALTY", bracket: null, occurrence: null, disrupted: false, incident_date: d(-4), description: "عدم ارتداء معدات السلامة في الموقع (إنذار سابق بتاريخ سابق)",
+    amount: Math.round(dwOf(v) * 0.25 * 100) / 100, payroll_month: monthOf(t), status: "ISSUED", seen_at: null, objection_text: null,
     objected_at: null, decision_note: null, decided_at: null, created_at: ts(-1), leave_request_id: null });
 })();
 function hrOverviewDemo() {
@@ -1837,49 +1856,88 @@ function hrOverviewDemo() {
 }
 function deductionsDemo(month: string) {
   const m = `${month}-01`, today = hrToday();
-  const notices = noticesDemo.filter((n) => n.payroll_month === m).map((n) => ({ ...n, full_name: hrEmp(n.employee_id).full_name, kind_label: KIND_LABEL[n.kind] }));
+  const notices = noticesDemo.filter((n) => n.payroll_month === m).map((n) => ({ ...n, full_name: hrEmp(n.employee_id).full_name, kind_label: KIND_LABEL[n.kind],
+    nature_label: NATURE_LABEL[n.nature], bracket_label: n.bracket ? BRACKET_LABEL[n.bracket as Bracket] : null }));
   const have = new Set(noticesDemo.filter((n) => n.status !== "CANCELLED").map((n) => `${n.employee_id}|${n.kind}|${n.incident_date}`));
   const haveLeave = new Set(noticesDemo.filter((n) => n.status !== "CANCELLED" && n.leave_request_id).map((n) => n.leave_request_id));
   const local = (at: string) => riyadhIso(new Date(new Date(at).getTime() + 3 * 3600e3)).slice(0, 10);
-  const sug: DeductionSuggestion[] = [];
+  type Ev = { e: DemoEmp; kind: DeductionKind; d: string; late?: number; fromStart?: number; to?: string; days?: number; leave?: DemoLeave };
+  const events: Ev[] = [];
+  // 1) التأخر
   const lateByDay = new Map<string, number>();
   for (const r of attRecords) if (r.kind === "IN" && r.status === "ACCEPTED" && (r.late_minutes ?? 0) > 0 && local(r.at).startsWith(month)) {
     const k = `${r.employee_id}|${local(r.at)}`; lateByDay.set(k, Math.max(lateByDay.get(k) ?? 0, r.late_minutes ?? 0));
   }
   for (const [k, min] of lateByDay) {
     const [eid, day] = k.split("|"); const e = employeesDemo.find((x) => x.id === eid && x.is_active);
-    if (!e || have.has(`${eid}|LATE|${day}`) || diffDays(today, day) > 30) continue;
-    sug.push({ employee_id: eid, full_name: e.full_name, kind: "LATE", kind_label: KIND_LABEL.LATE, incident_date: day,
-      amount: lateAmount(min, dailyWage(e.basic_wage, e.housing_allowance), workMinutes()), description: `تأخر ${min} دقيقة عن بداية الدوام يوم ${day}` });
+    if (!e || have.has(`${eid}|LATE|${day}`)) continue;
+    events.push({ e, kind: "LATE", d: day, late: min, fromStart: min + attSettings.grace_minutes });
   }
+  // 2) الغياب: الأيام المتصلة واقعة واحدة (العطل لا تقطع التتابع)
   const present = new Set(attRecords.filter((r) => r.kind === "IN" && r.status === "ACCEPTED").map((r) => `${r.employee_id}|${local(r.at)}`));
   const firstRec = new Map<string, string>();
   for (const r of attRecords) { const d = local(r.at); if (!firstRec.has(r.employee_id) || d < firstRec.get(r.employee_id)!) firstRec.set(r.employee_id, d); }
   const hol = hrHolidays();
-  for (let d = m; d.startsWith(month) && d < today; d = isoAddDays(d, 1)) {
-    if (!attSettings.work_days.includes(weekday0(d)) || hol.has(d)) continue;
-    for (const [eid, since] of firstRec) {
-      const e = employeesDemo.find((x) => x.id === eid && x.is_active);
-      if (!e || d < since || present.has(`${eid}|${d}`) || have.has(`${eid}|ABSENCE|${d}`)) continue;
-      if (leavesDemo.some((l) => l.employee_id === eid && l.status === "APPROVED" && l.start_date <= d && d <= l.end_date)) continue;
-      sug.push({ employee_id: eid, full_name: e.full_name, kind: "ABSENCE", kind_label: KIND_LABEL.ABSENCE, incident_date: d,
-        amount: dailyWage(e.basic_wage, e.housing_allowance), description: `غياب يوم ${d} دون إجازة أو تسجيل حضور` });
+  for (const [eid, since] of firstRec) {
+    const e = employeesDemo.find((x) => x.id === eid && x.is_active); if (!e) continue;
+    let run: string[] = [];
+    for (let d = m; d.startsWith(month) && d <= today; d = isoAddDays(d, 1)) {
+      const work = attSettings.work_days.includes(weekday0(d)) && !hol.has(d) && d < today;
+      const absent = work && d >= since && !present.has(`${eid}|${d}`)
+        && !leavesDemo.some((l) => l.employee_id === eid && l.status === "APPROVED" && l.start_date <= d && d <= l.end_date);
+      if (absent) run.push(d);
+      else if (work || d >= today) {
+        if (run.length && !have.has(`${eid}|ABSENCE|${run[0]}`)) events.push({ e, kind: "ABSENCE", d: run[0], to: run[run.length - 1], days: run.length });
+        run = [];
+      }
     }
+    if (run.length && !have.has(`${eid}|ABSENCE|${run[0]}`)) events.push({ e, kind: "ABSENCE", d: run[0], to: run[run.length - 1], days: run.length });
   }
+  // 3) التأخر عن المباشرة
   for (const l of leavesDemo) {
     if (l.status !== "APPROVED" || !l.return_date || !l.return_date.startsWith(month) || haveLeave.has(l.id)) continue;
     const n = lateReturnDays(l.end_date, l.return_date, attSettings.work_days, hol); if (!n) continue;
-    const e = hrEmp(l.employee_id);
-    sug.push({ employee_id: e.id, full_name: e.full_name, kind: "LATE_RETURN", kind_label: KIND_LABEL.LATE_RETURN, incident_date: l.return_date, leave_request_id: l.id,
-      amount: Math.round(n * dailyWage(e.basic_wage, e.housing_allowance) * 100) / 100, description: `تأخر ${n} يوم عمل عن المباشرة بعد الإجازة ال${LEAVE_LABEL[l.leave_type]} (انتهت ${l.end_date})` });
+    events.push({ e: hrEmp(l.employee_id), kind: "LATE_RETURN", d: l.return_date, days: n, leave: l });
   }
-  sug.sort((a, b) => a.incident_date.localeCompare(b.incident_date) || a.full_name.localeCompare(b.full_name, "ar"));
+  events.sort((a, b) => a.d.localeCompare(b.d) || a.e.full_name.localeCompare(b.e.full_name, "ar"));
+  const pending = new Map<string, number>();
+  const regulation = hrSettingsDemo.deduction_method === "REGULATION";
+  const sug: DeductionSuggestion[] = events.map((ev) => {
+    const dw = dwOf(ev.e), notes: string[] = [];
+    let description: string, wage: DeductionSuggestion["wage"], bracket: Bracket | null;
+    if (ev.kind === "LATE") {
+      description = `تأخر ${ev.fromStart} دقيقة عن بداية الدوام يوم ${ev.d}`;
+      const amt = lateAmount(ev.late!, dw, workMinutes());
+      wage = amt > 0 ? { amount: amt, label: `أجر ${ev.late} دقيقة بعد السماحية` } : null;
+      bracket = lateBracket(ev.fromStart!);
+    } else {
+      const days = ev.days!;
+      description = ev.kind === "ABSENCE"
+        ? (days === 1 ? `غياب يوم ${ev.d} دون إجازة أو تسجيل حضور` : `غياب ${days} أيام عمل متصلة من ${ev.d} إلى ${ev.to} دون إجازة أو تسجيل حضور`)
+        : `تأخر ${days} يوم عمل عن المباشرة بعد الإجازة ال${LEAVE_LABEL[ev.leave!.leave_type]} (انتهت ${ev.leave!.end_date})`;
+      wage = { amount: round2(days * dw), label: `أجر ${days} ${days === 1 ? "يوم" : "أيام"} غياب` };
+      bracket = absenceBracket(days);
+      if (days >= 10) notes.push("بلغ الغياب المتصل 10 أيام: يلزم إنذار كتابي قبل أي فصل وفق المادة 80 عند تجاوز 15 يوماً.");
+    }
+    let penalty: PenaltySuggestion | null = null;
+    if (regulation && bracket) {
+      const key = `${ev.e.id}|${bracket}`;
+      const occ = priorOccDemo(ev.e, bracket, ev.d) + (pending.get(key) ?? 0) + 1;
+      pending.set(key, (pending.get(key) ?? 0) + 1);
+      penalty = suggestPenalty(bracket, occ, dw);
+      if (ev.kind === "LATE") { const alt = suggestPenalty(bracket, occ, dw, true); penalty.alt_disrupted = { nature: alt.nature, label: alt.label, amount: alt.amount }; }
+      if (penalty.nature !== "ACTION" && diffDays(today, ev.d) > 30) { notes.push("مضى أكثر من 30 يوماً على الواقعة: لا يجوز توقيع الجزاء، ويبقى حسم أجر المدة."); penalty = null; }
+    }
+    return { employee_id: ev.e.id, full_name: ev.e.full_name, kind: ev.kind, kind_label: KIND_LABEL[ev.kind], incident_date: ev.d, daily_wage: dw,
+      description, leave_request_id: ev.leave?.id ?? null, notes, wage, penalty };
+  });
   const summary = [...new Set(notices.map((n) => n.employee_id))].flatMap((eid) => {
     const e = hrEmp(eid); const live = notices.filter((n) => n.employee_id === eid && ["ISSUED", "OBJECTED", "CONFIRMED"].includes(n.status));
     if (!live.length) return [];
-    return [{ employee_id: eid, full_name: e.full_name, fines: live.filter((n) => FINE_KINDS.includes(n.kind)).reduce((a, n) => a + n.amount, 0),
-      total: live.reduce((a, n) => a + n.amount, 0), confirmed: live.filter((n) => n.status === "CONFIRMED").reduce((a, n) => a + n.amount, 0),
-      fine_cap: Math.round(dailyWage(e.basic_wage, e.housing_allowance) * 500) / 100, half_wage: (e.basic_wage + e.housing_allowance) / 2 }];
+    return [{ employee_id: eid, full_name: e.full_name, fines: round2(live.filter((n) => n.nature === "PENALTY").reduce((a, n) => a + n.amount, 0)),
+      wage: round2(live.filter((n) => n.nature === "WAGE").reduce((a, n) => a + n.amount, 0)), warnings: live.filter((n) => n.nature === "WARNING").length,
+      total: round2(live.reduce((a, n) => a + n.amount, 0)), confirmed: round2(live.filter((n) => n.status === "CONFIRMED").reduce((a, n) => a + n.amount, 0)),
+      fine_cap: round2(dwOf(e) * 5), half_wage: round2(mwOf(e) / 2) }];
   });
   const [yy, mm] = month.split("-").map(Number);
   const mStart = `${month}-01`, mEnd = isoAddDays(mm === 12 ? `${yy + 1}-01-01` : `${yy}-${String(mm + 1).padStart(2, "0")}-01`, -1);
@@ -1888,9 +1946,10 @@ function deductionsDemo(month: string) {
     const a = l.start_date > mStart ? l.start_date : mStart, b = l.end_date < mEnd ? l.end_date : mEnd;
     const days = hrDaysOf(l.leave_type, a, b); if (!days) return [];
     return [{ leave_id: l.id, employee_id: l.employee_id, full_name: e.full_name, leave_type: l.leave_type, label: LEAVE_LABEL[l.leave_type], from_date: a, to_date: b,
-      days, amount: round2(days * dailyWage(e.basic_wage, e.housing_allowance)) }];
+      days, amount: round2(days * dwOf(e)) }];
   });
-  return { month, notices, suggestions: sug, summary, unpaid_leaves, objection_days: hrSettingsDemo.objection_days };
+  return { month, notices, suggestions: sug, summary, unpaid_leaves, objection_days: hrSettingsDemo.objection_days,
+    method: hrSettingsDemo.deduction_method, wage_base: hrSettingsDemo.wage_base, late_repeat_days: hrSettingsDemo.late_repeat_days };
 }
 function personHrDemo(empId: string) {
   const y = Number(hrToday().slice(0, 4));
@@ -1975,7 +2034,10 @@ function hrRoute(method: string, p: string, q: URLSearchParams, body: Record<str
   if (!addonAccess("ATTENDANCE").via) throw new DemoError(402, "خدمة الإجازات ضمن إضافة «الحضور والإجازات والخصومات».");
   if (p === "/hr/settings" && method === "PUT") {
     const d = Number(body.objection_days); if (!(d >= 1 && d <= 60)) throw new DemoError(422, "مهلة الاعتراض بين 1 و60 يوماً");
-    Object.assign(hrSettingsDemo, { count_workdays_only: !!body.count_workdays_only, objection_days: d, notify_employees: !!body.notify_employees }); return { ok: true };
+    const r = Number(body.late_repeat_days) || 180; if (!(r >= 30 && r <= 365)) throw new DemoError(422, "نافذة التكرار بين 30 و365 يوماً");
+    Object.assign(hrSettingsDemo, { count_workdays_only: !!body.count_workdays_only, objection_days: d, notify_employees: !!body.notify_employees,
+      deduction_method: body.deduction_method === "DURATION" ? "DURATION" : "REGULATION",
+      wage_base: (["BASIC", "BASIC_HOUSING", "TOTAL"].includes(String(body.wage_base)) ? body.wage_base : "TOTAL") as WageBase, late_repeat_days: r }); return { ok: true };
   }
   if ((m = p.match(/^\/hr\/policies\/([A-Z]+)$/)) && method === "PUT") {
     const t = m[1] as LeaveType; if (!LEAVE_TYPES.includes(t)) throw new DemoError(404, "نوع غير معروف");
@@ -2018,6 +2080,14 @@ function hrRoute(method: string, p: string, q: URLSearchParams, body: Record<str
   }
   if (p === "/hr/deductions" && method === "GET") return deductionsDemo(q.get("month") ?? hrToday().slice(0, 7));
   if (p === "/hr/deductions" && method === "POST") return createNoticeDemo(body);
+  if (p === "/hr/deductions/batch" && method === "POST") {
+    const items = (body.items as Record<string, unknown>[]) ?? [];
+    if (!items.length || items.length > 2) throw new DemoError(422, "عناصر الدفعة 1 أو 2");
+    if (new Set(items.map((i) => `${i.employee_id}|${i.incident_date}|${i.kind}`)).size !== 1) throw new DemoError(422, "عناصر الدفعة يجب أن تكون لواقعة واحدة");
+    const snapshot = [...noticesDemo];
+    try { return { ids: items.map((i) => createNoticeDemo(i).id) }; }
+    catch (x) { noticesDemo.splice(0, noticesDemo.length, ...snapshot); throw x; }   // كلاهما أو لا شيء
+  }
   if ((m = p.match(/^\/hr\/deductions\/([^/]+)\/decide$/))) {
     const n = noticesDemo.find((x) => x.id === m![1]); if (!n) throw new DemoError(404, "الإشعار غير موجود");
     if (!["ISSUED", "OBJECTED"].includes(n.status)) throw new DemoError(409, "تم البت في هذا الإشعار مسبقاً");

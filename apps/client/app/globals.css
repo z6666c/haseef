@@ -792,3 +792,6 @@ fieldset.checks { display: flex; gap: 18px; flex-wrap: wrap; }
 .pay-card.pay-best { outline: 2px solid var(--emerald); }
 .promo-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid var(--emerald); margin-bottom: 12px; }
 .lp-promo { display: inline-flex; gap: 8px; align-items: center; padding: 6px 12px; border-radius: 999px; background: rgb(16 185 129 / 0.12); font-size: var(--t-sm); font-weight: 600; }
+.sugg-list { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); }
+.sugg-card { display: grid; gap: 6px; }
+.sugg-pen { border-top: 1px dashed var(--line, #e5e7eb); padding-top: 6px; display: grid; gap: 6px; }

@@ -16,6 +16,7 @@ from sqlalchemy import text
 from ..db import platform_tx
 from ..deps import Tenant, get_tenant
 from ..domain import hr
+from ..domain import penalties as pen
 from ..services import hr_service as svc
 from .attendance import MANAGERS, RIYADH, _need, _person
 from .compliance import _audit
@@ -75,6 +76,9 @@ class HrSettingsIn(BaseModel):
     count_workdays_only: bool = True
     objection_days: int = Field(15, ge=1, le=60)
     notify_employees: bool = True
+    deduction_method: Literal["REGULATION", "DURATION"] = "REGULATION"
+    wage_base: Literal["BASIC", "BASIC_HOUSING", "TOTAL"] = "TOTAL"
+    late_repeat_days: int = Field(180, ge=30, le=365)
 
 
 @router.put("/hr/settings")
@@ -82,7 +86,8 @@ def put_settings(body: HrSettingsIn, t: Tenant = Depends(get_tenant)):
     _need(t)
     svc.hr_settings(t.conn, t.org_id)
     t.conn.execute(text("""UPDATE hr_settings SET count_workdays_only = :count_workdays_only, objection_days = :objection_days,
-                           notify_employees = :notify_employees, updated_at = now() WHERE org_id = :o"""), {**body.model_dump(), "o": t.org_id})
+                           notify_employees = :notify_employees, deduction_method = :deduction_method, wage_base = :wage_base,
+                           late_repeat_days = :late_repeat_days, updated_at = now() WHERE org_id = :o"""), {**body.model_dump(), "o": t.org_id})
     _audit(t.conn, t, "UPDATE", "hr_settings", None, body.model_dump())
     return {"ok": True}
 
@@ -205,7 +210,12 @@ def adjust(employee_id: UUID, body: AdjustIn, t: Tenant = Depends(get_tenant)):
     return {"ok": True}
 
 
-# ---------------------------------------------------------------- الخصومات
+# ---------------------------------------------------------------- الخصومات والجزاءات
+NOTICE_COLS = """n.id, n.employee_id, e.full_name, n.kind, n.nature, n.bracket, n.occurrence, n.disrupted, n.incident_date, n.description,
+               n.amount, n.payroll_month, n.status, n.seen_at, n.objection_text, n.objected_at, n.decision_note, n.decided_at,
+               n.created_at, n.leave_request_id"""
+
+
 @router.get("/hr/deductions")
 def deductions(month: str, t: Tenant = Depends(get_tenant)):
     _need(t, manage=False)
@@ -213,31 +223,33 @@ def deductions(month: str, t: Tenant = Depends(get_tenant)):
     m = _month(month)
     nxt = date(m.year + (m.month == 12), m.month % 12 + 1, 1)
     today = svc.today()
-    notices = [svc.row(r) for r in c.execute(text("""
-        SELECT n.id, n.employee_id, e.full_name, n.kind, n.incident_date, n.description, n.amount, n.payroll_month, n.status, n.seen_at,
-               n.objection_text, n.objected_at, n.decision_note, n.decided_at, n.created_at, n.leave_request_id
-        FROM deduction_notices n JOIN org_employees e ON e.id = n.employee_id WHERE n.payroll_month = :m ORDER BY n.created_at DESC"""),
-        {"m": m}).mappings()]
+    hs = svc.hr_settings(c, o)
+    notices = [svc.row(r) for r in c.execute(text(f"""
+        SELECT {NOTICE_COLS} FROM deduction_notices n JOIN org_employees e ON e.id = n.employee_id
+        WHERE n.payroll_month = :m ORDER BY n.created_at DESC"""), {"m": m}).mappings()]
     for n in notices:
         n["kind_label"] = hr.KIND_LABEL[n["kind"]]
-    emps = {r["id"]: dict(r) for r in c.execute(text("""SELECT id, full_name, start_date, basic_wage, housing_allowance FROM org_employees
-                                                       WHERE is_active""")).mappings()}
+        n["nature_label"] = hr.NATURE_LABEL[n["nature"]]
+        n["bracket_label"] = pen.BRACKET_LABEL.get(n["bracket"] or "", None)
+    emps = {r["id"]: dict(r) for r in c.execute(text("""SELECT id, full_name, start_date, basic_wage, housing_allowance, other_allowances
+                                                       FROM org_employees WHERE is_active""")).mappings()}
     wd, hol, work_min = svc.work_calendar(c, o)
-    suggestions = _suggest(c, m, nxt, today, emps, notices, wd, hol, work_min)
+    suggestions = _suggest(c, m, nxt, today, emps, notices, wd, hol, work_min, hs)
     summary = []
     for eid, e in emps.items():
-        mine = [n for n in notices if n["employee_id"] == str(eid) or n["employee_id"] == eid]
-        live = [n for n in mine if n["status"] in ("ISSUED", "OBJECTED", "CONFIRMED")]
+        live = [n for n in notices if str(n["employee_id"]) == str(eid) and n["status"] in ("ISSUED", "OBJECTED", "CONFIRMED")]
         if not live:
             continue
-        dw = hr.daily_wage(e["basic_wage"], e["housing_allowance"])
+        dw = svc.emp_daily_wage(e, hs)
         summary.append({"employee_id": eid, "full_name": e["full_name"],
-                        "fines": round(sum(n["amount"] for n in live if n["kind"] in hr.FINE_KINDS), 2),
+                        "fines": round(sum(n["amount"] for n in live if n["nature"] == "PENALTY"), 2),
+                        "wage": round(sum(n["amount"] for n in live if n["nature"] == "WAGE"), 2),
+                        "warnings": sum(1 for n in live if n["nature"] == "WARNING"),
                         "total": round(sum(n["amount"] for n in live), 2),
                         "confirmed": round(sum(n["amount"] for n in live if n["status"] == "CONFIRMED"), 2),
-                        "fine_cap": round(dw * 5, 2), "half_wage": round((float(e["basic_wage"]) + float(e["housing_allowance"])) / 2, 2)})
+                        "fine_cap": round(dw * 5, 2),
+                        "half_wage": round(hr.monthly_wage(e["basic_wage"], e["housing_allowance"], e["other_allowances"]) / 2, 2)})
     # الإجازات المعتمدة بدون أجر: أيامها الواقعة في هذا الشهر لا يُستحق عنها أجر (ليست جزاءً ولا تحتاج إشعار خصم)
-    hs = svc.hr_settings(c, o)
     unpaid = []
     for l in c.execute(text("""SELECT l.id, l.employee_id, l.leave_type, l.start_date, l.end_date FROM leave_requests l
                                WHERE l.status = 'APPROVED' AND NOT l.is_paid AND l.start_date < :n AND l.end_date >= :m ORDER BY l.start_date"""),
@@ -250,46 +262,66 @@ def deductions(month: str, t: Tenant = Depends(get_tenant)):
         if days:
             unpaid.append({"leave_id": l["id"], "employee_id": l["employee_id"], "full_name": e["full_name"], "leave_type": l["leave_type"],
                            "label": hr.LEAVE_LABEL[l["leave_type"]], "from_date": a, "to_date": b, "days": days,
-                           "amount": round(days * hr.daily_wage(e["basic_wage"], e["housing_allowance"]), 2)})
-    return {"month": month, "notices": notices, "suggestions": suggestions, "summary": [svc.row(s) for s in summary],
-            "unpaid_leaves": [svc.row(u) for u in unpaid], "objection_days": hs["objection_days"]}
+                           "amount": round(days * svc.emp_daily_wage(e, hs), 2)})
+    return {"month": month, "notices": notices, "suggestions": suggestions, "summary": [svc.row(x) for x in summary],
+            "unpaid_leaves": [svc.row(u) for u in unpaid], "objection_days": hs["objection_days"],
+            "method": hs["deduction_method"], "wage_base": hs["wage_base"], "late_repeat_days": hs["late_repeat_days"]}
 
 
-def _suggest(c, m: date, nxt: date, today: date, emps: dict, notices: list[dict], wd, hol, work_min) -> list[dict]:
-    """اقتراحات من سجل الحضور والمباشرة؛ لا يصدر شيء دون قرار الموارد البشرية."""
+def _penalty(c, e: dict, bracket: str, incident: date, hs: dict, pending: dict, dw: float) -> dict | None:
+    """الجزاء المقترح وفق جدول اللائحة، مع رقم التكرار: ما صدر سابقاً + ما يسبقه من اقتراحات هذا الشهر."""
+    if hs["deduction_method"] != "REGULATION":
+        return None
+    key = (str(e["id"]), bracket)
+    occ = svc.prior_occurrences(c, e, bracket, incident, hs) + pending.get(key, 0) + 1
+    pending[key] = pending.get(key, 0) + 1
+    p = pen.suggest(bracket, occ, dw)
+    if bracket in pen.LATE:
+        alt = pen.suggest(bracket, occ, dw, disrupted=True)
+        p["alt_disrupted"] = {k: alt[k] for k in ("nature", "label", "amount")}
+    return p
+
+
+def _suggest(c, m: date, nxt: date, today: date, emps: dict, notices: list[dict], wd, hol, work_min, hs: dict) -> list[dict]:
+    """اقتراحات من سجل الحضور والمباشرة: حسم أجر المدة + الجزاء المتدرج (حسب طريقة المنشأة). لا يصدر شيء دون قرار الموارد البشرية."""
     have = {(str(n["employee_id"]), n["kind"], n["incident_date"]) for n in notices if n["status"] != "CANCELLED"}
     have_leave = {str(n["leave_request_id"]) for n in notices if n["leave_request_id"] and n["status"] != "CANCELLED"}
-    out: list[dict] = []
+    grace = c.execute(text("SELECT grace_minutes FROM attendance_settings LIMIT 1")).scalar_one_or_none() or 0
+    events: list[dict] = []
     start = datetime.combine(m, time(0), RIYADH)
     end = datetime.combine(min(nxt, today + timedelta(days=1)), time(0), RIYADH)
+    # 1) التأخر: أجر دقائق ما بعد السماحية، والجزاء بشريحة مدة التأخر من بداية الدوام
     for r in c.execute(text("""SELECT employee_id, (at AT TIME ZONE 'Asia/Riyadh')::date AS d, max(late_minutes) AS late
                                FROM attendance_records WHERE kind = 'IN' AND status = 'ACCEPTED' AND late_minutes > 0 AND at >= :s AND at < :e
                                GROUP BY employee_id, d"""), {"s": start, "e": end}).mappings():
         e = emps.get(r["employee_id"])
-        if not e or (str(r["employee_id"]), "LATE", r["d"].isoformat()) in have or (today - r["d"]).days > 30:
+        if not e or (str(r["employee_id"]), "LATE", r["d"].isoformat()) in have:
             continue
-        amt = hr.late_amount(r["late"], hr.daily_wage(e["basic_wage"], e["housing_allowance"]), work_min)
-        if amt > 0:
-            out.append({"employee_id": r["employee_id"], "full_name": e["full_name"], "kind": "LATE", "incident_date": r["d"], "amount": amt,
-                        "description": f"تأخر {r['late']} دقيقة عن بداية الدوام يوم {r['d']:%Y-%m-%d}"})
-    # الغياب: لمن رُبط بالحضور فقط، ومن تاريخ ربطه، وخارج الإجازات المعتمدة والعطل
+        events.append({"e": e, "kind": "LATE", "d": r["d"], "late": int(r["late"]), "from_start": int(r["late"]) + int(grace)})
+    # 2) الغياب: لمن رُبط بالحضور، من تاريخ ربطه، خارج الإجازات والعطل؛ تُجمع الأيام المتصلة في واقعة واحدة
     linked = {r["employee_id"]: (r["created_at"].astimezone(RIYADH).date()) for r in c.execute(text("SELECT employee_id, created_at FROM attendance_people")).mappings()}
     present = {(r[0], r[1]) for r in c.execute(text("""SELECT DISTINCT employee_id, (at AT TIME ZONE 'Asia/Riyadh')::date FROM attendance_records
                                                      WHERE kind = 'IN' AND status = 'ACCEPTED' AND at >= :s AND at < :e"""), {"s": start, "e": end})}
     leaves = [dict(r) for r in c.execute(text("""SELECT employee_id, start_date, end_date FROM leave_requests WHERE status = 'APPROVED'
                                                 AND start_date < :n AND end_date >= :m"""), {"m": m, "n": nxt}).mappings()]
-    d = m
-    while d < min(nxt, today):
-        if hr.weekday0(d) in wd and d not in hol:
-            for eid, since in linked.items():
-                e = emps.get(eid)
-                if not e or d < since or d < e["start_date"] or (eid, d) in present or (str(eid), "ABSENCE", d.isoformat()) in have:
-                    continue
-                if any(l["employee_id"] == eid and l["start_date"] <= d <= l["end_date"] for l in leaves):
-                    continue
-                out.append({"employee_id": eid, "full_name": e["full_name"], "kind": "ABSENCE", "incident_date": d,
-                            "amount": hr.daily_wage(e["basic_wage"], e["housing_allowance"]), "description": f"غياب يوم {d:%Y-%m-%d} دون إجازة أو تسجيل حضور"})
-        d += timedelta(days=1)
+    for eid, since in linked.items():
+        e = emps.get(eid)
+        if not e:
+            continue
+        run: list[date] = []
+        d = m
+        while d <= min(nxt, today):
+            work = hr.weekday0(d) in wd and d not in hol and d < min(nxt, today)
+            absent = (work and d >= since and d >= e["start_date"] and (eid, d) not in present
+                      and not any(l["employee_id"] == eid and l["start_date"] <= d <= l["end_date"] for l in leaves))
+            if absent:
+                run.append(d)
+            elif work or d >= min(nxt, today):          # يوم عمل حضره (أو نهاية الفترة) يقطع التتابع؛ العطل لا تقطعه
+                if run and (str(eid), "ABSENCE", run[0].isoformat()) not in have:
+                    events.append({"e": e, "kind": "ABSENCE", "d": run[0], "to": run[-1], "days": len(run)})
+                run = []
+            d += timedelta(days=1)
+    # 3) التأخر عن المباشرة بعد الإجازة: يُعامل معاملة الغياب
     for l in c.execute(text("""SELECT id, employee_id, leave_type, end_date, return_date FROM leave_requests WHERE status = 'APPROVED'
                                AND return_date IS NOT NULL AND return_date >= :m AND return_date < :n"""), {"m": m, "n": nxt}).mappings():
         e = emps.get(l["employee_id"])
@@ -297,33 +329,93 @@ def _suggest(c, m: date, nxt: date, today: date, emps: dict, notices: list[dict]
             continue
         late = hr.late_return_days(l["end_date"], l["return_date"], work_days=wd, holidays=hol)
         if late:
-            out.append({"employee_id": l["employee_id"], "full_name": e["full_name"], "kind": "LATE_RETURN", "incident_date": l["return_date"],
-                        "amount": round(late * hr.daily_wage(e["basic_wage"], e["housing_allowance"]), 2), "leave_request_id": l["id"],
-                        "description": f"تأخر {late} يوم عمل عن المباشرة بعد الإجازة ال{hr.LEAVE_LABEL[l['leave_type']]} (انتهت {l['end_date']:%Y-%m-%d})"})
-    for s in out:
-        s["kind_label"] = hr.KIND_LABEL[s["kind"]]
-    out.sort(key=lambda s: (s["incident_date"], s["full_name"]))
-    return [svc.row(s) for s in out]
+            events.append({"e": e, "kind": "LATE_RETURN", "d": l["return_date"], "days": late, "leave": l})
+    events.sort(key=lambda x: (x["d"], x["e"]["full_name"]))
+    pending: dict = {}
+    out = []
+    for ev in events:
+        e = ev["e"]
+        dw = svc.emp_daily_wage(e, hs)
+        g = {"employee_id": e["id"], "full_name": e["full_name"], "kind": ev["kind"], "kind_label": hr.KIND_LABEL[ev["kind"]],
+             "incident_date": ev["d"], "daily_wage": dw, "leave_request_id": None, "notes": []}
+        if ev["kind"] == "LATE":
+            g["description"] = f"تأخر {ev['from_start']} دقيقة عن بداية الدوام يوم {ev['d']:%Y-%m-%d}"
+            amt = hr.late_amount(ev["late"], dw, work_min)
+            g["wage"] = {"amount": amt, "label": f"أجر {ev['late']} دقيقة بعد السماحية"} if amt > 0 else None
+            bracket = pen.late_bracket(ev["from_start"])
+        else:
+            days = ev["days"]
+            if ev["kind"] == "ABSENCE":
+                g["description"] = (f"غياب يوم {ev['d']:%Y-%m-%d} دون إجازة أو تسجيل حضور" if days == 1
+                                    else f"غياب {days} أيام عمل متصلة من {ev['d']:%Y-%m-%d} إلى {ev['to']:%Y-%m-%d} دون إجازة أو تسجيل حضور")
+            else:
+                l = ev["leave"]
+                g["leave_request_id"] = l["id"]
+                g["description"] = f"تأخر {days} يوم عمل عن المباشرة بعد الإجازة ال{hr.LEAVE_LABEL[l['leave_type']]} (انتهت {l['end_date']:%Y-%m-%d})"
+            g["wage"] = {"amount": round(days * dw, 2), "label": f"أجر {days} {'يوم' if days == 1 else 'أيام'} غياب"}
+            bracket = pen.absence_bracket(days)
+            if days >= 10:
+                g["notes"].append("بلغ الغياب المتصل 10 أيام: يلزم إنذار كتابي قبل أي فصل وفق المادة 80 عند تجاوز 15 يوماً.")
+        p = _penalty(c, e, bracket, ev["d"], hs, pending, dw) if bracket else None
+        if p and p["nature"] in ("PENALTY", "WARNING") and (today - ev["d"]).days > 30:
+            g["notes"].append("مضى أكثر من 30 يوماً على الواقعة: لا يجوز توقيع الجزاء، ويبقى حسم أجر المدة.")
+            p = None
+        g["penalty"] = p
+        out.append(g)
+    return [svc.row(x) for x in out]
 
 
 class NoticeIn(BaseModel):
     employee_id: UUID
     kind: Kind
+    nature: Literal["WAGE", "PENALTY", "WARNING"] | None = None
+    bracket: str | None = Field(None, max_length=12)
+    occurrence: int | None = Field(None, ge=1, le=99)
+    disrupted: bool = False
     incident_date: date
     description: str = Field(min_length=3, max_length=1000)
-    amount: float = Field(gt=0, le=1000000)
+    amount: float = Field(ge=0, le=1000000)
     payroll_month: str = Field(pattern=r"^\d{4}-\d{2}$")
     leave_request_id: UUID | None = None
+
+
+def _issue(t: Tenant, body: NoticeIn, notify_employee: bool = True) -> dict:
+    if body.bracket and body.bracket not in pen.BRACKET_LABEL:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "شريحة غير معروفة")
+    r = svc.create_notice(t.conn, t.org_id, body.employee_id, kind=body.kind, incident=body.incident_date, description=body.description,
+                          amount=round(body.amount, 2), payroll_month=_month(body.payroll_month), user_id=t.principal.user_id,
+                          leave_request_id=body.leave_request_id, nature=body.nature, bracket=body.bracket, occurrence=body.occurrence,
+                          disrupted=body.disrupted, notify_employee=notify_employee)
+    _audit(t.conn, t, "CREATE", "deduction_notice", r["id"], body.model_dump())
+    return r
 
 
 @router.post("/hr/deductions", status_code=201)
 def add_notice(body: NoticeIn, t: Tenant = Depends(get_tenant)):
     _need(t)
-    r = svc.create_notice(t.conn, t.org_id, body.employee_id, kind=body.kind, incident=body.incident_date, description=body.description,
-                          amount=round(body.amount, 2), payroll_month=_month(body.payroll_month), user_id=t.principal.user_id,
-                          leave_request_id=body.leave_request_id)
-    _audit(t.conn, t, "CREATE", "deduction_notice", r["id"], body.model_dump())
-    return r
+    return _issue(t, body)
+
+
+class NoticeBatchIn(BaseModel):
+    items: list[NoticeIn] = Field(min_length=1, max_length=2)
+
+
+@router.post("/hr/deductions/batch", status_code=201)
+def add_notices(body: NoticeBatchIn, t: Tenant = Depends(get_tenant)):
+    """إصدار واقعة واحدة بإشعارين (حسم أجر المدة + الجزاء أو الإنذار) معاً: كلاهما أو لا شيء، وإشعار واحد للموظف."""
+    _need(t)
+    if len({(str(i.employee_id), i.incident_date, i.kind) for i in body.items}) != 1:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "عناصر الدفعة يجب أن تكون لواقعة واحدة")
+    ids = [_issue(t, i, notify_employee=False)["id"] for i in body.items]
+    first = body.items[0]
+    parts = []
+    for i in body.items:
+        nat = i.nature or hr.nature_of(i.kind)
+        parts.append("إنذار كتابي" if nat == "WARNING" else f"{hr.NATURE_LABEL[nat]} {i.amount:.2f} ريال")
+    s = svc.hr_settings(t.conn, t.org_id)
+    svc.notify(t.conn, t.org_id, first.employee_id, f"صدر بحقك عن واقعة {first.incident_date:%Y-%m-%d} ({hr.KIND_LABEL[first.kind]}): "
+               f"{' + '.join(parts)}. يمكنك الاطلاع والاعتراض خلال {s['objection_days']} يوماً من رابطك الشخصي أو بكتابة «إشعاراتي» للمساعد.")
+    return {"ids": ids}
 
 
 class NoticeDecideIn(BaseModel):

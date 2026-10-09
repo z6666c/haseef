@@ -252,6 +252,25 @@ dd = call("GET", "/v1/hr/deductions?month=" + d0.strftime("%Y-%m"), org_id=so)
 assert dd["notices"][0]["status"] == "OBJECTED", dd["notices"]
 call("POST", f"/v1/hr/deductions/{nt['id']}/decide", {"confirm": False, "note": "قُبل الاعتراض"}, org_id=so)
 call("PUT", "/v1/hr/policies/ANNUAL", {"pay_mode": "UNPAID", "from_balance": True, "min_notice_days": 0}, expect=422, org_id=so)
+# جدول اللائحة: واقعة تأخر بإشعارين (أجر المدة + إنذار)، ثم التكرار الثاني جزاء 5%
+dd = call("GET", "/v1/hr/deductions?month=" + d0.strftime("%Y-%m"), org_id=so)
+assert dd["method"] == "REGULATION" and dd["wage_base"] == "TOTAL", dd["method"]
+mo = d0.strftime("%Y-%m")
+call("POST", "/v1/hr/deductions/batch", {"items": [
+    {"employee_id": emp, "kind": "LATE", "nature": "WAGE", "incident_date": str(d0), "description": "أجر 10 دقائق تأخر", "amount": 5.21, "payroll_month": mo},
+    {"employee_id": emp, "kind": "LATE", "nature": "WARNING", "bracket": "LATE_15", "incident_date": str(d0), "description": "تأخر 10 دقائق — المرة الأولى",
+     "amount": 0, "payroll_month": mo}]}, expect=201, org_id=so)
+call("POST", "/v1/hr/deductions", {"employee_id": emp, "kind": "LATE", "nature": "WARNING", "incident_date": str(d0), "description": "إنذار بمبلغ",
+                                   "amount": 10, "payroll_month": mo}, expect=422, org_id=so)
+nx = call("POST", "/v1/hr/deductions", {"employee_id": emp, "kind": "LATE", "nature": "PENALTY", "bracket": "LATE_15", "incident_date": str(d0),
+                                        "description": "تأخر 12 دقيقة — المرة الثانية", "amount": 12.5, "payroll_month": mo}, expect=201, org_id=so)
+dd = call("GET", "/v1/hr/deductions?month=" + mo, org_id=so)
+row = next(x for x in dd["summary"] if x["employee_id"] == emp)
+assert row["warnings"] == 1 and row["wage"] == 5.21, row
+call("PUT", "/v1/hr/settings", {"count_workdays_only": True, "objection_days": 15, "notify_employees": True, "deduction_method": "DURATION",
+                                "wage_base": "BASIC_HOUSING", "late_repeat_days": 180}, org_id=so)
+assert call("GET", "/v1/hr/deductions?month=" + mo, org_id=so)["method"] == "DURATION"
+step("جدول لائحة تنظيم العمل: حسم أجر المدة والإنذار والجزاء المتدرج، وطريقة المنشأة")
 call("PUT", "/v1/hr/policies/EMERGENCY", {"pay_mode": "CHOICE", "from_balance": True, "max_days_per_request": 3, "yearly_cap": 5, "min_notice_days": 0}, org_id=so)
 step("الإجازات الأربع والمرضية بشرائح الأجر، وسقف الغرامة، واعتراض الموظف على الخصم")
 ev = call("GET", "/v1/events", org_id=so)
