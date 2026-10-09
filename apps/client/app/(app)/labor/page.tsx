@@ -223,8 +223,16 @@ function EmployeesTab({ canManage, act }: { canManage: boolean; act: Act }) {
       </div>
       {!data.show_wages && <p className="small muted">الأجور مخفية: يطّلع عليها مدير المنشأة ومسؤول الامتثال فقط.</p>}
       {importing && <ImportPanel onDone={async (rows) => { if (await act(() => api.importEmployees(rows), `استُورد ${rows.length} موظفاً`)) setImporting(false); }} />}
-      {edit && <EmployeeForm init={edit.v} onCancel={() => setEdit(null)}
-        onSave={async (v) => { if (await act(() => edit.id ? api.updateEmployee(edit.id, v) : api.createEmployee(v), `حُفظ: ${v.full_name}`)) setEdit(null); }} />}
+      {edit && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={edit.id ? "تعديل بيانات الموظف" : "موظف جديد"}
+             onClick={(ev) => { if (ev.target === ev.currentTarget) setEdit(null); }}>
+          <div className="modal modal-wide">
+            <h2>{edit.id ? `تعديل بيانات ${edit.v.full_name} وعقده` : "موظف جديد"}</h2>
+            <EmployeeForm key={edit.id ?? "new"} init={edit.v} onCancel={() => setEdit(null)}
+              onSave={async (v) => { if (await act(() => edit.id ? api.updateEmployee(edit.id, v) : api.createEmployee(v), `حُفظ: ${v.full_name}`)) setEdit(null); }} />
+          </div>
+        </div>
+      )}
       {rows.length === 0 ? <p className="empty">لا موظفين بعد. أضفهم يدوياً أو استوردهم من ملف.</p> : (
         <div className="table-scroll">
           <table className="deadlines labor-table emp-table">
@@ -242,7 +250,7 @@ function EmployeesTab({ canManage, act }: { canManage: boolean; act: Act }) {
                     <td><span className="status-chip" data-s={e.qiwa_contract_documented ? "IN_PLACE" : "PENDING"}>{e.qiwa_contract_documented ? "موثّق" : "غير موثّق"}</span></td>
                     <td>{doc ? <>{formatDate(doc)}<div className={`small ${dl! < 30 ? "late" : "muted"}`}>{e.iqama_expiry ? "الإقامة" : "العقد"}{dl! < 0 ? " منتهية" : ` بعد ${countDays(dl!)}`}</div></> : "—"}</td>
                     <td>{canManage && e.is_active && <div style={{ display: "flex", gap: 6 }}>
-                      <button className="btn btn-quiet btn-xs" type="button" onClick={() => setEdit({ id: e.id, v: { ...e, basic_wage: e.basic_wage ?? 0, housing_allowance: e.housing_allowance ?? 0 } })}>تعديل</button>
+                      <button className="btn btn-quiet btn-xs" type="button" onClick={() => setEdit({ id: e.id, v: toInput(e) })}>تعديل</button>
                       <button className="btn btn-quiet btn-xs" type="button" onClick={() => setLeaving(e)}>إنهاء خدمة</button></div>}</td>
                   </tr>
                 );
@@ -269,6 +277,14 @@ function EmployeesTab({ canManage, act }: { canManage: boolean; act: Act }) {
   );
 }
 
+/** بيانات الموظف القابلة للتعديل فقط (بدون المعرّف وحالة الخدمة). */
+function toInput(e: Employee): EmployeeInput {
+  return { full_name: e.full_name, nationality: e.nationality, job_title: e.job_title, start_date: e.start_date, gosi_system: e.gosi_system,
+    basic_wage: e.basic_wage ?? 0, housing_allowance: e.housing_allowance ?? 0, gosi_registered: e.gosi_registered,
+    qiwa_contract_documented: e.qiwa_contract_documented, contract_end_date: e.contract_end_date, probation_end_date: e.probation_end_date,
+    iqama_expiry: e.iqama_expiry, work_permit_expiry: e.work_permit_expiry };
+}
+
 function EmployeeForm({ init, onSave, onCancel }: { init: EmployeeInput; onSave: (v: EmployeeInput) => void; onCancel: () => void }) {
   const [v, setV] = useState<EmployeeInput>(init);
   const set = <K extends keyof EmployeeInput>(k: K, val: EmployeeInput[K]) => setV({ ...v, [k]: val });
@@ -276,7 +292,7 @@ function EmployeeForm({ init, onSave, onCancel }: { init: EmployeeInput; onSave:
     <div className="field"><label>{label}</label><input type="date" required={req} value={v[k] ?? ""} onChange={(e) => set(k, e.target.value || (req ? v[k] : null) as never)} /></div>
   );
   return (
-    <form className="panel inline-form" onSubmit={(e) => { e.preventDefault(); onSave(v); }}>
+    <form className="inline-form" onSubmit={(e) => { e.preventDefault(); onSave(v); }}>
       <div className="grid">
         <div className="field"><label>الاسم</label><input required minLength={2} value={v.full_name} onChange={(e) => set("full_name", e.target.value)} /></div>
         <div className="field"><label>الجنسية</label>
