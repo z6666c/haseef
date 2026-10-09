@@ -27,7 +27,7 @@ router = APIRouter(prefix="/labor", tags=["labor"])
 
 HR_MANAGERS = ("ORG_ADMIN", "COMPLIANCE_OFFICER")
 FEATURE = "LABOR_HR"
-EMP_COLS = """id, full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, gosi_registered,
+EMP_COLS = """id, full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, other_allowances, gosi_registered,
               qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, is_active, left_on, mobile"""
 
 
@@ -54,7 +54,7 @@ def _employees(t: Tenant, active_only: bool = False) -> list[dict]:
     rows = t.conn.execute(text(f"""SELECT {EMP_COLS} FROM org_employees WHERE (is_active OR NOT :active_only)
                                    ORDER BY is_active DESC, full_name"""), {"active_only": active_only}).mappings()
     show_wages = t.role in HR_MANAGERS
-    return [_clean({**r, **({} if show_wages else {"basic_wage": None, "housing_allowance": None})}) for r in rows]
+    return [_clean({**r, **({} if show_wages else {"basic_wage": None, "housing_allowance": None, "other_allowances": None})}) for r in rows]
 
 
 @router.get("/overview")
@@ -159,6 +159,7 @@ class EmployeeIn(BaseModel):
     gosi_system: Literal["OLD", "NEW"] = "OLD"
     basic_wage: float = Field(ge=0, le=1_000_000)
     housing_allowance: float = Field(0, ge=0, le=1_000_000)
+    other_allowances: float = Field(0, ge=0, le=1_000_000)       # النقل وغيره: يدخل في الأجر الفعلي لحساب الحسم، لا في اشتراك التأمينات
     gosi_registered: bool = False
     qiwa_contract_documented: bool = False
     contract_end_date: date | None = None

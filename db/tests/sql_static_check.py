@@ -23,9 +23,10 @@ FRAGMENTS = {
     "_POLICY_COLS": "id, policy_type, title, version, approval_date, review_due_date, status, "
                     "effective_status, days_remaining",
     "cond": "target_id IS NULL",
-    "EMP_COLS": "id, full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, gosi_registered, qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, is_active, left_on, mobile",
-    "EMP_INS_COLS": "full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, gosi_registered, qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, mobile",
-    "EMP_INS_VALS": ":full_name, :nationality, :job_title, :start_date, :gosi_system, :basic_wage, :housing_allowance, :gosi_registered, :qiwa_contract_documented, :contract_end_date, :probation_end_date, :iqama_expiry, :work_permit_expiry, :mobile",
+    "EMP_COLS": "id, full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, other_allowances, gosi_registered, qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, is_active, left_on, mobile",
+    "EMP_INS_COLS": "full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, other_allowances, gosi_registered, qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, mobile",
+    "EMP_INS_VALS": ":full_name, :nationality, :job_title, :start_date, :gosi_system, :basic_wage, :housing_allowance, :other_allowances, :gosi_registered, :qiwa_contract_documented, :contract_end_date, :probation_end_date, :iqama_expiry, :work_permit_expiry, :mobile",
+    "NOTICE_COLS": "n.id, n.employee_id, e.full_name, n.kind, n.nature, n.bracket, n.occurrence, n.disrupted, n.incident_date, n.description, n.amount, n.payroll_month, n.status, n.seen_at, n.objection_text, n.objected_at, n.decision_note, n.decided_at, n.created_at, n.leave_request_id",
     "EMP_SETS": "full_name = :full_name, basic_wage = :basic_wage",
     "sets": "id = id",          # تعديل ديناميكي: الأعمدة من نموذج Pydantic
     "', '.join(PROFILE_FIELDS)": "employees_count, fiscal_year_end_month, processes_personal_data, vat_registered, "

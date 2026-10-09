@@ -75,7 +75,7 @@ def row(r) -> dict:
 
 
 def employee(c: Connection, org_id, emp_id) -> dict:
-    e = c.execute(text("""SELECT id, full_name, start_date, basic_wage, housing_allowance, mobile FROM org_employees
+    e = c.execute(text("""SELECT id, full_name, start_date, basic_wage, housing_allowance, other_allowances, mobile FROM org_employees
                           WHERE id = :e AND org_id = :o AND is_active"""), {"e": emp_id, "o": org_id}).mappings().one_or_none()
     if e is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "الموظف غير موجود")
@@ -244,31 +244,62 @@ def submit_return(c: Connection, org_id, emp_id, leave_id, return_date: date, *,
 
 
 def month_sums(c: Connection, emp_id, month: date, exclude=None) -> tuple[float, float]:
-    r = c.execute(text("""SELECT COALESCE(sum(amount) FILTER (WHERE kind = ANY(:f)), 0) AS fines, COALESCE(sum(amount), 0) AS total
+    r = c.execute(text("""SELECT COALESCE(sum(amount) FILTER (WHERE nature = 'PENALTY'), 0) AS fines, COALESCE(sum(amount), 0) AS total
                           FROM deduction_notices WHERE employee_id = :e AND payroll_month = :m AND status IN ('ISSUED','OBJECTED','CONFIRMED')
                           AND (CAST(:x AS uuid) IS NULL OR id <> CAST(:x AS uuid))"""),
-                  {"e": emp_id, "m": month, "f": list(hr.FINE_KINDS), "x": str(exclude) if exclude else None}).mappings().one()
+                  {"e": emp_id, "m": month, "x": str(exclude) if exclude else None}).mappings().one()
     return float(r["fines"]), float(r["total"])
 
 
+def emp_daily_wage(emp: dict, settings: dict) -> float:
+    return hr.daily_wage(emp["basic_wage"], emp["housing_allowance"], emp.get("other_allowances") or 0, settings.get("wage_base") or "TOTAL")
+
+
+def contract_year_start(start_date: date, on: date) -> date:
+    """بداية السنة العقدية التي تقع فيها الواقعة (ذكرى تاريخ المباشرة)."""
+    try:
+        y = start_date.replace(year=on.year)
+    except ValueError:                       # 29 فبراير
+        y = date(on.year, 3, 1)
+    return y if y <= on else (start_date.replace(year=on.year - 1) if not (start_date.month == 2 and start_date.day == 29) else date(on.year - 1, 3, 1))
+
+
+def prior_occurrences(c: Connection, emp: dict, bracket: str, incident: date, settings: dict) -> int:
+    """عدد المرات السابقة للمخالفة نفسها: التأخر خلال نافذة المنشأة، والغياب خلال السنة العقدية. الملغاة لا تُحسب."""
+    since = (incident - timedelta(days=int(settings.get("late_repeat_days") or 180)) if bracket.startswith("LATE")
+             else contract_year_start(emp["start_date"], incident))
+    return int(c.execute(text("""SELECT count(*) FROM deduction_notices WHERE employee_id = :e AND bracket = :b
+                                 AND nature IN ('PENALTY','WARNING') AND status IN ('ISSUED','OBJECTED','CONFIRMED')
+                                 AND incident_date >= :s AND incident_date < :i"""),
+                         {"e": emp["id"], "b": bracket, "s": since, "i": incident}).scalar_one())
+
+
 def create_notice(c: Connection, org_id, emp_id, *, kind: str, incident: date, description: str, amount: float, payroll_month: date,
-                  user_id, leave_request_id=None) -> dict:
+                  user_id, leave_request_id=None, nature: str | None = None, bracket: str | None = None, occurrence: int | None = None,
+                  disrupted: bool = False, notify_employee: bool = True) -> dict:
     emp = employee(c, org_id, emp_id)
-    dw = hr.daily_wage(emp["basic_wage"], emp["housing_allowance"])
+    s = hr_settings(c, org_id)
+    nature = nature or hr.nature_of(kind)
+    dw = emp_daily_wage(emp, s)
     fines, total = month_sums(c, emp_id, payroll_month)
-    err = hr.validate_deduction(kind=kind, amount=amount, incident=incident, today=today(), dwage=dw,
-                                monthly_wage=float(emp["basic_wage"]) + float(emp["housing_allowance"]), month_fines=fines, month_total=total)
+    err = hr.validate_deduction(kind=kind, nature=nature, amount=amount, incident=incident, today=today(), dwage=dw,
+                                monthly_wage=hr.monthly_wage(emp["basic_wage"], emp["housing_allowance"], emp.get("other_allowances") or 0),
+                                month_fines=fines, month_total=total)
     if err:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, err)
-    nid = c.execute(text("""INSERT INTO deduction_notices (org_id, employee_id, kind, incident_date, description, amount, payroll_month,
-                                                           leave_request_id, created_by)
-                            VALUES (:o, :e, :k, :i, :d, :a, :m, :l, :u) RETURNING id"""),
-                    {"o": org_id, "e": emp_id, "k": kind, "i": incident, "d": description, "a": amount, "m": payroll_month,
-                     "l": leave_request_id, "u": user_id}).scalar_one()
-    s = hr_settings(c, org_id)
-    notify(c, org_id, emp_id, f"صدر بحقك إشعار خصم ({hr.KIND_LABEL[kind]}) بمبلغ {amount:.2f} ريال عن واقعة {incident:%Y-%m-%d}. "
-                              f"يمكنك الاطلاع عليه والاعتراض خلال {s['objection_days']} يوماً من رابطك الشخصي أو بكتابة «إشعاراتي» للمساعد.")
-    return {"id": nid}
+    if bracket and occurrence is None:
+        occurrence = prior_occurrences(c, emp, bracket, incident, s) + 1
+    nid = c.execute(text("""INSERT INTO deduction_notices (org_id, employee_id, kind, nature, bracket, occurrence, disrupted, incident_date,
+                                                           description, amount, payroll_month, leave_request_id, created_by)
+                            VALUES (:o, :e, :k, :n, :b, :oc, :dis, :i, :d, :a, :m, :l, :u) RETURNING id"""),
+                    {"o": org_id, "e": emp_id, "k": kind, "n": nature, "b": bracket, "oc": occurrence, "dis": disrupted, "i": incident,
+                     "d": description, "a": amount, "m": payroll_month, "l": leave_request_id, "u": user_id}).scalar_one()
+    if notify_employee:
+        what = ("إنذار كتابي" if nature == "WARNING" else f"جزاء ({hr.KIND_LABEL[kind]}) بمبلغ {amount:.2f} ريال" if nature == "PENALTY"
+                else f"حسم أجر مدة ({hr.KIND_LABEL[kind]}) بمبلغ {amount:.2f} ريال")
+        notify(c, org_id, emp_id, f"صدر بحقك {what} عن واقعة {incident:%Y-%m-%d}. "
+                                  f"يمكنك الاطلاع عليه والاعتراض خلال {s['objection_days']} يوماً من رابطك الشخصي أو بكتابة «إشعاراتي» للمساعد.")
+    return {"id": nid, "occurrence": occurrence}
 
 
 def object_notice(c: Connection, org_id, emp_id, notice_id, objection: str) -> None:
@@ -295,7 +326,8 @@ def decide_notice(c: Connection, org_id, notice_id, *, confirm: bool, note: str 
     c.execute(text("""UPDATE deduction_notices SET status = :s, decided_at = now(), decided_by = :u, decision_note = :n WHERE id = :i"""),
               {"s": "CONFIRMED" if confirm else "CANCELLED", "u": user_id, "n": note, "i": notice_id})
     if n["status"] == "OBJECTED" or not confirm:
-        msg = (f"تم النظر في اعتراضك وتأكيد الخصم ({float(n['amount']):.2f} ريال)." if confirm else f"أُلغي إشعار الخصم ({hr.KIND_LABEL[n['kind']]}).") \
+        msg = ((f"تم النظر في اعتراضك وتأكيد الخصم ({float(n['amount']):.2f} ريال)." if float(n["amount"]) else "تم النظر في اعتراضك وتأكيد الإنذار.")
+               if confirm else f"أُلغي الإشعار ({hr.KIND_LABEL[n['kind']]}).") \
             + (f" الملاحظة: {note}" if note else "")
         notify(c, org_id, n["employee_id"], msg)
 
@@ -335,7 +367,7 @@ def employee_view(c: Connection, org_id, emp_id) -> dict:
     annotate_sick(leaves)
     for lv in leaves:
         lv["label"] = hr.LEAVE_LABEL[lv["leave_type"]]
-    notices = [row(r) for r in c.execute(text("""SELECT id, kind, incident_date, description, amount, payroll_month, status, objection_text,
+    notices = [row(r) for r in c.execute(text("""SELECT id, kind, nature, bracket, occurrence, incident_date, description, amount, payroll_month, status, objection_text,
                                                         objected_at, decision_note, created_at
                                                  FROM deduction_notices WHERE employee_id = :e AND org_id = :o ORDER BY created_at DESC LIMIT 30"""),
                                        {"e": emp_id, "o": org_id}).mappings()]

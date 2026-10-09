@@ -194,7 +194,7 @@ function DoneDialog({ task, onClose, onSave }: { task: LaborTask; onClose: () =>
 // ------------------------------------------------------------------ الموظفون
 const EMPTY_EMP: EmployeeInput = {
   full_name: "", nationality: "SAUDI", job_title: null, start_date: new Date().toISOString().slice(0, 10), gosi_system: "NEW",
-  basic_wage: 0, housing_allowance: 0, gosi_registered: true, qiwa_contract_documented: false,
+  basic_wage: 0, housing_allowance: 0, other_allowances: 0, gosi_registered: true, qiwa_contract_documented: false,
   contract_end_date: null, probation_end_date: null, iqama_expiry: null, work_permit_expiry: null,
 };
 const CSV_TEMPLATE = "الاسم,الجنسية,المسمى الوظيفي,تاريخ المباشرة,الراتب الأساسي,بدل السكن,انتهاء الإقامة,انتهاء رخصة العمل,انتهاء العقد,موثق في قوى,مسجل في التأمينات,النظام الجديد\n"
@@ -245,7 +245,7 @@ function EmployeesTab({ canManage, act }: { canManage: boolean; act: Act }) {
                   <tr key={e.id} data-left={!e.is_active || undefined}>
                     <td><b>{e.full_name}</b><div className="small muted">{e.job_title ?? "—"} · منذ {formatDate(e.start_date)}{!e.is_active && ` · انتهت خدمته ${formatDate(e.left_on!)}`}</div></td>
                     <td>{NAT_LABEL[e.nationality]}{e.nationality === "SAUDI" && <div className="small muted">{SYSTEM_LABEL[e.gosi_system]}</div>}</td>
-                    {data.show_wages && <td className="num">{sar((e.basic_wage ?? 0) + (e.housing_allowance ?? 0))}</td>}
+                    {data.show_wages && <td className="num">{sar((e.basic_wage ?? 0) + (e.housing_allowance ?? 0) + (e.other_allowances ?? 0))}</td>}
                     <td><span className="status-chip" data-s={e.gosi_registered ? "IN_PLACE" : "FAIL"}>{e.gosi_registered ? "مسجّل" : "غير مسجّل"}</span></td>
                     <td><span className="status-chip" data-s={e.qiwa_contract_documented ? "IN_PLACE" : "PENDING"}>{e.qiwa_contract_documented ? "موثّق" : "غير موثّق"}</span></td>
                     <td>{doc ? <>{formatDate(doc)}<div className={`small ${dl! < 30 ? "late" : "muted"}`}>{e.iqama_expiry ? "الإقامة" : "العقد"}{dl! < 0 ? " منتهية" : ` بعد ${countDays(dl!)}`}</div></> : "—"}</td>
@@ -280,7 +280,7 @@ function EmployeesTab({ canManage, act }: { canManage: boolean; act: Act }) {
 /** بيانات الموظف القابلة للتعديل فقط (بدون المعرّف وحالة الخدمة). */
 function toInput(e: Employee): EmployeeInput {
   return { full_name: e.full_name, nationality: e.nationality, job_title: e.job_title, start_date: e.start_date, gosi_system: e.gosi_system,
-    basic_wage: e.basic_wage ?? 0, housing_allowance: e.housing_allowance ?? 0, gosi_registered: e.gosi_registered,
+    basic_wage: e.basic_wage ?? 0, housing_allowance: e.housing_allowance ?? 0, other_allowances: e.other_allowances ?? 0, gosi_registered: e.gosi_registered,
     qiwa_contract_documented: e.qiwa_contract_documented, contract_end_date: e.contract_end_date, probation_end_date: e.probation_end_date,
     iqama_expiry: e.iqama_expiry, work_permit_expiry: e.work_permit_expiry, mobile: e.mobile ?? null };
 }
@@ -304,6 +304,8 @@ function EmployeeForm({ init, onSave, onCancel }: { init: EmployeeInput; onSave:
         {date("start_date", "تاريخ المباشرة", true)}
         <div className="field"><label>الراتب الأساسي</label><input type="number" min={0} step="0.01" required value={v.basic_wage} onChange={(e) => set("basic_wage", Number(e.target.value))} /></div>
         <div className="field"><label>بدل السكن</label><input type="number" min={0} step="0.01" value={v.housing_allowance} onChange={(e) => set("housing_allowance", Number(e.target.value))} /></div>
+        <div className="field"><label>بدلات أخرى (النقل وغيره)</label><input type="number" min={0} step="0.01" value={v.other_allowances ?? 0} onChange={(e) => set("other_allowances", Number(e.target.value))} />
+          <small className="muted">تدخل في الأجر الفعلي لحساب الحسم، لا في اشتراك التأمينات</small></div>
         {v.nationality === "SAUDI" && <div className="field"><label>نظام التأمينات</label>
           <select value={v.gosi_system} onChange={(e) => set("gosi_system", e.target.value as EmployeeInput["gosi_system"])}>
             <option value="NEW">الجديد (أول تسجيل بعد 3 يوليو 2024)</option><option value="OLD">السابق</option></select></div>}

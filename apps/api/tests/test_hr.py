@@ -98,6 +98,38 @@ class DeductionTests(unittest.TestCase):
         self.assertIsNone(self._v(kind="ABSENCE", amount=3000, incident=date(2026, 12, 1)))
         self.assertIn("نصف الأجر", self._v(kind="ABSENCE", amount=3000, month_total=2000))
 
+    def test_natures(self):
+        # دقائق التأخر أجر مدة: لا تدخل في سقف الجزاءات
+        self.assertIsNone(self._v(kind="LATE", nature="WAGE", amount=2000, month_fines=1500))
+        self.assertIsNone(self._v(kind="LATE", nature="WARNING", amount=0))
+        self.assertIn("بلا مبلغ", self._v(kind="LATE", nature="WARNING", amount=10))
+        self.assertIn("30 يوماً", self._v(kind="ABSENCE", nature="PENALTY", amount=600, incident=date(2026, 12, 1)))
+        self.assertEqual(hr.daily_wage(6000, 1500, 1500), 300)
+        self.assertEqual(hr.daily_wage(6000, 1500, 1500, "BASIC"), 200)
+        self.assertEqual(hr.daily_wage(6000, 1500, 1500, "BASIC_HOUSING"), 250)
+
+
+class PenaltyTableTests(unittest.TestCase):
+    def test_brackets(self):
+        from haseef.domain import penalties as p
+        self.assertEqual(p.late_bracket(10), "LATE_15")
+        self.assertEqual(p.late_bracket(16), "LATE_30")
+        self.assertEqual(p.late_bracket(61), "LATE_OVER")
+        self.assertEqual(p.absence_bracket(1), "ABS_1")
+        self.assertEqual(p.absence_bracket(9), "ABS_7_10")
+        self.assertEqual(p.absence_bracket(16), "ABS_15")
+
+    def test_escalation(self):
+        from haseef.domain import penalties as p
+        self.assertEqual(p.suggest("LATE_15", 1, 300)["nature"], "WARNING")
+        s2 = p.suggest("LATE_15", 2, 300)
+        self.assertEqual((s2["nature"], s2["amount"], s2["label"]), ("PENALTY", 15.0, "حسم 5% من الأجر اليومي"))
+        self.assertEqual(p.suggest("LATE_15", 2, 300, disrupted=True)["amount"], 45.0)
+        self.assertEqual(p.suggest("LATE_30", 9, 300)["amount"], 150.0)          # الرابع فما بعده
+        self.assertEqual(p.suggest("ABS_1", 1, 300)["amount"], 600.0)
+        self.assertEqual(p.suggest("ABS_1", 3, 300)["label"], "حسم أجر 4 أيام")
+        self.assertEqual(p.suggest("ABS_15", 1, 300)["nature"], "ACTION")
+
 
 if __name__ == "__main__":
     unittest.main()

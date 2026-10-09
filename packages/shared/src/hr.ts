@@ -98,20 +98,32 @@ export function sickNote(usedBefore: number, days: number): string {
   return sickSplit(usedBefore, days).map(([d, r]) => `${d} يوم ${parts[r]}`).join("، ");
 }
 
-export const dailyWage = (basic: number, housing: number) => Math.round(((basic + housing) / 30) * 100) / 100;
+/** أجر اليوم = الأجر الشهري ÷ 30 (الافتراضي الأجر الفعلي بكل بدلاته الثابتة). */
+export const dailyWage = (basic: number, housing: number, other = 0, base: WageBase = "TOTAL") =>
+  Math.round(((basic + (base === "BASIC" ? 0 : housing) + (base === "TOTAL" ? other : 0)) / 30) * 100) / 100;
+export const monthlyWage = (basic: number, housing: number, other = 0) => Math.round((basic + housing + other) * 100) / 100;
 export const lateAmount = (minutes: number, dwage: number, workMinutes: number) => Math.round(dwage * minutes / Math.max(workMinutes, 1) * 100) / 100;
 
+export type Nature = "WAGE" | "PENALTY" | "WARNING";
+export const NATURE_LABEL: Record<Nature, string> = { WAGE: "حسم أجر المدة", PENALTY: "جزاء مالي", WARNING: "إنذار كتابي" };
+export type WageBase = "BASIC" | "BASIC_HOUSING" | "TOTAL";
+export const WAGE_BASE_LABEL: Record<WageBase, string> = { TOTAL: "الأجر الفعلي (الأساسي + السكن + البدلات الأخرى)", BASIC_HOUSING: "الأساسي + السكن", BASIC: "الأساسي فقط" };
+export const natureOf = (kind: DeductionKind): Nature => (kind === "ABSENCE" || kind === "LATE_RETURN" ? "WAGE" : "PENALTY");
+
+/** الضوابط بحسب طبيعة الإشعار (مطابق للخادم): حسم المدة لسقف النصف فقط، والجزاء لسقف الخمسة أيام ومهلة الثلاثين، والإنذار بلا مبلغ. */
 export function validateDeduction(o: { kind: DeductionKind; amount: number; incident: string; today: string; dwage: number; monthlyWage: number;
-  monthFines: number; monthTotal: number }): string | null {
-  if (o.amount <= 0) return "المبلغ يجب أن يكون أكبر من صفر";
+  monthFines: number; monthTotal: number; nature?: Nature }): string | null {
+  const nature = o.nature ?? natureOf(o.kind);
   if (o.incident > o.today) return "تاريخ الواقعة في المستقبل";
+  if (nature === "WARNING") { if (o.amount) return "الإنذار الكتابي بلا مبلغ"; }
+  else if (o.amount <= 0) return "المبلغ يجب أن يكون أكبر من صفر";
+  if (nature !== "WAGE" && diffDays(o.today, o.incident) > 30) return "مضى أكثر من 30 يوماً على الواقعة؛ لا يجوز توقيع الجزاء نظاماً";
   const cap5 = Math.round(o.dwage * 5 * 100) / 100;
-  if (FINE_KINDS.includes(o.kind)) {
-    if (diffDays(o.today, o.incident) > 30) return "مضى أكثر من 30 يوماً على الواقعة؛ لا يجوز توقيع الجزاء نظاماً";
-    if (o.amount > cap5) return `الغرامة عن المخالفة الواحدة لا تتجاوز أجر خمسة أيام (${cap5.toFixed(2)} ريال)`;
-    if (o.monthFines + o.amount > cap5) return `مجموع الغرامات في الشهر لا يتجاوز أجر خمسة أيام (${cap5.toFixed(2)} ريال)؛ المتاح ${Math.max(cap5 - o.monthFines, 0).toFixed(2)}`;
+  if (nature === "PENALTY") {
+    if (o.amount > cap5) return `الجزاء عن المخالفة الواحدة لا يتجاوز أجر خمسة أيام (${cap5.toFixed(2)} ريال)`;
+    if (o.monthFines + o.amount > cap5) return `مجموع الجزاءات في الشهر لا يتجاوز أجر خمسة أيام (${cap5.toFixed(2)} ريال)؛ المتاح ${Math.max(cap5 - o.monthFines, 0).toFixed(2)}`;
   }
   const half = Math.round(o.monthlyWage / 2 * 100) / 100;
-  if (o.monthTotal + o.amount > half) return `مجموع الحسم في الشهر لا يتجاوز نصف الأجر (${half.toFixed(2)} ريال)؛ المتاح ${Math.max(half - o.monthTotal, 0).toFixed(2)}`;
+  if (o.amount && o.monthTotal + o.amount > half) return `مجموع الحسم في الشهر لا يتجاوز نصف الأجر (${half.toFixed(2)} ريال)؛ المتاح ${Math.max(half - o.monthTotal, 0).toFixed(2)}`;
   return null;
 }

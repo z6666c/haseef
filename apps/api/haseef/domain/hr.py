@@ -133,32 +133,59 @@ def fmt_days(x: float) -> str:
     return str(int(x)) if float(x).is_integer() else f"{x:.1f}"
 
 
-def daily_wage(basic: float, housing: float) -> float:
-    return round((float(basic) + float(housing)) / 30, 2)
+WAGE_BASES = ("BASIC", "BASIC_HOUSING", "TOTAL")
+NATURES = ("WAGE", "PENALTY", "WARNING")
+NATURE_LABEL = {"WAGE": "حسم أجر المدة", "PENALTY": "جزاء مالي", "WARNING": "إنذار كتابي"}
+
+
+def daily_wage(basic: float, housing: float, other: float = 0, base: str = "TOTAL") -> float:
+    """أجر اليوم = الأجر الشهري ÷ 30. الأجر الفعلي يشمل البدلات الثابتة (السكن والنقل وغيرها) ما لم تختر المنشأة غير ذلك."""
+    monthly = float(basic) + (float(housing) if base in ("BASIC_HOUSING", "TOTAL") else 0) + (float(other or 0) if base == "TOTAL" else 0)
+    return round(monthly / 30, 2)
+
+
+def monthly_wage(basic: float, housing: float, other: float = 0) -> float:
+    return round(float(basic) + float(housing) + float(other or 0), 2)
 
 
 def late_amount(minutes: int, dwage: float, work_minutes: int) -> float:
     return round(dwage * minutes / max(work_minutes, 1), 2)
 
 
+def nature_of(kind: str) -> str:
+    """للإشعارات القديمة قبل التمييز بين حسم المدة والجزاء."""
+    return "WAGE" if kind in ("ABSENCE", "LATE_RETURN") else "PENALTY"
+
+
 def validate_deduction(*, kind: str, amount: float, incident: date, today: date, dwage: float, monthly_wage: float,
-                       month_fines: float, month_total: float) -> str | None:
+                       month_fines: float, month_total: float, nature: str | None = None) -> str | None:
+    """الضوابط بحسب طبيعة الإشعار:
+      * حسم أجر المدة (غياب/تأخر/تأخر عن المباشرة): أجر عن وقت لم يُعمل، يخضع لسقف نصف الأجر فقط.
+      * الجزاء المالي: لا يتجاوز أجر خمسة أيام للمخالفة ولا مجموع الشهر، ولا يُوقَّع بعد 30 يوماً من الواقعة.
+      * الإنذار الكتابي: بلا مبلغ، ومهلة الثلاثين يوماً نفسها.
+    """
+    nature = nature or nature_of(kind)
     if kind not in KIND_LABEL:
         return "نوع الخصم غير معروف"
-    if amount <= 0:
-        return "المبلغ يجب أن يكون أكبر من صفر"
+    if nature not in NATURES:
+        return "طبيعة الإشعار غير معروفة"
     if incident > today:
         return "تاريخ الواقعة في المستقبل"
+    if nature == "WARNING":
+        if amount:
+            return "الإنذار الكتابي بلا مبلغ"
+    elif amount <= 0:
+        return "المبلغ يجب أن يكون أكبر من صفر"
+    if nature in ("PENALTY", "WARNING") and (today - incident).days > 30:
+        return "مضى أكثر من 30 يوماً على الواقعة؛ لا يجوز توقيع الجزاء نظاماً"
     cap5 = round(dwage * 5, 2)
-    if kind in FINE_KINDS:
-        if (today - incident).days > 30:
-            return "مضى أكثر من 30 يوماً على الواقعة؛ لا يجوز توقيع الجزاء نظاماً"
+    if nature == "PENALTY":
         if amount > cap5:
-            return f"الغرامة عن المخالفة الواحدة لا تتجاوز أجر خمسة أيام ({cap5:.2f} ريال)"
+            return f"الجزاء عن المخالفة الواحدة لا يتجاوز أجر خمسة أيام ({cap5:.2f} ريال)"
         if month_fines + amount > cap5:
-            return f"مجموع الغرامات في الشهر لا يتجاوز أجر خمسة أيام ({cap5:.2f} ريال)؛ المتاح {max(cap5 - month_fines, 0):.2f}"
+            return f"مجموع الجزاءات في الشهر لا يتجاوز أجر خمسة أيام ({cap5:.2f} ريال)؛ المتاح {max(cap5 - month_fines, 0):.2f}"
     half = round(monthly_wage / 2, 2)
-    if month_total + amount > half:
+    if amount and month_total + amount > half:
         return f"مجموع الحسم في الشهر لا يتجاوز نصف الأجر ({half:.2f} ريال)؛ المتاح {max(half - month_total, 0):.2f}"
     return None
 

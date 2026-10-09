@@ -17,3 +17,4 @@ export * from "./attendance.ts";
 export * from "./webauthnBrowser.ts";
 export * from "./hr.ts";
 export * from "./fileBrowser.ts";
+export * from "./penalties.ts";

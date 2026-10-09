@@ -243,13 +243,13 @@ function NoticesPanel({ token }: { token: string }) {
       <p className="small muted">يُبلغك صاحب العمل كتابةً بأي خصم وسببه، ولك أن تعترض خلال {d.objection_days} يوماً قبل تأكيده.</p>
       {msg && <p className="notice" role="status">{msg}</p>}
       {e2 && <p className="error" role="alert">{e2}</p>}
-      {d.notices.length === 0 && <p className="small muted">لا توجد إشعارات خصم.</p>}
+      {d.notices.length === 0 && <p className="small muted">لا توجد إشعارات.</p>}
       {d.notices.map((n) => (
         <div key={n.id} className="panel" style={{ display: "grid", gap: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><b>{KIND_LABEL[n.kind]} · {sar(n.amount)}</b>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><b>{n.nature === "WARNING" ? "إنذار كتابي" : n.nature === "WAGE" ? "حسم أجر المدة" : "جزاء"} — {KIND_LABEL[n.kind]}{n.nature !== "WARNING" ? ` · ${sar(n.amount)}` : ""}</b>
             <span className="status-chip" data-s={n.status === "CONFIRMED" ? "FAIL" : n.status === "CANCELLED" ? "IN_PLACE" : "PENDING"}>{NOTICE_STATUS[n.status]}</span></div>
           <div className="small">{n.description}</div>
-          <div className="small muted">الواقعة {formatDate(n.incident_date)} · يُخصم من رواتب {n.payroll_month.slice(0, 7)}</div>
+          <div className="small muted">الواقعة {formatDate(n.incident_date)}{n.nature !== "WARNING" ? ` · يُخصم من رواتب ${n.payroll_month.slice(0, 7)}` : ""}</div>
           {n.objection_text && <div className="small">اعتراضك: «{n.objection_text}»</div>}
           {n.decision_note && <div className="small">رد الموارد البشرية: {n.decision_note}</div>}
           {n.status === "ISSUED" && (obj === n.id ? (
