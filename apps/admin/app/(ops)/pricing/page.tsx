@@ -68,9 +68,9 @@ function AddonForm({ a, editor, onSave }: { a: AddonPrice; editor: boolean;
   const [unlimited, setUnlimited] = useState(a.limits.included_unlimited ?? true);
   const [active, setActive] = useState(a.is_active);
   return (
-    <form className="panel" onSubmit={(e) => { e.preventDefault(); onSave({ monthly_price: Number(price), included_tiers: tiers, members: members === "" ? null : Number(members),
+    <form className="pricing-addon" onSubmit={(e) => { e.preventDefault(); onSave({ monthly_price: Number(price), included_tiers: tiers, members: members === "" ? null : Number(members),
       questions: questions === "" ? null : Number(questions), included_unlimited: unlimited, is_active: active }); }}>
-      <h3 style={{ marginTop: 0 }}>{a.name}</h3>
+      <h3>{a.name}</h3>
       <div className="grid">
         <div className="field"><label>السعر الشهري (ريال)</label><input type="number" min={0} value={price} disabled={!editor} onChange={(e) => setPrice(e.target.value)} /></div>
         <div className="field"><label>حد الموظفين</label><input type="number" min={1} placeholder="بلا حد" value={members} disabled={!editor} onChange={(e) => setMembers(e.target.value)} /></div>
