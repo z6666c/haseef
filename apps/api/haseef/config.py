@@ -31,6 +31,25 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
     client_base_url: str = "https://app.haseef.sa"
+    api_public_url: str = "https://app.haseef.sa/api"     # للروابط الخارجية: التقويم وإشعارات بوابة الدفع
+
+    # البريد الإلكتروني
+    email_provider: str = "console"             # console | smtp
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str = "حصيف <no-reply@haseef.sa>"
+    smtp_starttls: bool = True
+
+    # الدفع الإلكتروني
+    payment_provider: str = "fake"              # fake (تطوير وعرض فقط) | moyasar
+    moyasar_secret_key: str | None = None
+
+    # بوت الواتساب (Meta Cloud API: التحقق من الويبهوك وتوقيعه)
+    meta_app_secret: str | None = None
+    meta_verify_token: str | None = None
+    signup_enabled: bool = True
 
     # الإرسال
     alert_send_hour: int = 9                    # بتوقيت الرياض

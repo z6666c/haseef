@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ..config import Settings
 from .base import ConsoleSender, MessageSender
+from .email import SmtpEmail
 from .whatsapp import MetaCloudWhatsApp, UnifonicWhatsApp
 
 
@@ -16,5 +17,10 @@ def build_senders(s: Settings) -> dict[str, MessageSender]:
         wa = UnifonicWhatsApp(s.unifonic_app_sid, s.unifonic_sender, s.whatsapp_template_lang)
     else:
         wa = ConsoleSender()
-    # البريد: ConsoleSender حتى يُختار مزوّد بريد داخل المملكة (المرحلة 3).
-    return {"WHATSAPP": wa, "EMAIL": ConsoleSender()}
+    if s.email_provider == "smtp":
+        if not s.smtp_host:
+            raise RuntimeError("HASEEF_SMTP_HOST مطلوب عند HASEEF_EMAIL_PROVIDER=smtp")
+        email: MessageSender = SmtpEmail(s.smtp_host, s.smtp_port, s.smtp_user, s.smtp_password, s.smtp_from, s.smtp_starttls)
+    else:
+        email = ConsoleSender()
+    return {"WHATSAPP": wa, "EMAIL": email}

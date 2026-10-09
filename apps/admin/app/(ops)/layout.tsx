@@ -15,6 +15,7 @@ const NAV: { href: string; label: string; perms: string[] }[] = [
   { href: "/trials", label: "طلبات التجربة", perms: ["trials.manage"] },
   { href: "/dispatches", label: "التنبيهات", perms: ["alerts.view"] },
   { href: "/finance", label: "المالية", perms: ["finance.view", "billing.manage", "expenses.manage"] },
+  { href: "/pricing", label: "التسعير", perms: ["finance.view", "billing.manage"] },
   { href: "/legal", label: "الاستشارات القانونية", perms: ["legal.cases", "legal.billing", "legal.lawyers"] },
   { href: "/content", label: "المحتوى المرجعي", perms: ["content.manage", "content.approve"] },
   { href: "/usage", label: "استهلاك الذكاء الاصطناعي", perms: ["usage.view"] },

@@ -5,7 +5,7 @@
  */
 import { duePhrase, formatDate } from "./format.ts";
 
-export type TemplateKey = "haseef_license_expiring" | "haseef_license_expired" | "haseef_policy_review_due" | "haseef_payment_due" | "haseef_labor_due";
+export type TemplateKey = "haseef_license_expiring" | "haseef_license_expired" | "haseef_policy_review_due" | "haseef_payment_due" | "haseef_labor_due" | "haseef_tax_due" | "haseef_bot_invite";
 
 export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; footer: string }> = {
   haseef_license_expiring: {
@@ -28,6 +28,16 @@ export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; fo
     body: "مرحباً {{1}}،\nتذكير من حصيف: «{{2}}» لمنشأة {{3}} مستحق {{4}}، بتاريخ {{5}}.\nأنجزه في المنصة الحكومية المختصة (التأمينات الاجتماعية أو قوى أو مُدد) ثم أكّد الإنجاز في حصيف.\nالتفاصيل: {{6}}\nفريق حصيف",
     footer: "رسالة خدمية من منصة حصيف",
   },
+  haseef_tax_due: {
+    title: "إقرار زكوي أو ضريبي مستحق",
+    body: "مرحباً {{1}}،\nتذكير من حصيف: «{{2}}» لمنشأة {{3}} مستحق {{4}}، بتاريخ {{5}}.\nقدّم الإقرار وسدّد في بوابة هيئة الزكاة والضريبة والجمارك ثم أكّد الإنجاز في حصيف لتجنب غرامات التأخير.\nالتفاصيل: {{6}}\nفريق حصيف",
+    footer: "رسالة خدمية من منصة حصيف",
+  },
+  haseef_bot_invite: {
+    title: "دعوة موظف لمساعد المنشأة",
+    body: "مرحباً {{1}}،\nأضافتك {{2}} إلى مساعدها على واتساب عبر منصة حصيف، للإجابة عن أسئلتك حول سياسات المنشأة وإجراءاتها.\nللموافقة أرسل «موافق»، أو «إيقاف» لعدم الاشتراك.",
+    footer: "رسالة خدمية من منصة حصيف",
+  },
   haseef_policy_review_due: {
     title: "موعد مراجعة سياسة داخلية",
     body: "مرحباً {{1}}،\nتذكير من حصيف: «{{2}}» في منشأة {{3}} مستحقة المراجعة الدورية {{4}}، بتاريخ {{5}}.\nراجع السياسة وحدّثها أو أعد اعتمادها من صفحة السياسات.\nالرابط: {{6}}\nفريق حصيف",
@@ -40,6 +50,7 @@ export const LABOR_TARGETS = new Set(["IQAMA", "WORK_PERMIT", "CONTRACT_END", "P
 /** القالب الذي يختاره الخادم: السياسات ← مراجعة، وغيرها ← قرب الانتهاء أو الانتهاء حسب الأيام المتبقية. */
 export function templateFor(targetType: string, daysLeft: number): TemplateKey {
   if (targetType === "POLICY") return "haseef_policy_review_due";
+  if (targetType === "TAX_TASK") return "haseef_tax_due";
   if (LABOR_TARGETS.has(targetType)) return "haseef_labor_due";
   return daysLeft < 0 ? "haseef_license_expired" : "haseef_license_expiring";
 }

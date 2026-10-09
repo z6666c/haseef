@@ -25,3 +25,7 @@ class ConsoleSender:
     def send(self, to: str, template: str, variables: list[str]) -> tuple[str, str]:
         log.info("[%s] → %s | %s | %s", self.name, to, template, variables)
         return self.name, f"console-{abs(hash((to, template, tuple(variables))))}"
+
+    def send_text(self, to: str, body: str) -> tuple[str, str]:
+        log.info("[%s] → %s | نص حر | %s", self.name, to, body[:200])
+        return self.name, f"console-{abs(hash((to, body)))}"

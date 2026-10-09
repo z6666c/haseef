@@ -10,3 +10,6 @@ export * from "./contractCheck.ts";
 export * from "./finance.ts";
 export * from "./qr.ts";
 export * from "./labor.ts";
+export * from "./tax.ts";
+export * from "./ics.ts";
+export * from "./bot.ts";

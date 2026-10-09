@@ -101,7 +101,7 @@ class PolicyOut(PolicyIn):
 
 # ---------- قواعد التنبيه ----------
 class AlertRuleIn(BaseModel):
-    target_type: Literal["COMPLIANCE_ITEM", "POLICY", "EMPLOYEE_DOC", "LABOR_TASK"]
+    target_type: Literal["COMPLIANCE_ITEM", "POLICY", "EMPLOYEE_DOC", "LABOR_TASK", "TAX_TASK"]
     target_id: UUID | None = None
     days_before: list[int] = Field(min_length=1, max_length=12)
     channels: list[Literal["WHATSAPP", "EMAIL"]] = Field(min_length=1)

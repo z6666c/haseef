@@ -251,3 +251,9 @@
 .gosi-note { margin-top: 18px; font-size: var(--t-sm); color: var(--muted); }
 .gosi-note summary { cursor: pointer; font-weight: 600; }
 .gosi-note ul { margin: 8px 0 0; padding-inline-start: 20px; display: grid; gap: 4px; }
+
+/* التسعير */
+.btn-xs { padding: 4px 10px; font-size: var(--t-xs); min-height: 0; }
+.checks { display: flex; flex-wrap: wrap; gap: 14px; border: 0; padding: 0; }
+.checks legend { width: 100%; margin-bottom: 4px; font-size: var(--t-sm); color: var(--muted); }
+.checks label, .checks-inline { display: inline-flex; gap: 6px; align-items: center; font-size: var(--t-sm); }

@@ -21,7 +21,7 @@ from sqlalchemy import Connection, text
 from ..deps import Admin, require_perm
 from ..permissions import ALL as PERM_ALL, FINANCE_AUDIT_ACTIONS, LABEL as PERM_LABEL, SUPER, catalog
 from ..security import hash_password
-from ..services import governance_service as gs
+from ..services import billing_service, governance_service as gs
 from ..services import invoicing
 from ..services.score_service import recompute
 
@@ -278,29 +278,13 @@ def extend_trial(org_id: UUID, body: ExtendTrialIn, a: Admin = Depends(require_p
 @router.post("/organizations/{org_id}/subscription/payment")
 def record_payment(org_id: UUID, body: PaymentIn, a: Admin = Depends(require_perm("billing.manage"))):
     _org_exists(a.conn, org_id)
-    months = 12 if body.billing_cycle == "YEARLY" else 1
-    sub = _live_sub(a.conn, org_id)
-    if sub is None:
-        if body.plan_tier is None:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "اختر الباقة لبدء اشتراك جديد")
-        sub_id = a.conn.execute(text("""
-            INSERT INTO subscriptions (org_id, plan_tier, billing_cycle, starts_at, ends_at, billing_status)
-            VALUES (:o, :t, :c, now(), now() + make_interval(months => :m), 'ACTIVE') RETURNING id"""),
-            {"o": org_id, "t": body.plan_tier, "c": body.billing_cycle, "m": months}).scalar_one()
-        tier = body.plan_tier
-    else:
-        sub_id, tier = sub["id"], body.plan_tier or sub["plan_tier"]
-        # التجربة تنتهي فوراً عند أول دفعة؛ الاشتراك الساري يُمدَّد من نهايته.
-        a.conn.execute(text("""
-            UPDATE subscriptions SET
-                billing_status = 'ACTIVE', billing_cycle = :c, plan_tier = :t,
-                starts_at = CASE WHEN billing_status = 'TRIAL' THEN now() ELSE starts_at END,
-                ends_at = CASE WHEN billing_status = 'TRIAL' THEN now() ELSE GREATEST(ends_at, now()) END
-                          + make_interval(months => :m)
-            WHERE id = :s"""), {"c": body.billing_cycle, "t": tier, "m": months, "s": sub_id})
-    ev = _billing_event(a, org_id, sub_id, "PAYMENT", tier=tier, amount=body.amount_sar, months=months,
-                        reference=body.reference, note=body.note)
-    inv = invoicing.invoice_subscription_payment(a.conn, billing_event_id=ev, user_id=a.user_id)
+    try:
+        r = billing_service.apply_subscription_payment(a.conn, org_id=org_id, tier=body.plan_tier, cycle=body.billing_cycle,
+                                                       amount_net=body.amount_sar, reference=body.reference, note=body.note,
+                                                       user_id=a.user_id)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(e))
+    sub_id, inv = r["subscription_id"], r["invoice"]
     a.audit("ADMIN_RECORD_PAYMENT", "subscription", sub_id, org_id,
             {"amount_sar": body.amount_sar, "cycle": body.billing_cycle, "reference": body.reference})
     recompute(a.conn, org_id)

@@ -55,6 +55,18 @@ class MetaCloudWhatsApp:
         messages = resp.json().get("messages") or [{}]
         return self.name, messages[0].get("id", "")
 
+    def send_text(self, to: str, body: str) -> tuple[str, str]:
+        """رسالة نصية حرة — مسموحة فقط داخل نافذة 24 ساعة من آخر رسالة للمستخدم (ردود البوت)."""
+        payload = {"messaging_product": "whatsapp", "to": to.lstrip("+"), "type": "text",
+                   "text": {"preview_url": False, "body": body[:4000]}}
+        try:
+            resp = self._client.post(self._url, json=payload, headers=self._headers)
+        except httpx.HTTPError as e:
+            raise SendError(f"META network error: {e}") from e
+        _raise_for(resp, self.name)
+        messages = resp.json().get("messages") or [{}]
+        return self.name, messages[0].get("id", "")
+
 
 class UnifonicWhatsApp:
     """Unifonic (مزوّد محلي سعودي) — يُفضَّل لإقامة البيانات وسهولة الفوترة بالريال."""
