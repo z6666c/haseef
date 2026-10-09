@@ -400,10 +400,11 @@ def dpia_status(dpia_id: UUID, body: DpiaStatus, t: Tenant = Depends(get_tenant)
                                 "الخطر المتبقي حرج: نفّذ المعالجات أو استشر الجهة المختصة قبل الاعتماد")
     t.conn.execute(text("""
         UPDATE dpia_assessments SET status = :s,
-            completed_at = CASE WHEN :s = 'IN_PROGRESS' THEN NULL ELSE COALESCE(completed_at, now()) END,
-            approved_by = CASE WHEN :s = 'APPROVED' THEN CAST(:u AS uuid) END,
-            approved_at = CASE WHEN :s = 'APPROVED' THEN now() END, updated_at = now()
-        WHERE id = :id"""), {"s": body.status, "u": t.principal.user_id, "id": dpia_id})
+            completed_at = CASE WHEN :in_progress THEN NULL ELSE COALESCE(completed_at, now()) END,
+            approved_by = CASE WHEN :approved THEN CAST(:u AS uuid) END,
+            approved_at = CASE WHEN :approved THEN now() END, updated_at = now()
+        WHERE id = :id"""), {"s": body.status, "in_progress": body.status == "IN_PROGRESS", "approved": body.status == "APPROVED",
+                             "u": t.principal.user_id, "id": dpia_id})
     _audit(t.conn, t, "DPIA_STATUS", "dpia", dpia_id, {"status": body.status})
     return _dpia_row(t, dpia_id)
 

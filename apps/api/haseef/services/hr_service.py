@@ -116,9 +116,9 @@ def create_leave(c: Connection, org_id, emp_id, *, leave_type: str, start: date,
     st = "APPROVED" if approve else "PENDING"
     lid = c.execute(text("""INSERT INTO leave_requests (org_id, employee_id, leave_type, start_date, end_date, days, reason, medical_ref, status, source,
                                                         decided_by, decided_at)
-                            VALUES (:o, :e, :t, :s, :en, :d, :r, :mr, :st, :src, :u, CASE WHEN :st = 'APPROVED' THEN now() END) RETURNING id"""),
+                            VALUES (:o, :e, :t, :s, :en, :d, :r, :mr, :st, :src, :u, CASE WHEN :ap THEN now() END) RETURNING id"""),
                     {"o": org_id, "e": emp_id, "t": leave_type, "s": start, "en": end, "d": days, "r": reason, "mr": (medical_ref or "").strip() or None,
-                     "st": st, "src": source, "u": user_id if approve else None}).scalar_one()
+                     "st": st, "ap": approve, "src": source, "u": user_id if approve else None}).scalar_one()
     out = {"id": lid, "days": days, "status": st}
     if leave_type == "SICK":
         out["pay_note"] = hr.sick_note(used_days(c, emp_id, start.year, ("SICK",)) - days, days)

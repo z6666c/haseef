@@ -64,6 +64,24 @@ def statements(root: pathlib.Path):
                 yield f"{p}:{node.lineno}", sql
 
 
+def _param_types(sql: str) -> str | None:
+    """psycopg يعيد استخدام الرقم نفسه للمعامل المكرر ($n)، فإن استُعمل في سياقين بنوعين مختلفين
+    (عمود varchar ومقارنة نصية مثلاً) يرفض PostgreSQL الاستعلام وقت التشغيل فقط. نحاكي ذلك بـ PREPARE."""
+    names: dict[str, int] = {}
+
+    def num(m: re.Match) -> str:
+        return f"${names.setdefault(m.group(1), len(names) + 1)}"
+
+    s = re.sub(r"(?<![:\w]):([a-z_]+)", num, sql).strip().rstrip(";")
+    if not names or s.upper().startswith("SELECT SET_CONFIG"):
+        return None
+    q = f"BEGIN; SET LOCAL ROLE haseef_platform; PREPARE _chk AS {s}; ROLLBACK;"
+    r = subprocess.run([PSQL, "-X", "-v", "ON_ERROR_STOP=1", "-q", "-d", os.environ["DB"], "-c", q],
+                       capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL)
+    err = r.stderr.strip()
+    return err.splitlines()[0] if "inconsistent types deduced" in err else None
+
+
 def main() -> int:
     root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "apps/api/haseef")
     ok = fail = 0
@@ -77,6 +95,9 @@ def main() -> int:
         if r.returncode:
             fail += 1
             print("FAIL", loc, "→", (r.stderr.strip().splitlines() or ["?"])[0])
+        elif (err := _param_types(sql)):
+            fail += 1
+            print("FAIL", loc, "→", err)
         else:
             ok += 1
     print(f"{ok} SQL statements OK, {fail} failed")
