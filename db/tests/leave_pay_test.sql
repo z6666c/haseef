@@ -16,3 +16,10 @@ BEGIN
   END;
 END $$;
 SELECT 'Leave pay tests passed';
+-- 0021: التسعير الجديد والشرائح
+DO $$ BEGIN
+  IF (SELECT monthly_price_sar FROM plans WHERE tier = 'ESSENTIAL') <> 219 OR (SELECT yearly_price_sar FROM plans WHERE tier = 'ENTERPRISE') <> 14290 THEN RAISE EXCEPTION 'plan prices'; END IF;
+  IF NOT (SELECT limits->'grants' ? 'WA_BOT' FROM addon_catalog WHERE code = 'STAFF_BUNDLE') THEN RAISE EXCEPTION 'bundle grants'; END IF;
+  IF (SELECT (limits->>'members')::int FROM addon_catalog WHERE code = 'ATTENDANCE_75') <> 75 THEN RAISE EXCEPTION 'tier 75'; END IF;
+END $$;
+SELECT 'Pricing tests passed';

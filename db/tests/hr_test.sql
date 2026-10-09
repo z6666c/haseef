@@ -30,7 +30,7 @@ BEGIN
     RAISE EXCEPTION 'payroll month not first day accepted';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
-  IF (SELECT name FROM addon_catalog WHERE code = 'ATTENDANCE') <> 'الحضور والإجازات والخصومات' THEN RAISE EXCEPTION 'addon rename'; END IF;
+  IF (SELECT name FROM addon_catalog WHERE code = 'ATTENDANCE') NOT LIKE 'الموارد البشرية%' THEN RAISE EXCEPTION 'addon rename'; END IF;
   IF (SELECT count(*) FROM annual_events WHERE code = 'NATIONAL_DAY') < 2 THEN RAISE EXCEPTION 'events seed'; END IF;
   PERFORM set_config('hr_test.a', a::text, false);
 END $$;

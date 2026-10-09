@@ -124,7 +124,7 @@ const CLIENT_ME: Me = {
 const ADMIN_ME: Me = { id: "0a1f5c1e-0000-4000-8000-0000000000b1", email: "admin@haseef.sa", full_name: "فريق عمليات حصيف", is_platform_admin: true, memberships: [] };
 
 // ---------- بيانات لوحة التحكم ----------
-const PRICES: Record<string, [number, number]> = { ESSENTIAL: [199, 1990], PROFESSIONAL_GRC: [499, 4990], ENTERPRISE: [1299, 12990] };
+const PRICES: Record<string, [number, number]> = { ESSENTIAL: [219, 2190], PROFESSIONAL_GRC: [549, 5490], ENTERPRISE: [1429, 14290] };
 type Org = {
   id: string; name: string; cr: string; legal: string; industry: string; size: string; score: number | null;
   suspended_at: string | null; reason: string | null; created_at: string;
@@ -1148,14 +1148,19 @@ const TEMP_PW = "Demo-Temp-2026";
 
 // ---------- النمو: التسعير والتسجيل الذاتي والدفع والضريبة والتقويم والبوت (نسخة العرض) ----------
 const QUOTA: Record<string, number | null> = { ESSENTIAL: 200, PROFESSIONAL_GRC: 1000, ENTERPRISE: null };
+type DemoAddonLimits = { members: number | null; questions: number | null; included_unlimited: boolean; grants?: string[]; extra_members_block?: number; extra_block_price?: number };
 const addonCatalog = [{ code: "WA_BOT", name: "بوت واتساب للموظفين", monthly_price: 99, included_tiers: ["ENTERPRISE"],
-  limits: { members: 50 as number | null, questions: 1000 as number | null, included_unlimited: true, extra_members_block: 50, extra_block_price: 49 }, is_active: true },
-  { code: "ATTENDANCE", name: "الحضور بالموقع وبصمة الجوال", monthly_price: 49, included_tiers: ["ENTERPRISE"],
-    limits: { members: 50 as number | null, questions: null as number | null, included_unlimited: true, extra_members_block: 50, extra_block_price: 49 }, is_active: true }];
+  limits: { members: 50, questions: 1000, included_unlimited: true, extra_members_block: 50, extra_block_price: 49 } as DemoAddonLimits, is_active: true },
+  { code: "ATTENDANCE", name: "الموارد البشرية — حتى 25 موظفاً", monthly_price: 149, included_tiers: ["ENTERPRISE"],
+    limits: { members: 25 as number | null, questions: null as number | null, included_unlimited: true } as DemoAddonLimits, is_active: true },
+  { code: "ATTENDANCE_75", name: "الموارد البشرية — حتى 75 موظفاً", monthly_price: 249, included_tiers: ["ENTERPRISE"],
+    limits: { members: 75, questions: null, included_unlimited: true, grants: ["ATTENDANCE"] } as DemoAddonLimits, is_active: true },
+  { code: "STAFF_BUNDLE", name: "حزمة الموظفين: الموارد البشرية + بوت الواتساب — حتى 25 موظفاً", monthly_price: 199, included_tiers: ["ENTERPRISE"],
+    limits: { members: 25, questions: 1000, included_unlimited: true, grants: ["ATTENDANCE", "WA_BOT"] } as DemoAddonLimits, is_active: true }];
 const pricingView = () => ({
   plans: Object.entries(PRICES).map(([tier, [m, y]]) => ({ tier, name_ar: PLAN_AR[tier], monthly_price_sar: m, yearly_price_sar: y, monthly_whatsapp_alerts: QUOTA[tier] }))
     .sort((a, b) => a.monthly_price_sar - b.monthly_price_sar),
-  addons: addonCatalog.map((a) => ({ ...a, included_tiers: [...a.included_tiers], limits: { ...a.limits } })),
+  addons: addonCatalog.map((a) => ({ ...a, included_tiers: [...a.included_tiers], limits: { ...a.limits, ...(a.limits.grants ? { grants: [...a.limits.grants] } : {}) } })),
 });
 const addonPaidUntil: Record<string, string | null> = { WA_BOT: ts(21), ATTENDANCE: ts(15) };
 function addonAccess(code: string) {
@@ -1165,9 +1170,18 @@ function addonAccess(code: string) {
   if (!a.is_active || !tier) return base;
   const lim = code === "WA_BOT" ? { members: a.limits.members, questions: a.limits.questions } : { members: a.limits.members };
   if (a.included_tiers.includes(tier)) return { ...base, via: "PLAN" as const, limits: a.limits.included_unlimited ? {} : lim };
+  const now = new Date().toISOString();
   const until = addonPaidUntil[code];
-  if (until && until > new Date().toISOString()) return { ...base, via: "ADDON" as const, paid_until: until, limits: lim };
-  return base;
+  let out: typeof base & { granted_by?: string } = until && until > now ? { ...base, via: "ADDON" as const, paid_until: until, limits: lim } : base;
+  // شريحة أكبر أو حزمة تمنح هذه الإضافة: تؤخذ الأوسع حدوداً
+  for (const g of addonCatalog.filter((x) => x.is_active && x.limits.grants?.includes(code))) {
+    const gu = addonPaidUntil[g.code];
+    if (!gu || gu <= now) continue;
+    const gl = { ...lim, members: g.limits.members, ...(code === "WA_BOT" ? { questions: g.limits.questions } : {}) };
+    const mine = out.via ? ((out.limits as { members?: number | null }).members ?? 1e9) : -1;
+    if ((g.limits.members ?? 1e9) > mine) out = { ...base, via: "ADDON" as const, paid_until: gu, limits: gl, granted_by: g.code };
+  }
+  return out;
 }
 const botAccess = () => addonAccess("WA_BOT");
 
@@ -1330,7 +1344,8 @@ function growthRoute(method: string, p: string, body: Record<string, unknown>): 
     return { ...pricingView(), vat_rate: finProfile.vat_registered ? VAT_RATE : 0, provider: "fake", can_pay: true,
       subscription: o.sub ? { plan_tier: o.sub.plan_tier, billing_cycle: o.sub.billing_cycle, billing_status: o.sub.billing_status, ends_at: o.sub.ends_at } : null,
       next_installment: plan && next ? { id: next.id, seq: next.seq, due_date: next.due_date, amount_net: next.amount_net, installments: plan.installments } : null,
-      bot: botAccess(), attendance: addonAccess("ATTENDANCE") };
+      bot: botAccess(), attendance: addonAccess("ATTENDANCE"),
+      addon_access: Object.fromEntries(addonCatalog.map((a) => [a.code, addonAccess(a.code)])), employees: employeesDemo.filter((e) => e.is_active).length };
   }
   if (p === "/billing/checkout" && method === "POST") {
     const o = orgs.find((x) => x.id === ORG_A)!;

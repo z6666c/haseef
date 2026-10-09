@@ -5,10 +5,13 @@ import { useEffect, useState } from "react";
 import { PLAN_LABEL, formatDate, round2, sar, type CheckoutOptions } from "@haseef/shared";
 import { api } from "@/lib/session";
 
-const ADDON_ACCESS: Record<string, (o: CheckoutOptions) => CheckoutOptions["bot"] | undefined> = { WA_BOT: (o) => o.bot, ATTENDANCE: (o) => o.attendance };
+const accessOf = (o: CheckoutOptions, code: string) => o.addon_access?.[code] ?? (code === "WA_BOT" ? o.bot : code === "ATTENDANCE" ? o.attendance : undefined);
+const HR = "حضور بالموقع وبصمة الجوال، وطلبات الإجازة والمباشرة، وإشعارات الخصم للموظفين.";
 const ADDON_BLURB: Record<string, string> = {
   WA_BOT: "مساعد واتساب يجيب موظفيك من سياسات منشأتك.",
-  ATTENDANCE: "حضور بالموقع وبصمة الجوال، وطلبات الإجازة والمباشرة، وإشعارات الخصم للموظفين.",
+  ATTENDANCE: HR,
+  ATTENDANCE_75: HR,
+  STAFF_BUNDLE: "الموارد البشرية وبوت الواتساب معاً بسعر أقل.",
 };
 
 /** الدفع الإلكتروني: القسط المستحق، أو الاشتراك/التجديد، أو الإضافات (بوت الموظفين، الحضور بالموقع). */
@@ -68,17 +71,24 @@ export function PayPanel() {
           </div>
         )}
         {o.addons.filter((a) => a.is_active).map((ad) => {
-          const acc = ADDON_ACCESS[ad.code]?.(o);
+          const acc = accessOf(o, ad.code);
           if (!acc) return null;
           const k = `addon-${ad.code}`;
+          const via = acc.granted_by && acc.granted_by !== ad.code ? o.addons.find((x) => x.code === acc.granted_by) : null;
+          const emp = o.employees ?? 0;
+          const fits = ad.limits.members == null || emp <= ad.limits.members;
+          const hrTier = ad.code === "ATTENDANCE" || ad.code === "ATTENDANCE_75";
+          const best = hrTier && fits && (ad.code === "ATTENDANCE_75" ? emp > 25 : true);
           return (
-            <div key={ad.code} className="panel pay-card">
+            <div key={ad.code} className={`panel pay-card${best && !acc.via ? " pay-best" : ""}`}>
               <h3>{ad.name}</h3>
-              {acc.via === "PLAN" ? <p className="small">مشمول في باقتك مجاناً.</p> : (
+              {best && !acc.via && <span className="tag">مناسب لعدد موظفيك ({emp})</span>}
+              {acc.via === "PLAN" ? <p className="small">مشمول في باقتك مجاناً.</p> : via ? <p className="small">مشمول في «{via.name}» حتى {formatDate(acc.paid_until!.slice(0, 10))}.</p> : (
                 <>
                   <p className="price">{sar(round2(ad.monthly_price * vat))} <small>شهرياً شامل الضريبة</small></p>
                   <p className="small muted">{acc.via === "ADDON" && acc.paid_until ? `مفعّل حتى ${formatDate(acc.paid_until.slice(0, 10))}.` : ADDON_BLURB[ad.code]}
-                    {" "}{ad.code === "WA_BOT" ? `حتى ${ad.limits.members ?? "∞"} موظفاً و${ad.limits.questions ?? "∞"} سؤال شهرياً.` : ad.limits.members ? `حتى ${ad.limits.members} موظفاً.` : ""}</p>
+                    {" "}{ad.limits.questions ? `حتى ${ad.limits.members ?? "∞"} موظفاً و${ad.limits.questions} سؤال شهرياً.` : ad.limits.members ? `حتى ${ad.limits.members} موظفاً.` : ""}
+                    {!fits && ` عندك ${emp} موظفاً، فالشريحة الأكبر أنسب.`}</p>
                   <button className="btn" type="button" disabled={!o.can_pay || !!busy}
                     onClick={() => go(k, { purpose: "ADDON", addon_code: ad.code })}>{busy === k ? "جارٍ التحويل…" : acc.via ? "مدّد شهراً" : "اشترك"}</button>
                 </>

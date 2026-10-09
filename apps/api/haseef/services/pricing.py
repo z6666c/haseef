@@ -45,4 +45,19 @@ def addon_access(conn: Connection, org_id: UUID | str, code: str) -> dict:
                                AND paid_until > now()"""), {"o": str(org_id), "c": code}).mappings().one_or_none()
     if row:
         out.update(via="ADDON", paid_until=row["paid_until"], limits=limits)
+    # إضافة أكبر (شريحة 75 موظفاً) أو حزمة تمنح هذه الإضافة: تؤخذ الأوسع حدوداً
+    for g in grantors(conn, code):
+        r = conn.execute(text("""SELECT paid_until FROM org_addons WHERE org_id = :o AND code = :c AND status = 'ACTIVE'
+                                 AND paid_until > now()"""), {"o": str(org_id), "c": g["code"]}).mappings().one_or_none()
+        if not r:
+            continue
+        gl = {k: v for k, v in (g["limits"] or {}).items() if k != "grants"}
+        mine = out["limits"].get("members") if out["via"] else -1
+        if not out["via"] or (gl.get("members") or 10**9) > (mine or 10**9):
+            out.update(via="ADDON", paid_until=r["paid_until"], limits={**limits, **gl}, granted_by=g["code"])
     return out
+
+
+def grantors(conn: Connection, code: str) -> list[dict]:
+    """الإضافات الفعّالة التي تشمل هذه الإضافة (limits.grants)."""
+    return [a for a in addons(conn) if a["is_active"] and code in ((a["limits"] or {}).get("grants") or [])]
