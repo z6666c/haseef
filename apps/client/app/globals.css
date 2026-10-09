@@ -779,3 +779,7 @@ fieldset.checks { display: flex; gap: 18px; flex-wrap: wrap; }
 @media (max-width: 860px) { .chat .msg { max-width: 95%; } }
 .panel .price { font-size: var(--t-lg); margin: 0; }
 .modal.modal-wide { width: min(780px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; }
+
+/* صفحة تسجيل الحضور للموظف (جوال أولاً) */
+.attend .attend-btn { padding: 16px; font-size: var(--t-lg); font-weight: 700; width: 100%; }
+@media (max-width: 900px) { .login.attend { grid-template-rows: auto 1fr; } .login.attend .login-brand { padding: 16px; min-height: 0; } }

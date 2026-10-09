@@ -53,10 +53,11 @@ def options(t: Tenant = Depends(get_tenant)):
             WHERE p.org_id = :o AND p.status = 'ACTIVE' AND i.paid_at IS NULL ORDER BY i.seq LIMIT 1"""),
             {"o": t.org_id}).mappings().one_or_none()
         bot = pricing.addon_access(c, t.org_id, "WA_BOT")
+        att = pricing.addon_access(c, t.org_id, "ATTENDANCE")
         return {"plans": pricing.plans(c), "addons": pricing.addons(c), "vat_rate": float(_vat_rate(c)),
                 "subscription": {k: _f(v) for k, v in sub.items() if k in ("plan_tier", "billing_cycle", "billing_status", "ends_at")} if sub else None,
                 "next_installment": {k: _f(v) for k, v in dict(due).items()} if due else None,
-                "bot": {**bot, "paid_until": bot["paid_until"]}, "can_pay": t.role in PAYERS,
+                "bot": bot, "attendance": att, "can_pay": t.role in PAYERS,
                 "provider": get_settings().payment_provider}
 
 

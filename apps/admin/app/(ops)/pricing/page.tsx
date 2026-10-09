@@ -74,7 +74,7 @@ function AddonForm({ a, editor, onSave }: { a: AddonPrice; editor: boolean;
       <div className="grid">
         <div className="field"><label>السعر الشهري (ريال)</label><input type="number" min={0} value={price} disabled={!editor} onChange={(e) => setPrice(e.target.value)} /></div>
         <div className="field"><label>حد الموظفين</label><input type="number" min={1} placeholder="بلا حد" value={members} disabled={!editor} onChange={(e) => setMembers(e.target.value)} /></div>
-        <div className="field"><label>حد الأسئلة شهرياً</label><input type="number" min={1} placeholder="بلا حد" value={questions} disabled={!editor} onChange={(e) => setQuestions(e.target.value)} /></div>
+        {a.code === "WA_BOT" && <div className="field"><label>حد الأسئلة شهرياً</label><input type="number" min={1} placeholder="بلا حد" value={questions} disabled={!editor} onChange={(e) => setQuestions(e.target.value)} /></div>}
       </div>
       <fieldset className="checks" style={{ margin: "10px 0" }}>
         <legend>مجاني ضمن الباقات</legend>
