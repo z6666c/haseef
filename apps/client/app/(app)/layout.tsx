@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PLAN_LABEL, PLATFORM_LEGAL_PAGES, countDays, type Me, type OnboardingState } from "@haseef/shared";
 import {
-  BellMessage, BookOpen, BuildingBadge, BuildingsGroup, CardReceipt, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, ReceiptPercent, ReportChart, Scales, UsersContract, ChatBot, MapPinCheck,
+  BellMessage, BookOpen, BuildingBadge, BuildingsGroup, CardReceipt, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, ReceiptPercent, ReportChart, Scales, UsersContract, ChatBot, MapPinCheck, CalendarStar, Suitcase,
 } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { api, getSession, setSession } from "@/lib/session";
@@ -22,9 +22,11 @@ const NAV: { href: string | null; label: string; Icon: typeof Radar; soon?: stri
   { href: "/labor", label: "العمل والموظفين", Icon: UsersContract },
   { href: "/tax", label: "الزكاة والضريبة", Icon: ReceiptPercent },
   { href: "/attendance", label: "الحضور بالموقع", Icon: MapPinCheck },
+  { href: "/hr", label: "الإجازات والخصومات", Icon: Suitcase },
   { href: "/bot", label: "بوت الموظفين", Icon: ChatBot },
   { href: "/pdpl", label: "حماية البيانات PDPL", Icon: FingerprintShield },
   { href: "/alerts", label: "التنبيهات والواتساب", Icon: BellMessage },
+  { href: "/events", label: "تقويم المناسبات", Icon: CalendarStar },
   { href: "/group", label: "المجموعة والمنشآت", Icon: BuildingsGroup },
   { href: "/reports", label: "تقرير المجلس", Icon: ReportChart },
   { href: "/billing", label: "الاشتراك والدفعات", Icon: CardReceipt },

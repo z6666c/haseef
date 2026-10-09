@@ -219,8 +219,14 @@ def report(month: str, t: Tenant = Depends(get_tenant)):
     end = date(start.year + (start.month == 12), start.month % 12 + 1, 1)
     s = _settings(t.conn, t.org_id)
     today = datetime.now(RIYADH).date()
+    from ..services.hr_service import work_calendar
+    _, holidays, _ = work_calendar(t.conn, t.org_id)
     workdays = [start + timedelta(days=i) for i in range((min(end, today + timedelta(days=1)) - start).days)
-                if ((start + timedelta(days=i)).weekday() + 1) % 7 in s["work_days"]]
+                if ((start + timedelta(days=i)).weekday() + 1) % 7 in s["work_days"] and start + timedelta(days=i) not in holidays]
+    leaves: dict = {}
+    for lv in t.conn.execute(text("""SELECT employee_id, start_date, end_date FROM leave_requests WHERE status = 'APPROVED'
+                                     AND start_date < :e AND end_date >= :s"""), {"s": start, "e": end}).mappings():
+        leaves.setdefault(lv["employee_id"], set()).update(d for d in workdays if lv["start_date"] <= d <= lv["end_date"])
     rows = t.conn.execute(text("""
         SELECT e.id, e.full_name,
                count(DISTINCT (r.at AT TIME ZONE 'Asia/Riyadh')::date) FILTER (WHERE r.kind = 'IN' AND r.status = 'ACCEPTED') AS days_present,
@@ -233,7 +239,8 @@ def report(month: str, t: Tenant = Depends(get_tenant)):
         WHERE e.is_active GROUP BY e.id, e.full_name ORDER BY e.full_name"""),
         {"s": datetime.combine(start, time(0), RIYADH), "e": datetime.combine(end, time(0), RIYADH)}).mappings()
     return {"month": month, "workdays": len(workdays),
-            "rows": [{**_row(r), "absent_days": max(len(workdays) - r["days_present"], 0)} for r in rows]}
+            "rows": [{**_row(r), "leave_days": len(leaves.get(r["id"], ())),
+                      "absent_days": max(len(workdays) - r["days_present"] - len(leaves.get(r["id"], ())), 0)} for r in rows]}
 
 
 # ================================================================ صفحة الموظف (عامة برابطه الشخصي)

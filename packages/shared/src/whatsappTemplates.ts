@@ -5,7 +5,7 @@
  */
 import { duePhrase, formatDate } from "./format.ts";
 
-export type TemplateKey = "haseef_license_expiring" | "haseef_license_expired" | "haseef_policy_review_due" | "haseef_payment_due" | "haseef_labor_due" | "haseef_tax_due" | "haseef_bot_invite";
+export type TemplateKey = "haseef_license_expiring" | "haseef_license_expired" | "haseef_policy_review_due" | "haseef_payment_due" | "haseef_labor_due" | "haseef_tax_due" | "haseef_bot_invite" | "haseef_hr_update" | "haseef_greeting";
 
 export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; footer: string }> = {
   haseef_license_expiring: {
@@ -37,6 +37,16 @@ export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; fo
     title: "دعوة موظف لمساعد المنشأة",
     body: "مرحباً {{1}}،\nأضافتك {{2}} إلى مساعدها على واتساب عبر منصة حصيف، للإجابة عن أسئلتك حول سياسات المنشأة وإجراءاتها.\nللموافقة أرسل «موافق»، أو «إيقاف» لعدم الاشتراك.",
     footer: "رسالة خدمية من منصة حصيف",
+  },
+  haseef_hr_update: {
+    title: "إشعار موارد بشرية للموظف",
+    body: "مرحباً {{1}}،\nإشعار من {{2}}:\n{{3}}",
+    footer: "رسالة خدمية عبر منصة حصيف",
+  },
+  haseef_greeting: {
+    title: "تهنئة بمناسبة",
+    body: "مرحباً {{1}}،\n{{2}}\n{{3}}",
+    footer: "عبر منصة حصيف",
   },
   haseef_policy_review_due: {
     title: "موعد مراجعة سياسة داخلية",

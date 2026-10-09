@@ -8,7 +8,7 @@ import { api } from "@/lib/session";
 const ADDON_ACCESS: Record<string, (o: CheckoutOptions) => CheckoutOptions["bot"] | undefined> = { WA_BOT: (o) => o.bot, ATTENDANCE: (o) => o.attendance };
 const ADDON_BLURB: Record<string, string> = {
   WA_BOT: "مساعد واتساب يجيب موظفيك من سياسات منشأتك.",
-  ATTENDANCE: "تسجيل حضور الموظفين من جوالاتهم داخل نطاق المنشأة مع التحقق بالبصمة.",
+  ATTENDANCE: "حضور بالموقع وبصمة الجوال، وطلبات الإجازة والمباشرة، وإشعارات الخصم للموظفين.",
 };
 
 /** الدفع الإلكتروني: القسط المستحق، أو الاشتراك/التجديد، أو الإضافات (بوت الموظفين، الحضور بالموقع). */

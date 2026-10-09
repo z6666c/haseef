@@ -12,6 +12,7 @@ import subprocess
 import sys
 
 FRAGMENTS = {
+    "EVENT_COLS": "id, code, name, event_date, kind, is_holiday, holiday_days, greeting, notify_subscribers, is_active",
     "PLAN_COLS": 'p.id, p.org_id, o.name AS org_name, p.plan_tier, p.total_net, p.installments, p.starts_on, p.ends_on, p.status, p.note, p.created_at, COALESCE(sum(i.amount_net) FILTER (WHERE i.paid_at IS NOT NULL), 0) AS paid_net, COALESCE(sum(i.amount_net) FILTER (WHERE i.paid_at IS NULL), 0) AS remaining_net, count(*) FILTER (WHERE i.paid_at IS NOT NULL) AS paid_count, min(i.due_date) FILTER (WHERE i.paid_at IS NULL) AS next_due, count(*) FILTER (WHERE i.paid_at IS NULL AND i.due_date < :today) AS overdue_count',
     "_DUE": "SELECT i.id, i.seq, i.due_date, i.amount_net, p.org_id, p.installments, o.name AS org_name FROM plan_installments i JOIN payment_plans p ON p.id = i.plan_id JOIN organizations o ON o.id = p.org_id WHERE i.paid_at IS NULL AND p.status = 'ACTIVE' AND o.is_active AND o.suspended_at IS NULL",
     "_DPIA_COLS": "d.id, d.project_name, r.activity_name AS related_activity, ua.full_name, uc.full_name",
@@ -22,9 +23,9 @@ FRAGMENTS = {
     "_POLICY_COLS": "id, policy_type, title, version, approval_date, review_due_date, status, "
                     "effective_status, days_remaining",
     "cond": "target_id IS NULL",
-    "EMP_COLS": "id, full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, gosi_registered, qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, is_active, left_on",
-    "EMP_INS_COLS": "full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, gosi_registered, qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry",
-    "EMP_INS_VALS": ":full_name, :nationality, :job_title, :start_date, :gosi_system, :basic_wage, :housing_allowance, :gosi_registered, :qiwa_contract_documented, :contract_end_date, :probation_end_date, :iqama_expiry, :work_permit_expiry",
+    "EMP_COLS": "id, full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, gosi_registered, qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, is_active, left_on, mobile",
+    "EMP_INS_COLS": "full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, gosi_registered, qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, mobile",
+    "EMP_INS_VALS": ":full_name, :nationality, :job_title, :start_date, :gosi_system, :basic_wage, :housing_allowance, :gosi_registered, :qiwa_contract_documented, :contract_end_date, :probation_end_date, :iqama_expiry, :work_permit_expiry, :mobile",
     "EMP_SETS": "full_name = :full_name, basic_wage = :basic_wage",
     "sets": "id = id",          # تعديل ديناميكي: الأعمدة من نموذج Pydantic
     "', '.join(PROFILE_FIELDS)": "employees_count, fiscal_year_end_month, processes_personal_data, vat_registered, "
@@ -63,6 +64,24 @@ def statements(root: pathlib.Path):
                 yield f"{p}:{node.lineno}", sql
 
 
+def _param_types(sql: str) -> str | None:
+    """psycopg يعيد استخدام الرقم نفسه للمعامل المكرر ($n)، فإن استُعمل في سياقين بنوعين مختلفين
+    (عمود varchar ومقارنة نصية مثلاً) يرفض PostgreSQL الاستعلام وقت التشغيل فقط. نحاكي ذلك بـ PREPARE."""
+    names: dict[str, int] = {}
+
+    def num(m: re.Match) -> str:
+        return f"${names.setdefault(m.group(1), len(names) + 1)}"
+
+    s = re.sub(r"(?<![:\w]):([a-z_]+)", num, sql).strip().rstrip(";")
+    if not names or s.upper().startswith("SELECT SET_CONFIG"):
+        return None
+    q = f"BEGIN; SET LOCAL ROLE haseef_platform; PREPARE _chk AS {s}; ROLLBACK;"
+    r = subprocess.run([PSQL, "-X", "-v", "ON_ERROR_STOP=1", "-q", "-d", os.environ["DB"], "-c", q],
+                       capture_output=True, text=True, timeout=15, stdin=subprocess.DEVNULL)
+    err = r.stderr.strip()
+    return err.splitlines()[0] if "inconsistent types deduced" in err else None
+
+
 def main() -> int:
     root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "apps/api/haseef")
     ok = fail = 0
@@ -76,6 +95,9 @@ def main() -> int:
         if r.returncode:
             fail += 1
             print("FAIL", loc, "→", (r.stderr.strip().splitlines() or ["?"])[0])
+        elif (err := _param_types(sql)):
+            fail += 1
+            print("FAIL", loc, "→", err)
         else:
             ok += 1
     print(f"{ok} SQL statements OK, {fail} failed")

@@ -197,6 +197,47 @@ token = su["access_token"]
 assert call("GET", "/v1/attendance/overview", org_id=so)["recent"][0]["reason"] == "NO_DEVICE"
 assert any(r["full_name"] == "موظف حضور" for r in call("GET", "/v1/attendance/report?month=" + __import__("datetime").date.today().strftime("%Y-%m"), org_id=so)["rows"])
 step("الحضور بالموقع: موقع ورابط شخصي، ويُرفض التسجيل دون جهاز مربوط ببصمة")
+# الإجازات والمباشرة والخصومات (ضمن الإضافة نفسها)
+import datetime as _dt
+d0 = _dt.date.today()
+ho = call("GET", "/v1/hr/overview", org_id=so)
+assert {p["leave_type"] for p in ho["policies"]} == {"ANNUAL", "REGULAR", "EMERGENCY", "SICK"}, ho["policies"]
+assert next(p for p in ho["people"] if p["id"] == emp)["entitlement"] == 21
+lv = call("POST", "/v1/hr/leaves", {"employee_id": emp, "leave_type": "ANNUAL", "start_date": str(d0 + _dt.timedelta(days=20)),
+                                     "end_date": str(d0 + _dt.timedelta(days=26)), "approve": True}, expect=201, org_id=so)
+assert lv["status"] == "APPROVED" and lv["days"] == 5, lv
+token = None
+import base64 as _b64
+_pdf = _b64.b64encode(b"%PDF-1.4\n% smoke medical report\n%%EOF").decode()
+call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "SICK", "start_date": str(d0), "end_date": str(d0), "medical_ref": "SL-1"}, expect=422)
+call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "SICK", "start_date": str(d0), "end_date": str(d0),
+                                                     "attachment": {"file_name": "x.html", "file_base64": _b64.b64encode(b"<html><script>").decode()}}, expect=422)
+sk = call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "SICK", "start_date": str(d0), "end_date": str(d0), "medical_ref": "SL-1",
+                                                          "attachment": {"file_name": "تقرير.pdf", "file_base64": _pdf}}, expect=201)
+assert sk["status"] == "PENDING" and sk["has_attachment"] and "بأجر كامل" in sk["pay_note"], sk
+token = su["access_token"]
+assert call("GET", f"/v1/hr/leaves/{sk['id']}/attachment", org_id=so, raw=True).startswith("%PDF")
+call("POST", f"/v1/hr/leaves/{sk['id']}/decide", {"approve": True}, org_id=so)
+call("POST", "/v1/hr/deductions", {"employee_id": emp, "kind": "VIOLATION", "incident_date": str(d0), "description": "مخالفة فحص",
+                                   "amount": 5000, "payroll_month": d0.strftime("%Y-%m")}, expect=422, org_id=so)
+nt = call("POST", "/v1/hr/deductions", {"employee_id": emp, "kind": "VIOLATION", "incident_date": str(d0), "description": "مخالفة فحص",
+                                        "amount": 100, "payroll_month": d0.strftime("%Y-%m")}, expect=201, org_id=so)
+token = None
+ph = call("GET", f"/v1/public/attendance/{atok}/hr")
+assert ph["balance"]["used"] == 5 and len(ph["notices"]) == 1 and len(ph["leaves"]) == 2, ph
+call("POST", f"/v1/public/attendance/{atok}/notices/{nt['id']}/object", {"objection": "كنت في مهمة رسمية خارج المقر"})
+token = su["access_token"]
+dd = call("GET", "/v1/hr/deductions?month=" + d0.strftime("%Y-%m"), org_id=so)
+assert dd["notices"][0]["status"] == "OBJECTED", dd["notices"]
+call("POST", f"/v1/hr/deductions/{nt['id']}/decide", {"confirm": False, "note": "قُبل الاعتراض"}, org_id=so)
+step("الإجازات الأربع والمرضية بشرائح الأجر، وسقف الغرامة، واعتراض الموظف على الخصم")
+ev = call("GET", "/v1/events", org_id=so)
+assert any(e["code"] == "NATIONAL_DAY" for e in ev["events"]) and not ev["settings"]["enabled"], ev
+call("PUT", "/v1/events/settings", {"enabled": True, "signature": "إدارة منشأة الفحص", "excluded_codes": ["FLAG_DAY"]}, org_id=so)
+assert call("GET", "/v1/events", org_id=so)["settings"]["enabled"]
+token = admin_token
+assert call("GET", "/v1/admin/events")["orgs_enabled"] >= 1
+step("تقويم المناسبات وتفعيل تهنئة الموظفين")
 token = admin_token
 call("PUT", "/v1/admin/pricing/addons/WA_BOT", {"monthly_price": 99, "included_tiers": ["ENTERPRISE"], "members": 50,
                                                  "questions": 1000, "included_unlimited": True, "is_active": True})

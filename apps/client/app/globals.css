@@ -783,3 +783,9 @@ fieldset.checks { display: flex; gap: 18px; flex-wrap: wrap; }
 /* صفحة تسجيل الحضور للموظف (جوال أولاً) */
 .attend .attend-btn { padding: 16px; font-size: var(--t-lg); font-weight: 700; width: 100%; }
 @media (max-width: 900px) { .login.attend { grid-template-rows: auto 1fr; } .login.attend .login-brand { padding: 16px; min-height: 0; } }
+
+/* مرفق التقرير الطبي */
+.attach-picker { display: grid; gap: 6px; }
+.attach-picker .label-like { font-size: var(--t-sm); font-weight: 600; }
+.attach-chip { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed var(--line, #d1d5db); border-radius: 8px; min-width: 0; }
+.attach-chip .attach-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
