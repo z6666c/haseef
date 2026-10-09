@@ -9,6 +9,7 @@ type Tab = "today" | "sites" | "report" | "settings";
 type Act = (fn: () => Promise<unknown>, ok: string) => Promise<boolean>;
 const fmtTime = (d: string | null) => d ? new Intl.DateTimeFormat("ar-SA-u-nu-latn-ca-gregory", { timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(d)) : "—";
 const fmtDT = (d: string) => new Intl.DateTimeFormat("ar-SA-u-nu-latn-ca-gregory", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Riyadh" }).format(new Date(d));
+const daysLeft = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 const thisMonth = () => new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", timeZone: "Asia/Riyadh" }).format(new Date()).slice(0, 7);
 
 export default function AttendancePage() {
@@ -53,6 +54,11 @@ export default function AttendancePage() {
         <p className="muted">تسجيل من جوال الموظف داخل نطاق المنشأة مع التحقق ببصمة الجوال.
           {ov.access.via === "PLAN" ? " مشمول في باقتك." : ov.access.paid_until ? ` اشتراكك ساري حتى ${formatDate(ov.access.paid_until.slice(0, 10))}.` : ""}</p>
       </header>
+      {ov.access.via === "ADDON" && ov.access.paid_until && daysLeft(ov.access.paid_until) <= 5 && (
+        <p className="hint-box">اشتراك الموارد البشرية ينتهي {daysLeft(ov.access.paid_until) <= 0 ? "اليوم" : daysLeft(ov.access.paid_until) === 1 ? "غداً" : `بعد ${daysLeft(ov.access.paid_until)} أيام`}
+          ({formatDate(ov.access.paid_until.slice(0, 10))}). بعده يتوقف تسجيل الحضور وطلبات الإجازة وتبقى البيانات محفوظة.{" "}
+          {ov.can_manage && <Link href="/billing">اشترك أو جدّد الآن</Link>}</p>
+      )}
       {(ov.sites ?? []).length === 0 && <p className="hint-box">ابدأ بإضافة موقع المنشأة من تبويب «المواقع»، ثم أرسل لكل موظف رابطه الشخصي.</p>}
       <dl className="obl-stats labor-stats">
         <div><dt>حضروا اليوم</dt><dd data-s="IN_PLACE">{inNow}<small className="muted"> / {people.length}</small></dd></div>
