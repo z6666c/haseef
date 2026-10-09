@@ -212,3 +212,19 @@ export const MapPinCheck = (p: P) => (
     <path d="m9.5 10 1.8 1.8 3.4-3.6" stroke={A} />
   </Svg>
 );
+
+export const CalendarStar = (p: P) => (
+  <Svg {...p}>
+    <rect x="4" y="5.5" width="16" height="14" rx="2" />
+    <path d="M8 3.5v4M16 3.5v4M4 10h16" />
+    <path d="m12 12.6.9 1.8 2 .3-1.45 1.4.35 2-1.8-.95-1.8.95.35-2-1.45-1.4 2-.3Z" stroke={A} />
+  </Svg>
+);
+
+export const Suitcase = (p: P) => (
+  <Svg {...p}>
+    <rect x="3.5" y="7.5" width="17" height="12" rx="2" />
+    <path d="M9 7.5V5.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5.5v2" />
+    <path d="M3.5 12.5h17" stroke={A} />
+  </Svg>
+);

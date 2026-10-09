@@ -282,7 +282,7 @@ function toInput(e: Employee): EmployeeInput {
   return { full_name: e.full_name, nationality: e.nationality, job_title: e.job_title, start_date: e.start_date, gosi_system: e.gosi_system,
     basic_wage: e.basic_wage ?? 0, housing_allowance: e.housing_allowance ?? 0, gosi_registered: e.gosi_registered,
     qiwa_contract_documented: e.qiwa_contract_documented, contract_end_date: e.contract_end_date, probation_end_date: e.probation_end_date,
-    iqama_expiry: e.iqama_expiry, work_permit_expiry: e.work_permit_expiry };
+    iqama_expiry: e.iqama_expiry, work_permit_expiry: e.work_permit_expiry, mobile: e.mobile ?? null };
 }
 
 function EmployeeForm({ init, onSave, onCancel }: { init: EmployeeInput; onSave: (v: EmployeeInput) => void; onCancel: () => void }) {
@@ -299,6 +299,8 @@ function EmployeeForm({ init, onSave, onCancel }: { init: EmployeeInput; onSave:
           <select value={v.nationality} onChange={(e) => set("nationality", e.target.value as EmployeeInput["nationality"])}>
             <option value="SAUDI">سعودي</option><option value="NON_SAUDI">غير سعودي</option></select></div>
         <div className="field"><label>المسمى الوظيفي</label><input value={v.job_title ?? ""} onChange={(e) => set("job_title", e.target.value || null)} /></div>
+        <div className="field"><label>الجوال (للإشعارات والتهاني، اختياري)</label><input dir="ltr" placeholder="+9665XXXXXXXX" pattern="\+9665\d{8}" value={v.mobile ?? ""}
+          onChange={(e) => set("mobile", e.target.value.trim() || null)} /></div>
         {date("start_date", "تاريخ المباشرة", true)}
         <div className="field"><label>الراتب الأساسي</label><input type="number" min={0} step="0.01" required value={v.basic_wage} onChange={(e) => set("basic_wage", Number(e.target.value))} /></div>
         <div className="field"><label>بدل السكن</label><input type="number" min={0} step="0.01" value={v.housing_allowance} onChange={(e) => set("housing_allowance", Number(e.target.value))} /></div>

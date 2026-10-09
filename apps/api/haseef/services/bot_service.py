@@ -109,6 +109,8 @@ def process_inbound(c: Connection, *, phone: str, body: str, profile_name: str |
     r = handle(body, build_state(c, org_id, dict(member), access, settings))
     if r.action and r.action.get("attend"):
         r.text = attendance_reply(c, org_id, member["id"])
+    if r.action and r.action.get("hr"):
+        r.text = hr_reply(c, org_id, member["id"], r.action["hr"])
     _log(c, org_id, member["id"], "IN", body)
     _apply(c, org_id, dict(member), r)
     _log(c, org_id, member["id"], "OUT", r.text, intent=r.intent, sources=r.sources)
@@ -127,6 +129,30 @@ def attendance_reply(c: Connection, org_id, member_id) -> str:
     return f"رابط تسجيل الحضور والانصراف الخاص بك (لا تشاركه):\n{url}\nسيطلب منك الموقع وبصمة جوالك."
 
 
+def hr_reply(c: Connection, org_id, member_id, what: str) -> str:
+    """«إجازة» و«رصيدي» و«إشعاراتي»: ضمن إضافة الحضور والإجازات."""
+    from ..domain.hr import fmt_days
+    from ..routers.attendance import issue_link
+    from . import hr_service
+    if not pricing.addon_access(c, org_id, "ATTENDANCE")["via"]:
+        return "خدمة الإجازات غير مفعّلة لمنشأتك. تواصل مع الموارد البشرية."
+    emp = c.execute(text("SELECT employee_id FROM bot_members WHERE id = :m"), {"m": member_id}).scalar_one_or_none()
+    if not emp:
+        return "رقمك غير مربوط بسجلك الوظيفي. اطلب من الموارد البشرية ربطه من صفحة بوت الموظفين."
+    if what == "balance":
+        e = hr_service.employee(c, org_id, emp)
+        b = hr_service.balance(c, org_id, e, hr_service.today().year)
+        pend = c.execute(text("SELECT count(*) FROM leave_requests WHERE employee_id = :e AND status = 'PENDING'"), {"e": emp}).scalar_one()
+        return (f"رصيد إجازتك السنوية لعام {b['year']}: {fmt_days(b['balance'])} يوم\n"
+                f"(الاستحقاق {b['entitlement']}، المستخدم {b['used']}{'، تعديلات ' + fmt_days(b['adjustments']) if b['adjustments'] else ''})"
+                + (f"\nلديك {pend} طلب بانتظار القرار." if pend else "") + "\nلرفع إجازة اكتب «إجازة».")
+    url = issue_link(c, org_id, emp) + ("&tab=notices" if what == "notices" else "&tab=leave")
+    if what == "notices":
+        n = c.execute(text("SELECT count(*) FROM deduction_notices WHERE employee_id = :e AND status = 'ISSUED'"), {"e": emp}).scalar_one()
+        return (f"لديك {n} إشعار خصم قائم." if n else "لا توجد إشعارات خصم قائمة.") + f"\nللاطلاع أو الاعتراض (لا تشارك الرابط):\n{url}"
+    return f"رابط الإجازات الخاص بك (لا تشاركه): ارفع إجازة سنوية أو اعتيادية أو اضطرارية أو مرضية، أو سجّل مباشرتك بعد العودة:\n{url}"
+
+
 def simulate(c: Connection, org_id: UUID, *, member_id: UUID | None, body: str) -> dict:
     """تجربة المحادثة من داخل حصيف دون واتساب. مع عضو محدد تُطبق الإجراءات فعلياً (مثل الإقرار)."""
     settings = ensure_settings(c, org_id)
@@ -142,6 +168,8 @@ def simulate(c: Connection, org_id: UUID, *, member_id: UUID | None, body: str) 
     r = handle(body, state)
     if r.action and r.action.get("attend"):
         r.text = attendance_reply(c, org_id, member["id"]) if member else "في التجربة بصفة المدير لا يوجد سجل موظف. اختر موظفاً مربوطاً لتجربة رابط الحضور."
+    if r.action and r.action.get("hr"):
+        r.text = hr_reply(c, org_id, member["id"], r.action["hr"]) if member else "في التجربة بصفة المدير لا يوجد سجل موظف. اختر موظفاً مربوطاً لتجربة الإجازات."
     if member:
         _apply(c, org_id, member, r)
     _log(c, org_id, member["id"] if member else None, "IN", body, simulated=True)

@@ -28,7 +28,7 @@ router = APIRouter(prefix="/labor", tags=["labor"])
 HR_MANAGERS = ("ORG_ADMIN", "COMPLIANCE_OFFICER")
 FEATURE = "LABOR_HR"
 EMP_COLS = """id, full_name, nationality, job_title, start_date, gosi_system, basic_wage, housing_allowance, gosi_registered,
-              qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, is_active, left_on"""
+              qiwa_contract_documented, contract_end_date, probation_end_date, iqama_expiry, work_permit_expiry, is_active, left_on, mobile"""
 
 
 def _num(v):
@@ -165,6 +165,7 @@ class EmployeeIn(BaseModel):
     probation_end_date: date | None = None
     iqama_expiry: date | None = None
     work_permit_expiry: date | None = None
+    mobile: str | None = Field(None, pattern=r"^\+9665\d{8}$")
 
     @model_validator(mode="after")
     def _saudi(self):

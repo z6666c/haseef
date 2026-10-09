@@ -8,9 +8,12 @@ const SENSITIVE = /(راتب|رواتب|مرتب|اجور|ايبان|حساب ب
 const SYN: Record<string, string> = { دوام: "عمل", شغل: "عمل", اوقات: "ساعات", اجازت: "اجازه", عطله: "اجازه", عطل: "اجازه",
   تاخر: "تاخير", غياب: "غياب", انصراف: "انصراف", بدل: "بدل", سفر: "سفر", انتداب: "سفر" };
 const ATTEND_WORDS = ["حضور", "انصراف", "بصمه", "الحضور", "تسجيل حضور", "تسجيل انصراف", "تحضير"];
+const HR_WORDS: Record<string, "leave" | "balance" | "notices"> = { "اجازه": "leave", "طلب اجازه": "leave", "اجازتي": "leave", "اجازاتي": "leave",
+  "مباشره": "leave", "تسجيل مباشره": "leave", "اجازه مرضيه": "leave", "رصيد": "balance", "رصيدي": "balance", "رصيد الاجازات": "balance",
+  "رصيد اجازاتي": "balance", "خصوماتي": "notices", "اشعاراتي": "notices", "الخصومات": "notices" };
 const MIN_SCORE = 1.2;
 const MAX_ANSWER = 700;
-export const BOT_MENU = "اكتب سؤالك مباشرة، مثل: كم أيام الإجازة السنوية؟\nأو استخدم الأوامر:\n• «حضور» لرابط تسجيل الحضور والانصراف\n• «السياسات» لقائمة السياسات\n• «سياسة 2» لملخص سياسة\n• «أقر 2» للإقرار بالاطلاع عليها\n• «إيقاف» لإلغاء الاشتراك";
+export const BOT_MENU = "اكتب سؤالك مباشرة، مثل: كم أيام الإجازة السنوية؟\nأو استخدم الأوامر:\n• «حضور» لرابط تسجيل الحضور والانصراف\n• «إجازة» لرفع إجازة أو تسجيل المباشرة\n• «رصيدي» لرصيد إجازاتك\n• «إشعاراتي» لإشعارات الخصم\n• «السياسات» لقائمة السياسات\n• «سياسة 2» لملخص سياسة\n• «أقر 2» للإقرار بالاطلاع عليها\n• «إيقاف» لإلغاء الاشتراك";
 
 export function botNorm(s: string): string {
   s = s.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x660)).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x6f0));
@@ -118,6 +121,7 @@ export function botHandle(textIn: string, st: BotState, joinCodeOk = false): Bot
   }
   if (["ايقاف", "الغاء الاشتراك", "stop"].includes(t)) return R("تم إيقاف اشتراكك في المساعد. يمكنك العودة بطلب من مسؤول منشأتك.", "OPT_OUT", [], { opt_out: true });
   if (ATTEND_WORDS.includes(t)) return R("رابط تسجيل الحضور: سيصلك الآن.", "ATTEND", [], { attend: true });
+  if (Object.hasOwn(HR_WORDS, t)) return R("لحظة…", "HR", [], { hr: HR_WORDS[t] });
   if (["مساعده", "قائمه", "help", "menu", "مرحبا", "السلام عليكم", "هلا"].includes(t)) return R(`أهلاً ${st.member_name ?? ""}.\n${BOT_MENU}`, "MENU");
   if (["السياسات", "سياسات", "قائمه السياسات"].includes(t)) {
     if (!pols.length) return R("لا توجد سياسات منشورة للموظفين حالياً." + hr, "POLICIES");

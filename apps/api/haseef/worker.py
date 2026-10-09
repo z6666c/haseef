@@ -25,6 +25,7 @@ celery.conf.beat_schedule = {
     "recompute-scores":      {"task": "haseef.recompute_scores", "schedule": crontab(hour=2, minute=0)},
     "labor-tasks-daily":     {"task": "haseef.labor_tasks",      "schedule": crontab(hour=0, minute=30)},
     "tax-tasks-daily":       {"task": "haseef.tax_tasks",        "schedule": crontab(hour=0, minute=40)},
+    "event-greetings":       {"task": "haseef.event_greetings",  "schedule": crontab(hour=9, minute=5)},
     "attendance-purge":      {"task": "haseef.attendance_purge", "schedule": crontab(hour=3, minute=15)},
     "installment-reminders": {"task": "haseef.remind_installments", "schedule": crontab(hour=s.alert_send_hour, minute=10)},
 }
@@ -65,6 +66,12 @@ def attendance_purge() -> int:
     from .routers.attendance import purge_coordinates
     with platform_tx() as conn:
         return purge_coordinates(conn)
+
+
+@celery.task(name="haseef.event_greetings")
+def event_greetings() -> int:
+    from .services import events_service, governance_service
+    return events_service.send_today(platform_tx, build_senders(s)["WHATSAPP"], governance_service.riyadh_today())
 
 
 @celery.task(name="haseef.recompute_scores")

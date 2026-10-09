@@ -6,7 +6,7 @@ import type { ComplianceItem, Dashboard, Me, ScoreReason } from "./types.ts";
 import CONTENT from "./demo-content.json" with { type: "json" };
 import { runCheck, type CkStandard } from "./governanceCheck.ts";
 import { dpiaAssess, dpiaSuggest } from "./dpia.ts";
-import type { AttendanceSettings, DpiaMitigation, DpiaQuestion, Employee, LaborProfile, SiteInput, TaxProfile } from "./api.ts";
+import type { AnnualEvent, DeductionSuggestion, LeaveRow, AttendanceSettings, DpiaMitigation, DpiaQuestion, Employee, LaborProfile, SiteInput, TaxProfile } from "./api.ts";
 import {
   EMP_DOC_LABEL, GOSI_RATES, TASK_KINDS, TASK_LABEL, contribution, gosiLatePenalty, monthStart, periodsToPlan, pickRate,
   qiwaIndicators, rateSystem, taskDueDate, type GosiSystem, type LaborTaskKind, type Nationality,
@@ -15,6 +15,8 @@ import { TAX_LABEL, addDaysIso, taxPeriodLabel, taxPlan, type TaxKind } from "./
 import { buildIcs } from "./ics.ts";
 import { botHandle, type BotState } from "./bot.ts";
 import { ATT_FLAG, ATT_REASON, evaluateAttendance, type AttResult } from "./attendance.ts";
+import { DEFAULT_POLICIES, FINE_KINDS, KIND_LABEL, LEAVE_LABEL, LEAVE_TYPES, addDays as isoAddDays, annualEntitlement, countLeaveDays, dailyWage, diffDays, fmtDays, holidayDates,
+  lateAmount, lateReturnDays, sickNote, validateDeduction, validateLeave, weekday0, type DeductionKind, type LeavePolicy, type LeaveType } from "./hr.ts";
 import { EXPENSE_CATEGORY, VAT_RATE, invoiceLine, invoiceNumber, periodRange, round2, zatcaTlv, type InvoiceLine } from "./finance.ts";
 
 
@@ -460,6 +462,7 @@ const PERM_RULES: [RegExp, RegExp, string[]][] = [
   [/./, /^\/admin\/(team|roles)/, ["team.manage"]],
   [/GET/, /^\/admin\/audit/, ["audit.view"]],
   [/PUT/, /^\/admin\/gosi-rates/, ["content.manage"]],
+  [/./, /^\/admin\/events/, ["content.manage"]],
   [/GET/, /^\/admin\/pricing/, ["finance.view", "billing.manage"]],
   [/./, /^\/admin\/pricing/, ["billing.manage"]],
   [/GET/, /^\/admin\/gosi-rates/, ["content.manage", "content.approve", "finance.view", "expenses.manage"]],
@@ -1088,6 +1091,12 @@ function laborOverviewDemo() {
   return { enabled: !!laborProfileDemo, profile: laborProfileDemo, tasks: laborProfileDemo ? tasks : [], hr: true, can_manage: true, today,
     indicators: qiwaIndicators(active), documents, gosi_month: { period: g.period, employee_total: g.employee_total, employer_total: g.employer_total, total: g.total } };
 }
+function mobileOf(v: unknown): string | null {
+  const x = String(v ?? "").trim();
+  if (!x) return null;
+  if (!/^\+9665\d{8}$/.test(x)) throw new DemoError(422, "الجوال بصيغة ‎+9665XXXXXXXX");
+  return x;
+}
 function empInput(b: Record<string, unknown>): Omit<DemoEmp, "id" | "is_active" | "left_on"> {
   const name = String(b.full_name ?? "").trim();
   if (name.length < 2) throw new DemoError(422, "اكتب اسم الموظف");
@@ -1097,7 +1106,8 @@ function empInput(b: Record<string, unknown>): Omit<DemoEmp, "id" | "is_active" 
     gosi_system: b.gosi_system === "NEW" ? "NEW" : "OLD", basic_wage: Number(b.basic_wage) || 0, housing_allowance: Number(b.housing_allowance) || 0,
     gosi_registered: !!b.gosi_registered, qiwa_contract_documented: !!b.qiwa_contract_documented,
     contract_end_date: (b.contract_end_date as string) || null, probation_end_date: (b.probation_end_date as string) || null,
-    iqama_expiry: saudi ? null : (b.iqama_expiry as string) || null, work_permit_expiry: saudi ? null : (b.work_permit_expiry as string) || null };
+    iqama_expiry: saudi ? null : (b.iqama_expiry as string) || null, work_permit_expiry: saudi ? null : (b.work_permit_expiry as string) || null,
+    mobile: mobileOf(b.mobile) };
 }
 const recipients = [
   { membership_id: "rcp-ahmad", full_name: "أحمد العتيبي", email: "demo@haseef.sa", phone: "+966500000001", role: "ORG_ADMIN", receives_alerts: true, alert_channels: ["EMAIL", "WHATSAPP"], is_me: true },
@@ -1425,6 +1435,7 @@ function growthRoute(method: string, p: string, body: Record<string, unknown>): 
       else if (!member.employee_id) r.text = "رقمك غير مربوط بسجلك الوظيفي. اطلب من الموارد البشرية ربطه من صفحة بوت الموظفين.";
       else { attLinks.add(member.employee_id); r.text = `رابط تسجيل الحضور والانصراف الخاص بك (لا تشاركه):\n${attLinkUrl(member.employee_id)}\nسيطلب منك الموقع وبصمة جوالك.`; }
     }
+    if (r.action?.hr) r.text = hrBotReply(member, String(r.action.hr));
     if (member && r.action) {
       if (r.action.consent) Object.assign(member, { status: "ACTIVE", consent_at: new Date().toISOString() });
       if (r.action.opt_out) member.status = "REMOVED";
@@ -1505,7 +1516,8 @@ function attOverviewDemo() {
 }
 function attPerson(token: string) {
   const id = token.replace(/^demo-/, ""); const e = employeesDemo.find((x) => x.id === id && x.is_active);
-  if (!e || !attLinks.has(e.id)) throw new DemoError(404, "الرابط غير صالح أو أُلغي. اطلب رابطاً جديداً من الموارد البشرية أو من مساعد واتساب.");
+  if (e) attLinks.add(e.id);   // نسخة العرض: كل تبويب يبدأ ببيانات جديدة، فيُقبل رابط أي موظف فعّال
+  if (!e) throw new DemoError(404, "الرابط غير صالح أو أُلغي. اطلب رابطاً جديداً من الموارد البشرية أو من مساعد واتساب.");
   if (!addonAccess("ATTENDANCE").via) throw new DemoError(403, "خدمة الحضور غير مفعّلة لمنشأتك حالياً.");
   return e;
 }
@@ -1583,12 +1595,13 @@ function attendanceRoute(method: string, p: string, q: URLSearchParams, body: Re
     const month = q.get("month") ?? riyadhIso(riyadhNow()).slice(0, 7);
     const [y, mo] = month.split("-").map(Number);
     const todayIso = riyadhIso(riyadhNow()).slice(0, 10);
-    let workdays = 0;
+    let workdays = 0; const wdList: string[] = [];
     for (let d = 1; d <= new Date(Date.UTC(y, mo, 0)).getUTCDate(); d++) {
       const iso = `${month}-${String(d).padStart(2, "0")}`;
       if (iso > todayIso) break;
-      if (attSettings.work_days.includes(new Date(`${iso}T00:00:00Z`).getUTCDay())) workdays++;
+      if (attSettings.work_days.includes(new Date(`${iso}T00:00:00Z`).getUTCDay()) && !hrHolidays().has(iso)) { workdays++; wdList.push(iso); }
     }
+    const leaveDaysOf = (id: string) => wdList.filter((d) => leavesDemo.some((l) => l.employee_id === id && l.status === "APPROVED" && l.start_date <= d && d <= l.end_date)).length;
     const inMonth = (r: DemoAtt) => riyadhIso(new Date(new Date(r.at).getTime() + 3 * 3600e3)).slice(0, 7) === month;
     return { month, workdays, rows: employeesDemo.filter((e) => e.is_active).map((e) => {
       const rs = attRecords.filter((r) => r.employee_id === e.id && inMonth(r));
@@ -1596,10 +1609,338 @@ function attendanceRoute(method: string, p: string, q: URLSearchParams, body: Re
       const days = new Set(ins.map((r) => riyadhIso(new Date(new Date(r.at).getTime() + 3 * 3600e3)).slice(0, 10))).size;
       return { id: e.id, full_name: e.full_name, days_present: days, late_days: ins.filter((r) => (r.late_minutes ?? 0) > 0).length,
         late_minutes: ins.reduce((a, r) => a + (r.late_minutes ?? 0), 0), rejected: rs.filter((r) => r.status === "REJECTED").length,
-        flagged: rs.filter((r) => r.status === "ACCEPTED" && r.flags.length).length, absent_days: Math.max(workdays - days, 0) };
+        flagged: rs.filter((r) => r.status === "ACCEPTED" && r.flags.length).length, leave_days: leaveDaysOf(e.id),
+        absent_days: Math.max(workdays - days - leaveDaysOf(e.id), 0) };
     }).sort((a, b) => a.full_name.localeCompare(b.full_name, "ar")) };
   }
   return NO_ROUTE;
+}
+
+// ---------- الموارد البشرية: الإجازات والمباشرة والخصومات + تقويم المناسبات (نسخة العرض) ----------
+type DemoLeave = { id: string; employee_id: string; leave_type: LeaveType; start_date: string; end_date: string; days: number; reason: string | null;
+  medical_ref: string | null; status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED"; source: "LINK" | "BOT" | "HR"; decision_note: string | null;
+  decided_at: string | null; return_date: string | null; return_submitted_at: string | null; return_confirmed_at: string | null; created_at: string };
+type DemoNotice = { id: string; employee_id: string; kind: DeductionKind; incident_date: string; description: string; amount: number; payroll_month: string;
+  status: "ISSUED" | "OBJECTED" | "CONFIRMED" | "CANCELLED"; seen_at: string | null; objection_text: string | null; objected_at: string | null;
+  decision_note: string | null; decided_at: string | null; created_at: string; leave_request_id: string | null };
+const hrSettingsDemo = { count_workdays_only: true, objection_days: 15, notify_employees: true };
+const hrPoliciesDemo: Record<LeaveType, LeavePolicy & { is_active: boolean }> = Object.fromEntries(
+  LEAVE_TYPES.map((t) => [t, { ...DEFAULT_POLICIES[t], is_active: true }])) as Record<LeaveType, LeavePolicy & { is_active: boolean }>;
+const leavesDemo: DemoLeave[] = [];
+const leaveAdj: { employee_id: string; year: number; days: number; note: string }[] = [];
+const noticesDemo: DemoNotice[] = [];
+const eventsDemo: AnnualEvent[] = ([
+  ["RAMADAN", "بداية شهر رمضان", "2027-02-08", "RELIGIOUS", false, 0, "مبارك عليكم الشهر، تقبّل الله صيامكم وقيامكم."],
+  ["FOUNDING_DAY", "يوم التأسيس", "2027-02-22", "NATIONAL", true, 1, "يوم التأسيس.. ثلاثة قرون من المجد والعز. كل عام والوطن بخير."],
+  ["EID_FITR", "عيد الفطر", "2027-03-09", "RELIGIOUS", true, 4, "عيدكم مبارك، وكل عام وأنتم بخير."],
+  ["FLAG_DAY", "يوم العلم", "2027-03-11", "NATIONAL", false, 0, "يوم العلم.. راية التوحيد عالية خفّاقة."],
+  ["ARAFAH", "يوم عرفة", "2027-05-15", "RELIGIOUS", false, 0, "يوم عرفة.. تقبّل الله منا ومنكم صالح الأعمال."],
+  ["EID_ADHA", "عيد الأضحى", "2027-05-16", "RELIGIOUS", true, 4, "عيد أضحى مبارك، أعاده الله علينا وعليكم بالخير."],
+  ["HIJRI_NEW_YEAR", "رأس السنة الهجرية 1449", "2027-06-06", "OCCASION", false, 0, "كل عام هجري وأنتم بخير."],
+  ["NATIONAL_DAY", "اليوم الوطني السعودي", "2027-09-23", "NATIONAL", true, 1, "اليوم الوطني السعودي.. دام عزك يا وطن."],
+  ["RAMADAN", "بداية شهر رمضان", "2028-01-28", "RELIGIOUS", false, 0, "مبارك عليكم الشهر، تقبّل الله صيامكم وقيامكم."],
+  ["FOUNDING_DAY", "يوم التأسيس", "2028-02-22", "NATIONAL", true, 1, "يوم التأسيس.. ثلاثة قرون من المجد والعز. كل عام والوطن بخير."],
+  ["EID_FITR", "عيد الفطر", "2028-02-26", "RELIGIOUS", true, 4, "عيدكم مبارك، وكل عام وأنتم بخير."],
+  ["EID_ADHA", "عيد الأضحى", "2028-05-05", "RELIGIOUS", true, 4, "عيد أضحى مبارك، أعاده الله علينا وعليكم بالخير."],
+  ["NATIONAL_DAY", "اليوم الوطني السعودي", "2028-09-23", "NATIONAL", true, 1, "اليوم الوطني السعودي.. دام عزك يا وطن."],
+] as const).map(([code, name, event_date, kind, is_holiday, holiday_days, greeting]) => ({ id: uid(), code, name, event_date, kind, is_holiday, holiday_days,
+  greeting, notify_subscribers: true, is_active: true, sent_subscribers: 0, sent_employees: 0 }));
+const orgEventsDemo = { enabled: false, signature: null as string | null, excluded_codes: [] as string[] };
+const hrToday = () => riyadhIso(riyadhNow()).slice(0, 10);
+const hrHolidays = () => holidayDates(eventsDemo);
+const hrEmp = (id: string) => { const e = employeesDemo.find((x) => x.id === id && x.is_active); if (!e) throw new DemoError(404, "الموظف غير موجود"); return e; };
+const hrDaysOf = (t: LeaveType, s: string, e: string) => countLeaveDays(s, e, { workDays: attSettings.work_days, holidays: hrHolidays(), workdaysOnly: hrSettingsDemo.count_workdays_only && t !== "SICK" });
+const usedOf = (emp: string, year: number, types: LeaveType[]) => leavesDemo.filter((l) => l.employee_id === emp && ["PENDING", "APPROVED"].includes(l.status)
+  && types.includes(l.leave_type) && l.start_date.startsWith(String(year))).reduce((a, l) => a + l.days, 0);
+function balanceOf(empId: string, year: number) {
+  const e = hrEmp(empId);
+  const ent = annualEntitlement(e.start_date, `${year}-12-31`);
+  const adj = leaveAdj.filter((a) => a.employee_id === empId && a.year === year).reduce((x, a) => x + a.days, 0);
+  const used = usedOf(empId, year, LEAVE_TYPES.filter((t) => hrPoliciesDemo[t].from_balance));
+  return { year, entitlement: ent, adjustments: adj, used, balance: Math.round((ent + adj - used) * 10) / 10 };
+}
+function createLeaveDemo(empId: string, b: Record<string, unknown>, source: DemoLeave["source"], byHr: boolean, approve: boolean) {
+  const t = String(b.leave_type) as LeaveType;
+  if (!LEAVE_TYPES.includes(t)) throw new DemoError(422, "نوع الإجازة غير معروف");
+  const s = String(b.start_date ?? ""), en = String(b.end_date ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(en)) throw new DemoError(422, "حدد تاريخ البداية والنهاية");
+  const days = hrDaysOf(t, s, en);
+  const err = validateLeave({ leaveType: t, start: s, end: en, days, today: hrToday(), policy: hrPoliciesDemo[t], byHr,
+    balance: balanceOf(empId, Number(s.slice(0, 4))).balance, usedThisYearType: usedOf(empId, Number(s.slice(0, 4)), [t]) });
+  if (err) throw new DemoError(422, err);
+  const ref = String(b.medical_ref ?? "").trim();
+  if (t === "SICK" && !byHr && !ref) throw new DemoError(422, "أدخل رقم التقرير الطبي (من منصة صحة) للإجازة المرضية");
+  if (leavesDemo.some((l) => l.employee_id === empId && ["PENDING", "APPROVED"].includes(l.status) && l.start_date <= en && l.end_date >= s))
+    throw new DemoError(409, "يوجد طلب إجازة آخر يتداخل مع هذه الفترة");
+  const l: DemoLeave = { id: uid(), employee_id: empId, leave_type: t, start_date: s, end_date: en, days, reason: (b.reason as string) || null, medical_ref: ref || null,
+    status: approve ? "APPROVED" : "PENDING", source, decision_note: null, decided_at: approve ? new Date().toISOString() : null, return_date: null,
+    return_submitted_at: null, return_confirmed_at: null, created_at: new Date().toISOString() };
+  leavesDemo.push(l);
+  return { id: l.id, days, status: l.status, ...(t === "SICK" ? { pay_note: sickNote(usedOf(empId, Number(s.slice(0, 4)), ["SICK"]) - days, days) } : {}) };
+}
+function annotateSickDemo<T extends { leave_type: LeaveType; status: string; start_date: string; days: number; employee_id?: string; pay_note?: string }>(rows: T[]) {
+  const used = new Map<string, number>();
+  for (const l of [...rows].sort((a, b) => a.start_date.localeCompare(b.start_date))) {
+    if (l.leave_type !== "SICK" || !["PENDING", "APPROVED"].includes(l.status)) continue;
+    const k = `${l.employee_id ?? ""}|${l.start_date.slice(0, 4)}`;
+    l.pay_note = sickNote(used.get(k) ?? 0, l.days); used.set(k, (used.get(k) ?? 0) + l.days);
+  }
+  return rows;
+}
+function leaveRowDemo(l: DemoLeave) {
+  const today = hrToday();
+  const ended = l.status === "APPROVED" && l.end_date < today;
+  return { ...l, full_name: employeesDemo.find((e) => e.id === l.employee_id)?.full_name ?? "—", label: LEAVE_LABEL[l.leave_type],
+    on_leave_now: l.status === "APPROVED" && l.start_date <= today && today <= l.end_date, awaiting_return: ended && !l.return_confirmed_at,
+    late_return_days: ended ? lateReturnDays(l.end_date, l.return_date ?? today, attSettings.work_days, hrHolidays()) : 0 } as LeaveRow;
+}
+function workMinutes() { const [a, b] = [attSettings.work_start, attSettings.work_end].map((x) => Number(x.slice(0, 2)) * 60 + Number(x.slice(3, 5))); return Math.max(b - a, 60); }
+const monthOf = (iso: string) => `${iso.slice(0, 7)}-01`;
+function monthSums(empId: string, month: string) {
+  const live = noticesDemo.filter((n) => n.employee_id === empId && n.payroll_month === month && ["ISSUED", "OBJECTED", "CONFIRMED"].includes(n.status));
+  return { fines: live.filter((n) => FINE_KINDS.includes(n.kind)).reduce((a, n) => a + n.amount, 0), total: live.reduce((a, n) => a + n.amount, 0) };
+}
+function createNoticeDemo(b: Record<string, unknown>) {
+  const e = hrEmp(String(b.employee_id));
+  const kind = String(b.kind) as DeductionKind;
+  if (!KIND_LABEL[kind]) throw new DemoError(422, "نوع الخصم غير معروف");
+  const month = `${String(b.payroll_month ?? "")}-01`;
+  if (!/^\d{4}-\d{2}-01$/.test(month)) throw new DemoError(422, "حدد شهر الرواتب");
+  if (String(b.description ?? "").trim().length < 3) throw new DemoError(422, "اكتب وصف الواقعة");
+  const amount = Math.round(Number(b.amount) * 100) / 100;
+  const s = monthSums(e.id, month);
+  const err = validateDeduction({ kind, amount, incident: String(b.incident_date), today: hrToday(), dwage: dailyWage(e.basic_wage, e.housing_allowance),
+    monthlyWage: e.basic_wage + e.housing_allowance, monthFines: s.fines, monthTotal: s.total });
+  if (err) throw new DemoError(422, err);
+  const n: DemoNotice = { id: uid(), employee_id: e.id, kind, incident_date: String(b.incident_date), description: String(b.description), amount, payroll_month: month,
+    status: "ISSUED", seen_at: null, objection_text: null, objected_at: null, decision_note: null, decided_at: null, created_at: new Date().toISOString(),
+    leave_request_id: (b.leave_request_id as string) || null };
+  noticesDemo.unshift(n); return { id: n.id };
+}
+(() => {
+  const by = (n: string) => employeesDemo.find((e) => e.full_name === n)!;
+  const t = hrToday(), d = (n: number) => isoAddDays(t, n);
+  const nextWorkday = (s: string) => { let x = s; while (!attSettings.work_days.includes(weekday0(x))) x = isoAddDays(x, 1); return x; };
+  const mk = (n: string, type: LeaveType, s: string, e: string, st: DemoLeave["status"], src: DemoLeave["source"], extra: Partial<DemoLeave> = {}) =>
+    leavesDemo.push({ id: uid(), employee_id: by(n).id, leave_type: type, start_date: s, end_date: e, days: hrDaysOf(type, s, e), reason: null, medical_ref: null,
+      status: st, source: src, decision_note: null, decided_at: st === "PENDING" ? null : ts(-5), return_date: null, return_submitted_at: null,
+      return_confirmed_at: null, created_at: ts(-6), ...extra });
+  const s1 = nextWorkday(d(14));
+  mk("فهد القحطاني", "ANNUAL", s1, isoAddDays(s1, 11), "PENDING", "LINK", { reason: "إجازة عائلية" });
+  mk("رامش كومار", "SICK", d(-1), d(1), "PENDING", "BOT", { medical_ref: "SL-2026-4471", reason: "التهاب حاد" });
+  mk("ريم السبيعي", "ANNUAL", d(-2), d(6), "APPROVED", "LINK");
+  mk("محمد رفيق", "EMERGENCY", d(-6), d(-4), "APPROVED", "BOT", { reason: "ظرف عائلي" });
+  mk("أحمد حسن", "ANNUAL", d(-30), d(-20), "APPROVED", "HR", { return_date: d(-16), return_submitted_at: ts(-16), return_confirmed_at: ts(-16) });
+  mk("جون ماثيو", "REGULAR", d(-40), d(-36), "REJECTED", "LINK", { decision_note: "ذروة تسليم المشروع" });
+  if (employeesDemo[1]) employeesDemo[1].mobile = "+966500000041";
+  by("سلطان المطيري").mobile = "+966500000042";
+  const late = attRecords.find((r) => r.kind === "IN" && (r.late_minutes ?? 0) > 0);
+  if (late) {
+    const e = hrEmp(late.employee_id); const day = riyadhIso(new Date(new Date(late.at).getTime() + 3 * 3600e3)).slice(0, 10);
+    noticesDemo.push({ id: uid(), employee_id: e.id, kind: "LATE", incident_date: day, description: `تأخر ${late.late_minutes} دقيقة عن بداية الدوام يوم ${day}`,
+      amount: lateAmount(late.late_minutes ?? 0, dailyWage(e.basic_wage, e.housing_allowance), workMinutes()), payroll_month: monthOf(day), status: "OBJECTED",
+      seen_at: ts(-2), objection_text: "تأخرت بسبب حادث مروري على الطريق، ومعي إثبات من نجم.", objected_at: ts(-1), decision_note: null, decided_at: null,
+      created_at: ts(-3), leave_request_id: null });
+    late.late_minutes = late.late_minutes;
+  }
+  const v = by("عبدالله الشهري");
+  noticesDemo.push({ id: uid(), employee_id: v.id, kind: "VIOLATION", incident_date: d(-4), description: "عدم ارتداء معدات السلامة في الموقع (إنذار سابق بتاريخ سابق)",
+    amount: Math.round(dailyWage(v.basic_wage, v.housing_allowance) * 0.25 * 100) / 100, payroll_month: monthOf(t), status: "ISSUED", seen_at: null, objection_text: null,
+    objected_at: null, decision_note: null, decided_at: null, created_at: ts(-1), leave_request_id: null });
+})();
+function hrOverviewDemo() {
+  const access = addonAccess("ATTENDANCE");
+  if (!access.via) throw new DemoError(402, "خدمة الإجازات ضمن إضافة «الحضور والإجازات والخصومات».");
+  const y = Number(hrToday().slice(0, 4));
+  const leaves = annotateSickDemo(leavesDemo.map(leaveRowDemo)).sort((a, b) => Number(b.status === "PENDING") - Number(a.status === "PENDING") || b.start_date.localeCompare(a.start_date));
+  return { access, can_manage: true, settings: { ...hrSettingsDemo },
+    policies: LEAVE_TYPES.map((t) => ({ ...hrPoliciesDemo[t], leave_type: t, label: LEAVE_LABEL[t] })),
+    people: employeesDemo.filter((e) => e.is_active).map((e) => ({ id: e.id, full_name: e.full_name, job_title: e.job_title, mobile: e.mobile ?? null, ...balanceOf(e.id, y) }))
+      .sort((a, b) => a.full_name.localeCompare(b.full_name, "ar")),
+    leaves, stats: { pending: leaves.filter((l) => l.status === "PENDING").length, on_leave: leaves.filter((l) => l.on_leave_now).length,
+      awaiting_return: leaves.filter((l) => l.awaiting_return).length } };
+}
+function deductionsDemo(month: string) {
+  const m = `${month}-01`, today = hrToday();
+  const notices = noticesDemo.filter((n) => n.payroll_month === m).map((n) => ({ ...n, full_name: hrEmp(n.employee_id).full_name, kind_label: KIND_LABEL[n.kind] }));
+  const have = new Set(noticesDemo.filter((n) => n.status !== "CANCELLED").map((n) => `${n.employee_id}|${n.kind}|${n.incident_date}`));
+  const haveLeave = new Set(noticesDemo.filter((n) => n.status !== "CANCELLED" && n.leave_request_id).map((n) => n.leave_request_id));
+  const local = (at: string) => riyadhIso(new Date(new Date(at).getTime() + 3 * 3600e3)).slice(0, 10);
+  const sug: DeductionSuggestion[] = [];
+  const lateByDay = new Map<string, number>();
+  for (const r of attRecords) if (r.kind === "IN" && r.status === "ACCEPTED" && (r.late_minutes ?? 0) > 0 && local(r.at).startsWith(month)) {
+    const k = `${r.employee_id}|${local(r.at)}`; lateByDay.set(k, Math.max(lateByDay.get(k) ?? 0, r.late_minutes ?? 0));
+  }
+  for (const [k, min] of lateByDay) {
+    const [eid, day] = k.split("|"); const e = employeesDemo.find((x) => x.id === eid && x.is_active);
+    if (!e || have.has(`${eid}|LATE|${day}`) || diffDays(today, day) > 30) continue;
+    sug.push({ employee_id: eid, full_name: e.full_name, kind: "LATE", kind_label: KIND_LABEL.LATE, incident_date: day,
+      amount: lateAmount(min, dailyWage(e.basic_wage, e.housing_allowance), workMinutes()), description: `تأخر ${min} دقيقة عن بداية الدوام يوم ${day}` });
+  }
+  const present = new Set(attRecords.filter((r) => r.kind === "IN" && r.status === "ACCEPTED").map((r) => `${r.employee_id}|${local(r.at)}`));
+  const firstRec = new Map<string, string>();
+  for (const r of attRecords) { const d = local(r.at); if (!firstRec.has(r.employee_id) || d < firstRec.get(r.employee_id)!) firstRec.set(r.employee_id, d); }
+  const hol = hrHolidays();
+  for (let d = m; d.startsWith(month) && d < today; d = isoAddDays(d, 1)) {
+    if (!attSettings.work_days.includes(weekday0(d)) || hol.has(d)) continue;
+    for (const [eid, since] of firstRec) {
+      const e = employeesDemo.find((x) => x.id === eid && x.is_active);
+      if (!e || d < since || present.has(`${eid}|${d}`) || have.has(`${eid}|ABSENCE|${d}`)) continue;
+      if (leavesDemo.some((l) => l.employee_id === eid && l.status === "APPROVED" && l.start_date <= d && d <= l.end_date)) continue;
+      sug.push({ employee_id: eid, full_name: e.full_name, kind: "ABSENCE", kind_label: KIND_LABEL.ABSENCE, incident_date: d,
+        amount: dailyWage(e.basic_wage, e.housing_allowance), description: `غياب يوم ${d} دون إجازة أو تسجيل حضور` });
+    }
+  }
+  for (const l of leavesDemo) {
+    if (l.status !== "APPROVED" || !l.return_date || !l.return_date.startsWith(month) || haveLeave.has(l.id)) continue;
+    const n = lateReturnDays(l.end_date, l.return_date, attSettings.work_days, hol); if (!n) continue;
+    const e = hrEmp(l.employee_id);
+    sug.push({ employee_id: e.id, full_name: e.full_name, kind: "LATE_RETURN", kind_label: KIND_LABEL.LATE_RETURN, incident_date: l.return_date, leave_request_id: l.id,
+      amount: Math.round(n * dailyWage(e.basic_wage, e.housing_allowance) * 100) / 100, description: `تأخر ${n} يوم عمل عن المباشرة بعد الإجازة ال${LEAVE_LABEL[l.leave_type]} (انتهت ${l.end_date})` });
+  }
+  sug.sort((a, b) => a.incident_date.localeCompare(b.incident_date) || a.full_name.localeCompare(b.full_name, "ar"));
+  const summary = [...new Set(notices.map((n) => n.employee_id))].flatMap((eid) => {
+    const e = hrEmp(eid); const live = notices.filter((n) => n.employee_id === eid && ["ISSUED", "OBJECTED", "CONFIRMED"].includes(n.status));
+    if (!live.length) return [];
+    return [{ employee_id: eid, full_name: e.full_name, fines: live.filter((n) => FINE_KINDS.includes(n.kind)).reduce((a, n) => a + n.amount, 0),
+      total: live.reduce((a, n) => a + n.amount, 0), confirmed: live.filter((n) => n.status === "CONFIRMED").reduce((a, n) => a + n.amount, 0),
+      fine_cap: Math.round(dailyWage(e.basic_wage, e.housing_allowance) * 500) / 100, half_wage: (e.basic_wage + e.housing_allowance) / 2 }];
+  });
+  return { month, notices, suggestions: sug, summary, objection_days: hrSettingsDemo.objection_days };
+}
+function personHrDemo(empId: string) {
+  const y = Number(hrToday().slice(0, 4));
+  for (const n of noticesDemo) if (n.employee_id === empId && !n.seen_at) n.seen_at = new Date().toISOString();
+  return { balance: balanceOf(empId, y), objection_days: hrSettingsDemo.objection_days, count_workdays_only: hrSettingsDemo.count_workdays_only,
+    policies: LEAVE_TYPES.filter((t) => hrPoliciesDemo[t].is_active).map((t) => ({ ...hrPoliciesDemo[t], leave_type: t, label: LEAVE_LABEL[t], used: usedOf(empId, y, [t]) })),
+    leaves: annotateSickDemo(leavesDemo.filter((l) => l.employee_id === empId).map((l) => ({ ...l, label: LEAVE_LABEL[l.leave_type] })))
+      .sort((a, b) => b.start_date.localeCompare(a.start_date)),
+    notices: noticesDemo.filter((n) => n.employee_id === empId) };
+}
+function submitReturnDemo(l: DemoLeave, date: string, byHr: boolean) {
+  if (l.status !== "APPROVED") throw new DemoError(409, "المباشرة تكون بعد إجازة موافق عليها");
+  if (l.return_confirmed_at) throw new DemoError(409, "أُكدت المباشرة مسبقاً");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date <= l.start_date) throw new DemoError(422, "تاريخ المباشرة يجب أن يكون بعد بداية الإجازة");
+  if (!byHr && date > hrToday()) throw new DemoError(422, "تُسجَّل المباشرة يوم عودتك للعمل، لا قبله");
+  l.return_date = date; l.return_submitted_at ??= new Date().toISOString();
+  if (byHr) l.return_confirmed_at = new Date().toISOString();
+  return { late_days: lateReturnDays(l.end_date, date, attSettings.work_days, hrHolidays()) };
+}
+function hrPublicRoute(method: string, p: string, body: Record<string, unknown>): unknown {
+  const m = p.match(/^\/public\/attendance\/([^/]+)\/(hr|leaves|leaves\/([^/]+)\/(cancel|return)|notices\/([^/]+)\/object)$/);
+  if (!m) return NO_ROUTE;
+  const e = attPerson(decodeURIComponent(m[1]));
+  if (m[2] === "hr") return personHrDemo(e.id);
+  if (m[2] === "leaves" && method === "POST") return createLeaveDemo(e.id, body, "LINK", false, false);
+  if (m[3]) {
+    const l = leavesDemo.find((x) => x.id === m[3] && x.employee_id === e.id); if (!l) throw new DemoError(404, "الطلب غير موجود");
+    if (m[4] === "cancel") { if (l.status !== "PENDING") throw new DemoError(409, "يمكن إلغاء الطلب قبل البت فيه فقط"); l.status = "CANCELLED"; return { ok: true }; }
+    return submitReturnDemo(l, String(body.return_date ?? ""), false);
+  }
+  const n = noticesDemo.find((x) => x.id === m[5] && x.employee_id === e.id); if (!n) throw new DemoError(404, "الإشعار غير موجود");
+  if (n.status !== "ISSUED") throw new DemoError(409, "لا يمكن الاعتراض على هذا الإشعار الآن");
+  if (String(body.objection ?? "").trim().length < 5) throw new DemoError(422, "اكتب سبب الاعتراض");
+  if (Date.now() - new Date(n.created_at).getTime() > hrSettingsDemo.objection_days * 864e5) throw new DemoError(409, `انتهت مهلة الاعتراض (${hrSettingsDemo.objection_days} يوماً)`);
+  Object.assign(n, { status: "OBJECTED", objection_text: String(body.objection), objected_at: new Date().toISOString() });
+  return { ok: true };
+}
+function eventsViewDemo() {
+  const t = hrToday();
+  return { events: eventsDemo.filter((e) => e.is_active && e.event_date >= isoAddDays(t, -1) && e.event_date < isoAddDays(t, 400)).sort((a, b) => a.event_date.localeCompare(b.event_date)),
+    can_manage: true, settings: { ...orgEventsDemo, excluded_codes: [...orgEventsDemo.excluded_codes] }, org_name: orgs.find((o) => o.id === ORG_A)!.name,
+    reachable_employees: employeesDemo.filter((e) => e.is_active && (e.mobile || botMembers.some((b) => b.employee_id === e.id && b.status === "ACTIVE"))).length, sent_total: 0 };
+}
+function eventInput(b: Record<string, unknown>): Omit<AnnualEvent, "id"> {
+  const code = String(b.code ?? "").trim().toUpperCase();
+  if (!/^[A-Z0-9_]{2,30}$/.test(code)) throw new DemoError(422, "الرمز بالإنجليزية الكبيرة والأرقام و_ فقط");
+  if (String(b.name ?? "").trim().length < 2) throw new DemoError(422, "اكتب اسم المناسبة");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.event_date ?? ""))) throw new DemoError(422, "حدد التاريخ");
+  if (String(b.greeting ?? "").trim().length < 5) throw new DemoError(422, "اكتب نص التهنئة");
+  const kind = ["NATIONAL", "RELIGIOUS", "OCCASION"].includes(String(b.kind)) ? String(b.kind) as AnnualEvent["kind"] : "OCCASION";
+  return { code, name: String(b.name), event_date: String(b.event_date), kind, is_holiday: !!b.is_holiday, holiday_days: Math.min(Math.max(Number(b.holiday_days) || 0, 0), 14),
+    greeting: String(b.greeting), notify_subscribers: b.notify_subscribers !== false, is_active: b.is_active !== false };
+}
+function adminEventsRoute(method: string, p: string, body: Record<string, unknown>): unknown {
+  if (p === "/admin/events" && method === "GET")
+    return { events: eventsDemo.filter((e) => e.event_date >= isoAddDays(hrToday(), -60)).sort((a, b) => a.event_date.localeCompare(b.event_date)), orgs_enabled: orgEventsDemo.enabled ? 1 : 0 };
+  if (p === "/admin/events" && method === "POST") {
+    const x = eventInput(body);
+    if (eventsDemo.some((e) => e.code === x.code && e.event_date === x.event_date)) throw new DemoError(409, "المناسبة مضافة بهذا التاريخ");
+    const ev = { id: uid(), ...x, sent_subscribers: 0, sent_employees: 0 }; eventsDemo.push(ev); log("ADMIN_EVENT_CREATE", null, { name: ev.name }); return { id: ev.id };
+  }
+  const m = p.match(/^\/admin\/events\/([^/]+)$/);
+  if (m && method === "PUT") {
+    const ev = eventsDemo.find((e) => e.id === m[1]); if (!ev) throw new DemoError(404, "المناسبة غير موجودة");
+    Object.assign(ev, eventInput(body)); log("ADMIN_EVENT_UPDATE", null, { name: ev.name }); return { ok: true };
+  }
+  return NO_ROUTE;
+}
+function hrRoute(method: string, p: string, q: URLSearchParams, body: Record<string, unknown>): unknown {
+  let m: RegExpMatchArray | null;
+  if (p === "/events" && method === "GET") return eventsViewDemo();
+  if (p === "/events/settings" && method === "PUT") {
+    Object.assign(orgEventsDemo, { enabled: !!body.enabled, signature: String(body.signature ?? "").trim() || null,
+      excluded_codes: ((body.excluded_codes as string[]) ?? []).slice(0, 30) }); return { ok: true };
+  }
+  if (!p.startsWith("/hr/")) return NO_ROUTE;
+  if (p === "/hr/overview") return hrOverviewDemo();
+  if (!addonAccess("ATTENDANCE").via) throw new DemoError(402, "خدمة الإجازات ضمن إضافة «الحضور والإجازات والخصومات».");
+  if (p === "/hr/settings" && method === "PUT") {
+    const d = Number(body.objection_days); if (!(d >= 1 && d <= 60)) throw new DemoError(422, "مهلة الاعتراض بين 1 و60 يوماً");
+    Object.assign(hrSettingsDemo, { count_workdays_only: !!body.count_workdays_only, objection_days: d, notify_employees: !!body.notify_employees }); return { ok: true };
+  }
+  if ((m = p.match(/^\/hr\/policies\/([A-Z]+)$/)) && method === "PUT") {
+    const t = m[1] as LeaveType; if (!LEAVE_TYPES.includes(t)) throw new DemoError(404, "نوع غير معروف");
+    const n = (v: unknown) => (v == null || v === "" ? null : Number(v));
+    Object.assign(hrPoliciesDemo[t], { is_paid: !!body.is_paid, from_balance: !!body.from_balance, max_days_per_request: n(body.max_days_per_request),
+      yearly_cap: n(body.yearly_cap), min_notice_days: Number(body.min_notice_days) || 0, is_active: body.is_active !== false }); return { ok: true };
+  }
+  if (p === "/hr/leaves" && method === "POST") { hrEmp(String(body.employee_id)); return createLeaveDemo(String(body.employee_id), body, "HR", true, body.approve !== false); }
+  if ((m = p.match(/^\/hr\/leaves\/([^/]+)\/(decide|cancel|return)$/))) {
+    const l = leavesDemo.find((x) => x.id === m![1]); if (!l) throw new DemoError(404, "الطلب غير موجود");
+    if (m[2] === "decide") {
+      if (l.status !== "PENDING") throw new DemoError(409, "تم البت في هذا الطلب مسبقاً");
+      Object.assign(l, { status: body.approve ? "APPROVED" : "REJECTED", decided_at: new Date().toISOString(), decision_note: (body.note as string) || null });
+      return { status: l.status };
+    }
+    if (m[2] === "cancel") {
+      if (!["PENDING", "APPROVED"].includes(l.status) || l.return_date) throw new DemoError(409, "لا يمكن إلغاء هذا الطلب");
+      l.status = "CANCELLED"; return { ok: true };
+    }
+    return submitReturnDemo(l, String(body.return_date ?? ""), true);
+  }
+  if ((m = p.match(/^\/hr\/employees\/([^/]+)\/adjust$/))) {
+    hrEmp(m[1]); const d = Number(body.days);
+    if (!d || Math.abs(d) > 365) throw new DemoError(422, "أدخل عدد أيام غير صفري"); if (String(body.note ?? "").trim().length < 2) throw new DemoError(422, "اكتب سبب التعديل");
+    leaveAdj.push({ employee_id: m[1], year: Number(hrToday().slice(0, 4)), days: d, note: String(body.note) }); return { ok: true };
+  }
+  if (p === "/hr/deductions" && method === "GET") return deductionsDemo(q.get("month") ?? hrToday().slice(0, 7));
+  if (p === "/hr/deductions" && method === "POST") return createNoticeDemo(body);
+  if ((m = p.match(/^\/hr\/deductions\/([^/]+)\/decide$/))) {
+    const n = noticesDemo.find((x) => x.id === m![1]); if (!n) throw new DemoError(404, "الإشعار غير موجود");
+    if (!["ISSUED", "OBJECTED"].includes(n.status)) throw new DemoError(409, "تم البت في هذا الإشعار مسبقاً");
+    Object.assign(n, { status: body.confirm ? "CONFIRMED" : "CANCELLED", decided_at: new Date().toISOString(), decision_note: (body.note as string) || null }); return { ok: true };
+  }
+  return NO_ROUTE;
+}
+function hrBotReply(member: DemoBotMember | null, what: string): string {
+  if (!member) return "في التجربة بصفة المدير لا يوجد سجل موظف. اختر موظفاً مربوطاً لتجربة الإجازات.";
+  if (!addonAccess("ATTENDANCE").via) return "خدمة الإجازات غير مفعّلة لمنشأتك. تواصل مع الموارد البشرية.";
+  if (!member.employee_id) return "رقمك غير مربوط بسجلك الوظيفي. اطلب من الموارد البشرية ربطه من صفحة بوت الموظفين.";
+  const eid = member.employee_id;
+  if (what === "balance") {
+    const b = balanceOf(eid, Number(hrToday().slice(0, 4)));
+    const pend = leavesDemo.filter((l) => l.employee_id === eid && l.status === "PENDING").length;
+    return `رصيد إجازتك السنوية لعام ${b.year}: ${fmtDays(b.balance)} يوم\n(الاستحقاق ${b.entitlement}، المستخدم ${b.used}${b.adjustments ? `، تعديلات ${fmtDays(b.adjustments)}` : ""})`
+      + (pend ? `\nلديك ${pend} طلب بانتظار القرار.` : "") + "\nلرفع إجازة اكتب «إجازة».";
+  }
+  attLinks.add(eid);
+  const url = `${attLinkUrl(eid)}&tab=${what === "notices" ? "notices" : "leave"}`;
+  if (what === "notices") {
+    const n = noticesDemo.filter((x) => x.employee_id === eid && x.status === "ISSUED").length;
+    return (n ? `لديك ${n} إشعار خصم قائم.` : "لا توجد إشعارات خصم قائمة.") + `\nللاطلاع أو الاعتراض (لا تشارك الرابط):\n${url}`;
+  }
+  return `رابط الإجازات الخاص بك (لا تشاركه): ارفع إجازة سنوية أو اعتيادية أو اضطرارية أو مرضية، أو سجّل مباشرتك بعد العودة:\n${url}`;
 }
 
 function route(method: string, path: string, body: Record<string, unknown>, token: string | null): unknown {
@@ -1638,7 +1979,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     return { access_token: "demo-client", org_id: ORG_A, trial_days: 14 };
   }
   if (method === "POST" && p === "/public/verify-email") { emailVerified = true; return { verified: true }; }
-  if (p.startsWith("/public/attendance/")) return attendancePublicRoute(method, p, body);
+  if (p.startsWith("/public/attendance/")) { const h = hrPublicRoute(method, p, body); return h !== NO_ROUTE ? h : attendancePublicRoute(method, p, body); }
   if (!token) throw new DemoError(401, "سجّل الدخول أولاً");
   const role = TEAM_ROLE[token];
   const isAdmin = !!role;
@@ -1651,6 +1992,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     actor = { name: TEAM_ME[role]?.full_name ?? role, role };
     requirePerm(role, method, p, body);
     if (p === "/admin/pricing" && method === "GET") return pricingView();
+    { const g = adminEventsRoute(method, p, body); if (g !== NO_ROUTE) return g; }
     if ((m = p.match(/^\/admin\/pricing\/plans\/([A-Z_]+)$/))) {
       const tier = m[1]; if (!PRICES[tier]) throw new DemoError(404, "الباقة غير موجودة");
       const mo = Number(body.monthly_price_sar), yr = Number(body.yearly_price_sar);
@@ -2037,6 +2379,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
 
   { const g = growthRoute(method, p, body); if (g !== NO_ROUTE) return g; }
   { const g = attendanceRoute(method, p, q, body); if (g !== NO_ROUTE) return g; }
+  { const g = hrRoute(method, p, q, body); if (g !== NO_ROUTE) return g; }
 
   // ---------- العمل والموظفين
   if (p === "/labor/overview") return laborOverviewDemo();
