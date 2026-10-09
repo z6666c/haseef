@@ -170,9 +170,39 @@ r = call("POST", "/v1/bot/simulate", {"text": "متى تصرف الرواتب"},
 assert r["intent"] == "ANSWER" and "27" in r["reply"], r
 assert call("POST", "/v1/bot/simulate", {"text": "كم راتب زميلي؟"}, org_id=so)["intent"] == "SENSITIVE"
 call("POST", "/v1/bot/members", {"full_name": "موظف تجريبي", "phone": "+9665" + str(secrets.randbelow(10**8)).zfill(8)}, expect=201, org_id=so)
+# الحضور بالموقع: مقفل للأساس، ثم يُشمل مؤقتاً من التسعير
+assert call("GET", "/v1/attendance/overview", org_id=so)["access"]["via"] is None
+call("POST", "/v1/attendance/sites", {"name": "المقر", "lat": 24.7136, "lng": 46.6753}, expect=402, org_id=so)
+token = admin_token
+att = next(a for a in call("GET", "/v1/admin/pricing")["addons"] if a["code"] == "ATTENDANCE")
+assert att["monthly_price"] == 49 and att["included_tiers"] == ["ENTERPRISE"], att
+call("PUT", "/v1/admin/pricing/addons/ATTENDANCE", {"monthly_price": 49, "included_tiers": ["ENTERPRISE", "ESSENTIAL"], "members": 50,
+                                                     "questions": None, "included_unlimited": True, "is_active": True})
+token = su["access_token"]
+ao = call("GET", "/v1/attendance/overview", org_id=so)
+assert ao["access"]["via"] == "PLAN" and ao["settings"]["require_device"], ao
+call("POST", "/v1/attendance/sites", {"name": "المقر الرئيسي", "lat": 24.7136, "lng": 46.6753, "radius_m": 100, "max_accuracy_m": 100,
+                                       "is_active": True}, expect=201, org_id=so)
+emp = call("POST", "/v1/labor/employees", {"full_name": "موظف حضور", "nationality": "SAUDI", "start_date": "2025-01-01", "gosi_system": "OLD",
+                                           "basic_wage": 6000, "housing_allowance": 1500, "gosi_registered": True}, expect=201, org_id=so)["id"]
+link = call("POST", f"/v1/attendance/people/{emp}/link", {}, org_id=so)["url"]
+atok = link.split("t=", 1)[1]
+token = None
+pg = call("GET", f"/v1/public/attendance/{atok}")
+assert pg["employee_name"] == "موظف حضور" and not pg["has_device"] and pg["webauthn"]["purpose"] == "ENROLL", pg
+ck = call("POST", f"/v1/public/attendance/{atok}/check", {"kind": "IN", "lat": 24.7137, "lng": 46.6754, "accuracy": 15})
+assert ck["status"] == "REJECTED" and ck["reason"] == "NO_DEVICE", ck
+call("GET", "/v1/public/attendance/not-a-real-token", expect=404)
+token = su["access_token"]
+assert call("GET", "/v1/attendance/overview", org_id=so)["recent"][0]["reason"] == "NO_DEVICE"
+assert any(r["full_name"] == "موظف حضور" for r in call("GET", "/v1/attendance/report?month=" + __import__("datetime").date.today().strftime("%Y-%m"), org_id=so)["rows"])
+step("الحضور بالموقع: موقع ورابط شخصي، ويُرفض التسجيل دون جهاز مربوط ببصمة")
 token = admin_token
 call("PUT", "/v1/admin/pricing/addons/WA_BOT", {"monthly_price": 99, "included_tiers": ["ENTERPRISE"], "members": 50,
                                                  "questions": 1000, "included_unlimited": True, "is_active": True})
-assert call("GET", "/v1/public/pricing")["addons"][0]["monthly_price"] == 99
+call("PUT", "/v1/admin/pricing/addons/ATTENDANCE", {"monthly_price": 49, "included_tiers": ["ENTERPRISE"], "members": 50,
+                                                     "questions": None, "included_unlimited": True, "is_active": True})
+pub = {a["code"]: a for a in call("GET", "/v1/public/pricing")["addons"]}
+assert pub["WA_BOT"]["monthly_price"] == 99 and pub["ATTENDANCE"]["monthly_price"] == 49, pub
 step("التسعير من غرفة العمليات، وبوت الموظفين يجيب من الأسئلة الشائعة ويرفض الأسئلة الحساسة")
-print("اكتمل الفحص المالي والعمالي والتسجيل والبوت")
+print("اكتمل الفحص المالي والعمالي والتسجيل والبوت والحضور")

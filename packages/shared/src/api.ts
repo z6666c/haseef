@@ -166,6 +166,22 @@ export function createApi(
     botSimulate: (text: string, member_id?: string | null) => req<{ reply: string; intent: string; sources: { kind: string; title: string }[] }>("/bot/simulate", { method: "POST", body: JSON.stringify({ text, member_id: member_id ?? null }) }),
     botAcks: () => req<{ policy_id: string; title: string; version: string; member_id: string; full_name: string; acknowledged_at: string | null }[]>("/bot/acknowledgments"),
 
+    // ---------- الحضور بالموقع وبصمة الجوال
+    attendanceOverview: () => req<AttendanceOverview>("/attendance/overview"),
+    attendanceSettings: (b: AttendanceSettings) => req<{ ok: boolean }>("/attendance/settings", { method: "PUT", body: JSON.stringify(b) }),
+    addSite: (b: SiteInput) => req<{ id: string }>("/attendance/sites", { method: "POST", body: JSON.stringify(b) }),
+    editSite: (id: string, b: SiteInput) => req<{ ok: boolean }>(`/attendance/sites/${id}`, { method: "PUT", body: JSON.stringify(b) }),
+    deleteSite: (id: string) => req<void>(`/attendance/sites/${id}`, { method: "DELETE" }),
+    attendanceLink: (employeeId: string) => req<{ url: string }>(`/attendance/people/${employeeId}/link`, { method: "POST", body: "{}" }),
+    revokeDevice: (employeeId: string) => req<void>(`/attendance/people/${employeeId}/device`, { method: "DELETE" }),
+    attendanceReport: (month: string) => req<AttendanceReport>(`/attendance/report?month=${month}`),
+    attendPage: (token: string) => req<AttendPage>(`/public/attendance/${encodeURIComponent(token)}`, { org: false }),
+    attendEnroll: (token: string, b: { challenge: string; credential_id?: string; client_data_json: string; attestation_object: string; label?: string | null }) =>
+      req<{ enrolled: boolean }>(`/public/attendance/${encodeURIComponent(token)}/enroll`, { method: "POST", org: false, body: JSON.stringify(b) }),
+    attendCheck: (token: string, b: AttendCheckInput) =>
+      req<AttendCheckResult>(`/public/attendance/${encodeURIComponent(token)}/check`, { method: "POST", org: false, body: JSON.stringify(b) }),
+    botLinkMember: (id: string, employee_id: string | null) => req<{ ok: boolean }>(`/bot/members/${id}`, { method: "PATCH", body: JSON.stringify({ employee_id }) }),
+
     submitTrial: (b: TrialInput) => req<{ received: boolean }>("/public/trial-requests", { method: "POST", org: false, body: JSON.stringify(b) }),
 
     // ---------- تقييم الأثر (DPIA)
@@ -756,6 +772,7 @@ export interface CheckoutOptions {
   subscription: { plan_tier: string; billing_cycle: string; billing_status: string; ends_at: string } | null;
   next_installment: { id: string; seq: number; due_date: string; amount_net: number; installments: number } | null;
   bot: AddonAccess;
+  attendance?: AddonAccess;
 }
 export interface PaymentIntent { id: string; purpose: string; description: string; amount_net: number; vat_amount: number; total: number;
   status: "INITIATED" | "PAID" | "FAILED" | "EXPIRED"; created_at: string; paid_at: string | null; invoice_id: string | null; provider: string }
@@ -778,4 +795,27 @@ export interface BotOverview {
   log?: { id: number; direction: "IN" | "OUT"; body: string; intent: string | null; simulated: boolean; created_at: string; full_name: string | null }[];
   unanswered?: { body: string; created_at: string; full_name: string | null }[];
   stats?: { members_active: number; members_total: number; questions_month: number; shared_policies: number };
+  employees?: { id: string; full_name: string }[];
 }
+
+// ---------- الحضور
+export interface AttendanceSettings { work_start: string; work_end: string; grace_minutes: number; work_days: number[]; require_device: boolean; retention_days: number }
+export interface SiteInput { name: string; lat: number; lng: number; radius_m: number; max_accuracy_m: number; is_active: boolean }
+export interface AttendanceRecord { id: number; kind: "IN" | "OUT"; at: string; status: "ACCEPTED" | "REJECTED"; reason: string | null; reason_label: string | null;
+  distance_m: number | null; accuracy_m: number | null; late_minutes: number | null; flags: string[]; flag_labels: string[]; full_name: string; site_name: string | null }
+export interface AttendanceOverview {
+  access: AddonAccess; can_manage: boolean;
+  settings?: AttendanceSettings; sites?: (SiteInput & { id: string })[];
+  people?: { employee_id: string; full_name: string; job_title: string | null; has_link: boolean; device_since: string | null; device_label: string | null;
+    last_used_at: string | null; in_at: string | null; out_at: string | null; late_minutes: number | null }[];
+  recent?: AttendanceRecord[]; limit?: number | null; linked?: number;
+}
+export interface AttendanceReport { month: string; workdays: number; rows: { id: string; full_name: string; days_present: number; late_days: number;
+  late_minutes: number; rejected: number; flagged: number; absent_days: number }[] }
+export interface AttendPage { employee_name: string; org_name: string; has_device: boolean; require_device: boolean; sites: string[];
+  today: { kind: "IN" | "OUT"; at: string; status: string; reason: string | null; reason_label: string | null; late_minutes: number | null }[];
+  webauthn: { rp_id: string; rp_name: string; challenge: string; purpose: "ENROLL" | "CHECK"; user_id: string; credential_id: string | null } }
+export interface AttendCheckInput { kind: "IN" | "OUT"; lat: number; lng: number; accuracy: number; challenge?: string | null; credential_id?: string | null;
+  client_data_json?: string | null; authenticator_data?: string | null; signature?: string | null }
+export interface AttendCheckResult { status: "ACCEPTED" | "REJECTED"; reason: string | null; reason_label: string | null; distance_m: number | null;
+  site_name: string | null; late_minutes: number | null; at: string; kind: "IN" | "OUT" }

@@ -24,6 +24,7 @@ const FEATURES = [
   { t: "حماية البيانات الشخصية", d: "سجل المعالجة، طلبات أصحاب البيانات بمهلة 30 يوماً، الحوادث بعدّاد 72 ساعة، وتقييم الأثر." },
   { t: "العمل والموظفين", d: "تقويم شهري لسداد التأمينات ورفع ملف حماية الأجور في مُدد وصرف الرواتب، وتنبيه قبل انتهاء الإقامات ورخص العمل والعقود." },
   { t: "الزكاة والضريبة", d: "مواعيد إقرارات القيمة المضافة والاستقطاع والزكاة بتنبيهات قبل الموعد، ومزامنة كل المواعيد مع تقويم جوجل والآيفون." },
+  { t: "الحضور بالموقع وبصمة الجوال", d: "يسجّل الموظف حضوره من جواله داخل نطاق المنشأة فقط وبعد التحقق ببصمته، بلا أجهزة بصمة ولا تطبيقات، مع تقرير شهري للتأخير والغياب." },
   { t: "بوت الموظفين على واتساب", d: "يجيب موظفيك عن الإجازات والدوام والإجراءات من سياساتك المنشورة فقط، ويسجّل إقرارهم بالاطلاع عليها." },
   { t: "فاحص العقود", d: "الصق عقد العمل أو سياسة الخصوصية لترى البنود المخالفة ورقم المادة والصياغة البديلة، والفحص داخل متصفحك." },
   { t: "محامٍ بالساعة", d: "استشارة مع محامٍ مرخّص بسعر معلن قبل الطلب، بلا عقود ولا أتعاب مفتوحة." },
@@ -49,7 +50,7 @@ export default function WelcomePage() {
     const x = pricing?.plans.find((p) => p.tier === tier);
     return x ? [x.monthly_price_sar, x.yearly_price_sar] : fallback;
   };
-  const bot = pricing?.addons.find((a) => a.code === "WA_BOT");
+  const extras = (pricing?.addons ?? []).filter((a) => a.is_active !== false);
   const [f, setF] = useState<TrialInput>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -156,7 +157,7 @@ export default function WelcomePage() {
               <p className="lp-muted">{p.for}</p>
               <p className="lp-price"><b>{priceOf(p.key, [p.m, p.y])[yearly ? 1 : 0].toLocaleString("en-US")}</b> ريال / {yearly ? "سنة" : "شهر"}</p>
               <ul>{p.items.map((i) => <li key={i}>{i}</li>)}
-                {bot && <li>{bot.included_tiers.includes(p.key) ? `${bot.name}: مشمول` : `${bot.name}: إضافة ${bot.monthly_price} ريال/شهر`}</li>}</ul>
+                {extras.map((a) => <li key={a.code}>{a.included_tiers.includes(p.key) ? `${a.name}: مشمول` : `${a.name}: إضافة ${a.monthly_price} ريال/شهر`}</li>)}</ul>
               <Link className={`btn ${"featured" in p ? "btn-action" : "btn-quiet"}`} href="/signup">ابدأ مجاناً 14 يوماً</Link>
               <button type="button" className="link-btn small" onClick={() => pick(p.key)}>أو اطلب عرضاً من فريقنا</button>
             </div>

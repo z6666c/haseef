@@ -6,7 +6,7 @@ import type { ComplianceItem, Dashboard, Me, ScoreReason } from "./types.ts";
 import CONTENT from "./demo-content.json" with { type: "json" };
 import { runCheck, type CkStandard } from "./governanceCheck.ts";
 import { dpiaAssess, dpiaSuggest } from "./dpia.ts";
-import type { DpiaMitigation, DpiaQuestion, Employee, LaborProfile, TaxProfile } from "./api.ts";
+import type { AttendanceSettings, DpiaMitigation, DpiaQuestion, Employee, LaborProfile, SiteInput, TaxProfile } from "./api.ts";
 import {
   EMP_DOC_LABEL, GOSI_RATES, TASK_KINDS, TASK_LABEL, contribution, gosiLatePenalty, monthStart, periodsToPlan, pickRate,
   qiwaIndicators, rateSystem, taskDueDate, type GosiSystem, type LaborTaskKind, type Nationality,
@@ -14,6 +14,7 @@ import {
 import { TAX_LABEL, addDaysIso, taxPeriodLabel, taxPlan, type TaxKind } from "./tax.ts";
 import { buildIcs } from "./ics.ts";
 import { botHandle, type BotState } from "./bot.ts";
+import { ATT_FLAG, ATT_REASON, evaluateAttendance, type AttResult } from "./attendance.ts";
 import { EXPENSE_CATEGORY, VAT_RATE, invoiceLine, invoiceNumber, periodRange, round2, zatcaTlv, type InvoiceLine } from "./finance.ts";
 
 
@@ -1137,22 +1138,27 @@ const TEMP_PW = "Demo-Temp-2026";
 // ---------- النمو: التسعير والتسجيل الذاتي والدفع والضريبة والتقويم والبوت (نسخة العرض) ----------
 const QUOTA: Record<string, number | null> = { ESSENTIAL: 200, PROFESSIONAL_GRC: 1000, ENTERPRISE: null };
 const addonCatalog = [{ code: "WA_BOT", name: "بوت واتساب للموظفين", monthly_price: 99, included_tiers: ["ENTERPRISE"],
-  limits: { members: 50 as number | null, questions: 1000 as number | null, included_unlimited: true, extra_members_block: 50, extra_block_price: 49 }, is_active: true }];
+  limits: { members: 50 as number | null, questions: 1000 as number | null, included_unlimited: true, extra_members_block: 50, extra_block_price: 49 }, is_active: true },
+  { code: "ATTENDANCE", name: "الحضور بالموقع وبصمة الجوال", monthly_price: 49, included_tiers: ["ENTERPRISE"],
+    limits: { members: 50 as number | null, questions: null as number | null, included_unlimited: true, extra_members_block: 50, extra_block_price: 49 }, is_active: true }];
 const pricingView = () => ({
   plans: Object.entries(PRICES).map(([tier, [m, y]]) => ({ tier, name_ar: PLAN_AR[tier], monthly_price_sar: m, yearly_price_sar: y, monthly_whatsapp_alerts: QUOTA[tier] }))
     .sort((a, b) => a.monthly_price_sar - b.monthly_price_sar),
   addons: addonCatalog.map((a) => ({ ...a, included_tiers: [...a.included_tiers], limits: { ...a.limits } })),
 });
-let botPaidUntil: string | null = ts(21);
-function botAccess() {
-  const o = orgs.find((x) => x.id === ORG_A)!; const a = addonCatalog[0];
+const addonPaidUntil: Record<string, string | null> = { WA_BOT: ts(21), ATTENDANCE: ts(15) };
+function addonAccess(code: string) {
+  const o = orgs.find((x) => x.id === ORG_A)!; const a = addonCatalog.find((x) => x.code === code)!;
   const tier = o.sub?.plan_tier ?? null;
   const base = { code: a.code, name: a.name, price: a.monthly_price, via: null as "PLAN" | "ADDON" | null, paid_until: null as string | null, limits: {}, plan_tier: tier };
   if (!a.is_active || !tier) return base;
-  if (a.included_tiers.includes(tier)) return { ...base, via: "PLAN" as const, limits: a.limits.included_unlimited ? {} : { members: a.limits.members, questions: a.limits.questions } };
-  if (botPaidUntil && botPaidUntil > new Date().toISOString()) return { ...base, via: "ADDON" as const, paid_until: botPaidUntil, limits: { members: a.limits.members, questions: a.limits.questions } };
+  const lim = code === "WA_BOT" ? { members: a.limits.members, questions: a.limits.questions } : { members: a.limits.members };
+  if (a.included_tiers.includes(tier)) return { ...base, via: "PLAN" as const, limits: a.limits.included_unlimited ? {} : lim };
+  const until = addonPaidUntil[code];
+  if (until && until > new Date().toISOString()) return { ...base, via: "ADDON" as const, paid_until: until, limits: lim };
   return base;
 }
+const botAccess = () => addonAccess("WA_BOT");
 
 // التسجيل والإعداد
 let onboardingNeeded = false;
@@ -1190,9 +1196,10 @@ function confirmIntent(it: DemoIntent) {
       created_at: now.toISOString(), actor: "دفع إلكتروني" });
     inv = subscriptionInvoice(o, it.plan_tier!, it.amount_net, months, ref);
   } else {
-    const base = botPaidUntil && botPaidUntil > new Date().toISOString() ? new Date(botPaidUntil) : new Date();
-    base.setUTCMonth(base.getUTCMonth() + 1); botPaidUntil = base.toISOString();
-    inv = issueInvoice({ source: "SUBSCRIPTION", org: o, ref, lines: [invoiceLine(`${addonCatalog[0].name} — اشتراك شهر`, 1, it.amount_net)], cycle: "MONTHLY" });
+    const code = it.addon_code ?? "WA_BOT", cur = addonPaidUntil[code];
+    const base = cur && cur > new Date().toISOString() ? new Date(cur) : new Date();
+    base.setUTCMonth(base.getUTCMonth() + 1); addonPaidUntil[code] = base.toISOString();
+    inv = issueInvoice({ source: "SUBSCRIPTION", org: o, ref, lines: [invoiceLine(`${addonCatalog.find((a) => a.code === code)!.name} — اشتراك شهر`, 1, it.amount_net)], cycle: "MONTHLY" });
   }
   Object.assign(it, { status: "PAID", paid_at: new Date().toISOString(), invoice_id: inv.id });
   return it;
@@ -1231,9 +1238,9 @@ type DemoBotMember = { id: string; full_name: string; phone: string; status: "IN
   created_at: string; employee_id: string | null };
 const botSettingsDemo = { enabled: true, invite_code: "nk7q2m", welcome_text: null as string | null, hr_contact: "الموارد البشرية — تحويلة 120", require_approval: true };
 const botMembers: DemoBotMember[] = [
-  { id: uid(), full_name: "سلطان المطيري", phone: "+966500000021", status: "ACTIVE", joined_via: "INVITE", consent_at: ts(-12), created_at: ts(-13), employee_id: null },
-  { id: uid(), full_name: "نورة الدوسري", phone: "+966500000022", status: "ACTIVE", joined_via: "INVITE", consent_at: ts(-11), created_at: ts(-13), employee_id: null },
-  { id: uid(), full_name: "جون ماثيو", phone: "+966500000023", status: "ACTIVE", joined_via: "CODE", consent_at: ts(-6), created_at: ts(-6), employee_id: null },
+  { id: uid(), full_name: "سلطان المطيري", phone: "+966500000021", status: "ACTIVE", joined_via: "INVITE", consent_at: ts(-12), created_at: ts(-13), employee_id: employeesDemo.find((x) => x.full_name === "سلطان المطيري")?.id ?? null },
+  { id: uid(), full_name: "نورة الدوسري", phone: "+966500000022", status: "ACTIVE", joined_via: "INVITE", consent_at: ts(-11), created_at: ts(-13), employee_id: employeesDemo.find((x) => x.full_name === "نورة الدوسري")?.id ?? null },
+  { id: uid(), full_name: "جون ماثيو", phone: "+966500000023", status: "ACTIVE", joined_via: "CODE", consent_at: ts(-6), created_at: ts(-6), employee_id: employeesDemo.find((x) => x.full_name === "جون ماثيو")?.id ?? null },
   { id: uid(), full_name: "عبدالله الشهري", phone: "+966500000024", status: "INVITED", joined_via: "INVITE", consent_at: null, created_at: ts(-2), employee_id: null },
   { id: uid(), full_name: "علي منصور", phone: "+966500000025", status: "PENDING", joined_via: "CODE", consent_at: ts(-1), created_at: ts(-1), employee_id: null },
 ];
@@ -1285,7 +1292,7 @@ function botOverviewDemo() {
     members: active.map((m) => ({ ...m, acks: acksDemo.filter((a) => a.member_id === m.id).length })),
     policies: policies.filter((x) => x.status === "ACTIVE").map((x) => ({ id: x.id, title: x.title, version: x.version, shared_with_employees: !!policyShare.get(x.id)?.shared,
       employee_summary: policyShare.get(x.id)?.summary ?? null, acks: acksDemo.filter((a) => a.policy_id === x.id && a.version === x.version).length })),
-    faqs: botFaqs.map((f) => ({ ...f })), log: botLog.slice(0, 60).map((x) => ({ ...x, full_name: name(x.member_id) })), unanswered: unanswered.slice(0, 20),
+    faqs: botFaqs.map((f) => ({ ...f })), employees: employeesDemo.filter((e) => e.is_active).map((e) => ({ id: e.id, full_name: e.full_name })), log: botLog.slice(0, 60).map((x) => ({ ...x, full_name: name(x.member_id) })), unanswered: unanswered.slice(0, 20),
     stats: { members_active: active.filter((m) => m.status === "ACTIVE").length, members_total: active.length,
       questions_month: botLog.filter((x) => x.direction === "OUT" && !x.simulated && ["ANSWER", "NO_ANSWER", "SENSITIVE"].includes(x.intent ?? "")).length,
       shared_policies: policies.filter((x) => x.status === "ACTIVE" && policyShare.get(x.id)?.shared).length } };
@@ -1312,7 +1319,7 @@ function growthRoute(method: string, p: string, body: Record<string, unknown>): 
     return { ...pricingView(), vat_rate: finProfile.vat_registered ? VAT_RATE : 0, provider: "fake", can_pay: true,
       subscription: o.sub ? { plan_tier: o.sub.plan_tier, billing_cycle: o.sub.billing_cycle, billing_status: o.sub.billing_status, ends_at: o.sub.ends_at } : null,
       next_installment: plan && next ? { id: next.id, seq: next.seq, due_date: next.due_date, amount_net: next.amount_net, installments: plan.installments } : null,
-      bot: botAccess() };
+      bot: botAccess(), attendance: addonAccess("ATTENDANCE") };
   }
   if (p === "/billing/checkout" && method === "POST") {
     const o = orgs.find((x) => x.id === ORG_A)!;
@@ -1330,9 +1337,10 @@ function growthRoute(method: string, p: string, body: Record<string, unknown>): 
       net = it.amount_net; desc = `اشتراك سنوي ${PLAN_AR[plan.plan_tier]} — القسط ${it.seq} من ${plan.installments}`;
       Object.assign(extra, { installment_id: it.id, plan_tier: plan.plan_tier, billing_cycle: "YEARLY" });
     } else {
-      const acc = botAccess();
-      if (acc.via === "PLAN") throw new DemoError(409, "هذه الإضافة مشمولة في باقتك مجاناً");
-      net = addonCatalog[0].monthly_price; desc = `${addonCatalog[0].name} — اشتراك شهر`; extra.addon_code = "WA_BOT";
+      const ad = addonCatalog.find((a) => a.code === body.addon_code && a.is_active);
+      if (!ad) throw new DemoError(404, "الإضافة غير متاحة");
+      if (addonAccess(ad.code).via === "PLAN") throw new DemoError(409, "هذه الإضافة مشمولة في باقتك مجاناً");
+      net = ad.monthly_price; desc = `${ad.name} — اشتراك شهر`; extra.addon_code = ad.code;
     }
     const vat = round2(net * rate);
     const it: DemoIntent = { id: uid(), purpose: body.purpose as DemoIntent["purpose"], plan_tier: null, billing_cycle: null, installment_id: null, addon_code: null,
@@ -1386,6 +1394,10 @@ function growthRoute(method: string, p: string, body: Record<string, unknown>): 
     const x: DemoBotMember = { id: uid(), full_name: String(body.full_name), phone, status: "INVITED", joined_via: "INVITE", consent_at: null, created_at: new Date().toISOString(), employee_id: (body.employee_id as string) ?? null };
     botMembers.push(x); return { id: x.id };
   }
+  if ((m = p.match(/^\/bot\/members\/([^/]+)$/)) && method === "PATCH") {
+    const x = botMembers.find((y) => y.id === m![1] && y.status !== "REMOVED"); if (!x) throw new DemoError(404, "العضو غير موجود");
+    x.employee_id = (body.employee_id as string) || null; return { ok: true };
+  }
   if ((m = p.match(/^\/bot\/members\/([^/]+)(\/approve)?$/))) {
     const x = botMembers.find((y) => y.id === m![1]); if (!x) throw new DemoError(404, "الموظف غير موجود");
     if (m[2]) { if (x.status !== "PENDING") throw new DemoError(409, "لا يوجد طلب انضمام بانتظار الموافقة"); x.status = "ACTIVE"; x.consent_at ??= new Date().toISOString(); return { ok: true }; }
@@ -1407,6 +1419,12 @@ function growthRoute(method: string, p: string, body: Record<string, unknown>): 
   if (p === "/bot/simulate") {
     const member = body.member_id ? botMembers.find((x) => x.id === body.member_id) ?? null : null;
     const r = botHandle(String(body.text ?? ""), botStateFor(member));
+    if (r.action?.attend) {
+      if (!member) r.text = "في التجربة بصفة المدير لا يوجد سجل موظف. اختر موظفاً مربوطاً لتجربة رابط الحضور.";
+      else if (!addonAccess("ATTENDANCE").via) r.text = "خدمة تسجيل الحضور غير مفعّلة لمنشأتك.";
+      else if (!member.employee_id) r.text = "رقمك غير مربوط بسجلك الوظيفي. اطلب من الموارد البشرية ربطه من صفحة بوت الموظفين.";
+      else { attLinks.add(member.employee_id); r.text = `رابط تسجيل الحضور والانصراف الخاص بك (لا تشاركه):\n${attLinkUrl(member.employee_id)}\nسيطلب منك الموقع وبصمة جوالك.`; }
+    }
     if (member && r.action) {
       if (r.action.consent) Object.assign(member, { status: "ACTIVE", consent_at: new Date().toISOString() });
       if (r.action.opt_out) member.status = "REMOVED";
@@ -1424,6 +1442,165 @@ function growthRoute(method: string, p: string, body: Record<string, unknown>): 
   return NO_ROUTE;
 }
 const NO_ROUTE = Symbol("no-route");
+
+// ---------- الحضور بالموقع وبصمة الجوال (نسخة العرض) ----------
+const attSettings: AttendanceSettings = { work_start: "08:00", work_end: "17:00", grace_minutes: 15, work_days: [0, 1, 2, 3, 4], require_device: true, retention_days: 90 };
+const attSites: (SiteInput & { id: string })[] = [{ id: uid(), name: "المقر الرئيسي — الرياض", lat: 24.7136, lng: 46.6753, radius_m: 100, max_accuracy_m: 100, is_active: true }];
+const attLinks = new Set<string>();
+const attDevices = new Map<string, { label: string | null; created_at: string; last_used_at: string | null; credential_id?: string }>();
+type DemoAtt = { id: number; employee_id: string; kind: "IN" | "OUT"; at: string; status: "ACCEPTED" | "REJECTED"; reason: string | null; distance_m: number | null;
+  accuracy_m: number | null; late_minutes: number | null; flags: string[]; site_id: string | null; lat: number | null; lng: number | null };
+const attRecords: DemoAtt[] = [];
+let attSeq = 0;
+const riyadhNow = () => new Date(Date.now() + 3 * 3600e3);                 // ساعة الرياض ممثلة كـ UTC
+const riyadhIso = (d: Date) => d.toISOString().slice(0, 16);
+const toUtc = (localIso: string) => new Date(new Date(`${localIso}:00Z`).getTime() - 3 * 3600e3).toISOString();
+(() => {
+  const emps = employeesDemo.filter((e) => e.is_active).slice(0, 8);
+  emps.forEach((e, i) => { attLinks.add(e.id); if (i < 6) attDevices.set(e.id, { label: i % 2 ? "iPhone" : "Android", created_at: ts(-20), last_used_at: ts(-1) }); });
+  const today = riyadhNow();
+  for (let back = 13; back >= 0; back--) {
+    const d = new Date(today.getTime() - back * 864e5); const day = d.getUTCDay();
+    if (!attSettings.work_days.includes(day)) continue;
+    const date = d.toISOString().slice(0, 10);
+    emps.slice(0, 6).forEach((e, i) => {
+      if ((i + back) % 9 === 4) return;                                     // غياب متفرق
+      const inMin = 7 * 60 + 45 + ((i * 7 + back * 3) % 45);                // 7:45 – 8:30
+      const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      const late = Math.max(0, inMin - (8 * 60 + attSettings.grace_minutes));
+      if (back === 0 && today.getUTCHours() * 60 + today.getUTCMinutes() < inMin) return;
+      attRecords.push({ id: ++attSeq, employee_id: e.id, kind: "IN", at: toUtc(`${date}T${hhmm(inMin)}`), status: "ACCEPTED", reason: null, distance_m: 12 + ((i * 13) % 60),
+        accuracy_m: 8 + (i % 4) * 6, late_minutes: late, flags: [], site_id: attSites[0].id, lat: 24.7137, lng: 46.6754 });
+      if (back > 0) attRecords.push({ id: ++attSeq, employee_id: e.id, kind: "OUT", at: toUtc(`${date}T${hhmm(17 * 60 + ((i * 11) % 40))}`), status: "ACCEPTED", reason: null,
+        distance_m: 20 + i, accuracy_m: 10, late_minutes: null, flags: [], site_id: attSites[0].id, lat: 24.7137, lng: 46.6754 });
+    });
+    if (back === 2) attRecords.push({ id: ++attSeq, employee_id: emps[6].id, kind: "IN", at: toUtc(`${date}T08:05`), status: "REJECTED", reason: "OUTSIDE", distance_m: 2380,
+      accuracy_m: 15, late_minutes: null, flags: [], site_id: attSites[0].id, lat: 24.735, lng: 46.68 });
+  }
+})();
+const attLinkUrl = (id: string) => {
+  const base = typeof location !== "undefined" ? location.origin + location.pathname.split("/").slice(0, 2).join("/") : "https://app.haseef.sa";
+  return `${base.replace(/\/admin$/, "")}/attend/?t=demo-${id}`;
+};
+function attRecordView(r: DemoAtt) {
+  return { id: r.id, kind: r.kind, at: r.at, status: r.status, reason: r.reason, reason_label: r.reason ? ATT_REASON[r.reason] ?? r.reason : null,
+    distance_m: r.distance_m, accuracy_m: r.accuracy_m, late_minutes: r.late_minutes, flags: r.flags, flag_labels: r.flags.map((f) => ATT_FLAG[f] ?? f),
+    full_name: employeesDemo.find((e) => e.id === r.employee_id)?.full_name ?? "—", site_name: attSites.find((s) => s.id === r.site_id)?.name ?? null };
+}
+function attOverviewDemo() {
+  const access = addonAccess("ATTENDANCE");
+  if (!access.via) return { access, can_manage: true };
+  const dayStart = toUtc(`${riyadhIso(riyadhNow()).slice(0, 10)}T00:00`);
+  const people = employeesDemo.filter((e) => e.is_active).map((e) => {
+    const mine = attRecords.filter((r) => r.employee_id === e.id && r.status === "ACCEPTED" && r.at >= dayStart);
+    const ins = mine.filter((r) => r.kind === "IN"), outs = mine.filter((r) => r.kind === "OUT");
+    const dev = attDevices.get(e.id);
+    return { employee_id: e.id, full_name: e.full_name, job_title: e.job_title, has_link: attLinks.has(e.id), device_since: dev?.created_at ?? null,
+      device_label: dev?.label ?? null, last_used_at: dev?.last_used_at ?? null, in_at: ins[0]?.at ?? null, out_at: outs.at(-1)?.at ?? null,
+      late_minutes: ins[0]?.late_minutes ?? null };
+  });
+  return { access, can_manage: true, settings: { ...attSettings }, sites: attSites.map((x) => ({ ...x })), people,
+    recent: [...attRecords].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 100).map(attRecordView),
+    limit: (access.limits as { members?: number | null }).members ?? null, linked: attLinks.size };
+}
+function attPerson(token: string) {
+  const id = token.replace(/^demo-/, ""); const e = employeesDemo.find((x) => x.id === id && x.is_active);
+  if (!e || !attLinks.has(e.id)) throw new DemoError(404, "الرابط غير صالح أو أُلغي. اطلب رابطاً جديداً من الموارد البشرية أو من مساعد واتساب.");
+  if (!addonAccess("ATTENDANCE").via) throw new DemoError(403, "خدمة الحضور غير مفعّلة لمنشأتك حالياً.");
+  return e;
+}
+function attendancePublicRoute(method: string, p: string, body: Record<string, unknown>): unknown {
+  const m = p.match(/^\/public\/attendance\/([^/]+)(\/enroll|\/check)?$/);
+  if (!m) return NO_ROUTE;
+  const e = attPerson(decodeURIComponent(m[1]));
+  const dayStart = toUtc(`${riyadhIso(riyadhNow()).slice(0, 10)}T00:00`);
+  if (!m[2]) {
+    const dev = attDevices.get(e.id);
+    return { employee_name: e.full_name, org_name: orgs.find((o) => o.id === ORG_A)!.name, has_device: !!dev, require_device: attSettings.require_device,
+      sites: attSites.filter((x) => x.is_active).map((x) => x.name),
+      today: attRecords.filter((r) => r.employee_id === e.id && r.at >= dayStart).map((r) => ({ kind: r.kind, at: r.at, status: r.status, reason: r.reason,
+        reason_label: r.reason ? ATT_REASON[r.reason] : null, late_minutes: r.late_minutes })),
+      webauthn: { rp_id: typeof location !== "undefined" ? location.hostname : "localhost", rp_name: "حصيف", challenge: uid(), purpose: dev ? "CHECK" : "ENROLL",
+        user_id: e.id, credential_id: dev ? dev.credential_id ?? "demo-credential" : null } };
+  }
+  if (m[2] === "/enroll") {
+    if (attDevices.has(e.id)) throw new DemoError(409, "لديك جهاز مربوط. لتغييره اطلب من الموارد البشرية إلغاء الربط.");
+    if (!body.client_data_json) throw new DemoError(400, "تعذّر ربط الجهاز");
+    attDevices.set(e.id, { label: (body.label as string) || "جوال", created_at: new Date().toISOString(), last_used_at: null, credential_id: (body.credential_id as string) || undefined });
+    return { enrolled: true };
+  }
+  // نسخة العرض: يُطلب توقيع البصمة من المتصفح فعلاً، لكن التحقق التشفيري يتم في الخادم الحقيقي فقط
+  const dev = attDevices.get(e.id);
+  const now = riyadhNow(); const nowLocal = riyadhIso(now);
+  let res: AttResult;
+  if (attSettings.require_device && (!dev || !body.signature)) res = { status: "REJECTED", reason: dev ? "BAD_DEVICE" : "NO_DEVICE", site_id: null, distance_m: null, flags: [], late_minutes: null };
+  else {
+    const last = [...attRecords].filter((r) => r.employee_id === e.id && r.status === "ACCEPTED").sort((a, b) => b.at.localeCompare(a.at))[0];
+    res = evaluateAttendance({ lat: Number(body.lat), lng: Number(body.lng), accuracy: Number(body.accuracy), sites: attSites, kind: body.kind === "OUT" ? "OUT" : "IN",
+      nowLocal, weekday: now.getUTCDay(), workStart: attSettings.work_start, graceMinutes: attSettings.grace_minutes, workDays: attSettings.work_days,
+      last: last && last.lat != null ? { atLocal: riyadhIso(new Date(new Date(last.at).getTime() + 3 * 3600e3)), lat: last.lat, lng: last.lng } : null });
+    if (dev) dev.last_used_at = new Date().toISOString();
+  }
+  attRecords.push({ id: ++attSeq, employee_id: e.id, kind: body.kind === "OUT" ? "OUT" : "IN", at: new Date().toISOString(), status: res.status, reason: res.reason,
+    distance_m: res.distance_m, accuracy_m: Math.round(Number(body.accuracy)), late_minutes: res.late_minutes, flags: res.flags, site_id: res.site_id,
+    lat: Number(body.lat), lng: Number(body.lng) });
+  return { status: res.status, reason: res.reason, reason_label: res.reason ? ATT_REASON[res.reason] : null, distance_m: res.distance_m,
+    site_name: attSites.find((x) => x.id === res.site_id)?.name ?? null, late_minutes: res.late_minutes, at: new Date().toISOString(), kind: body.kind };
+}
+function attendanceRoute(method: string, p: string, q: URLSearchParams, body: Record<string, unknown>): unknown {
+  let m: RegExpMatchArray | null;
+  if (p === "/attendance/overview") return attOverviewDemo();
+  if (!p.startsWith("/attendance/")) return NO_ROUTE;
+  if (!addonAccess("ATTENDANCE").via) throw new DemoError(402, "خدمة الحضور غير مفعّلة. اشترك فيها من «الاشتراك والدفعات».");
+  if (p === "/attendance/settings") {
+    const days = ((body.work_days as number[]) ?? []).filter((d) => d >= 0 && d <= 6);
+    Object.assign(attSettings, { work_start: String(body.work_start ?? "08:00").slice(0, 5), work_end: String(body.work_end ?? "17:00").slice(0, 5),
+      grace_minutes: Number(body.grace_minutes) || 0, work_days: [...new Set(days)].sort(), require_device: body.require_device !== false,
+      retention_days: Number(body.retention_days) || 90 });
+    return { ok: true };
+  }
+  const site = (b: Record<string, unknown>): SiteInput => {
+    const r = Number(b.radius_m), lat = Number(b.lat), lng = Number(b.lng);
+    if (String(b.name ?? "").trim().length < 2) throw new DemoError(422, "اكتب اسم الموقع");
+    if (!(lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180)) throw new DemoError(422, "إحداثيات غير صحيحة");
+    if (!(r >= 20 && r <= 2000)) throw new DemoError(422, "نصف القطر بين 20 و2000 متر");
+    return { name: String(b.name), lat, lng, radius_m: r, max_accuracy_m: Number(b.max_accuracy_m) || 100, is_active: b.is_active !== false };
+  };
+  if (p === "/attendance/sites" && method === "POST") { const x = { id: uid(), ...site(body) }; attSites.push(x); return { id: x.id }; }
+  if ((m = p.match(/^\/attendance\/sites\/([^/]+)$/))) {
+    const x = attSites.find((y) => y.id === m![1]); if (!x) throw new DemoError(404, "الموقع غير موجود");
+    if (method === "DELETE") { x.is_active = false; return undefined; }
+    Object.assign(x, site(body)); return { ok: true };
+  }
+  if ((m = p.match(/^\/attendance\/people\/([^/]+)\/(link|device)$/))) {
+    const e = employeesDemo.find((x) => x.id === m![1] && x.is_active); if (!e) throw new DemoError(404, "الموظف غير موجود");
+    if (m[2] === "device") { attDevices.delete(e.id); return undefined; }
+    const lim = (addonAccess("ATTENDANCE").limits as { members?: number | null }).members;
+    if (lim != null && !attLinks.has(e.id) && attLinks.size >= lim) throw new DemoError(409, `بلغت الحد (${lim} موظفاً) في اشتراك الحضور`);
+    attLinks.add(e.id); return { url: attLinkUrl(e.id) };
+  }
+  if (p === "/attendance/report") {
+    const month = q.get("month") ?? riyadhIso(riyadhNow()).slice(0, 7);
+    const [y, mo] = month.split("-").map(Number);
+    const todayIso = riyadhIso(riyadhNow()).slice(0, 10);
+    let workdays = 0;
+    for (let d = 1; d <= new Date(Date.UTC(y, mo, 0)).getUTCDate(); d++) {
+      const iso = `${month}-${String(d).padStart(2, "0")}`;
+      if (iso > todayIso) break;
+      if (attSettings.work_days.includes(new Date(`${iso}T00:00:00Z`).getUTCDay())) workdays++;
+    }
+    const inMonth = (r: DemoAtt) => riyadhIso(new Date(new Date(r.at).getTime() + 3 * 3600e3)).slice(0, 7) === month;
+    return { month, workdays, rows: employeesDemo.filter((e) => e.is_active).map((e) => {
+      const rs = attRecords.filter((r) => r.employee_id === e.id && inMonth(r));
+      const ins = rs.filter((r) => r.kind === "IN" && r.status === "ACCEPTED");
+      const days = new Set(ins.map((r) => riyadhIso(new Date(new Date(r.at).getTime() + 3 * 3600e3)).slice(0, 10))).size;
+      return { id: e.id, full_name: e.full_name, days_present: days, late_days: ins.filter((r) => (r.late_minutes ?? 0) > 0).length,
+        late_minutes: ins.reduce((a, r) => a + (r.late_minutes ?? 0), 0), rejected: rs.filter((r) => r.status === "REJECTED").length,
+        flagged: rs.filter((r) => r.status === "ACCEPTED" && r.flags.length).length, absent_days: Math.max(workdays - days, 0) };
+    }).sort((a, b) => a.full_name.localeCompare(b.full_name, "ar")) };
+  }
+  return NO_ROUTE;
+}
 
 function route(method: string, path: string, body: Record<string, unknown>, token: string | null): unknown {
   const p = path.split("?")[0];
@@ -1461,6 +1638,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
     return { access_token: "demo-client", org_id: ORG_A, trial_days: 14 };
   }
   if (method === "POST" && p === "/public/verify-email") { emailVerified = true; return { verified: true }; }
+  if (p.startsWith("/public/attendance/")) return attendancePublicRoute(method, p, body);
   if (!token) throw new DemoError(401, "سجّل الدخول أولاً");
   const role = TEAM_ROLE[token];
   const isAdmin = !!role;
@@ -1858,6 +2036,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
   }
 
   { const g = growthRoute(method, p, body); if (g !== NO_ROUTE) return g; }
+  { const g = attendanceRoute(method, p, q, body); if (g !== NO_ROUTE) return g; }
 
   // ---------- العمل والموظفين
   if (p === "/labor/overview") return laborOverviewDemo();

@@ -25,6 +25,7 @@ celery.conf.beat_schedule = {
     "recompute-scores":      {"task": "haseef.recompute_scores", "schedule": crontab(hour=2, minute=0)},
     "labor-tasks-daily":     {"task": "haseef.labor_tasks",      "schedule": crontab(hour=0, minute=30)},
     "tax-tasks-daily":       {"task": "haseef.tax_tasks",        "schedule": crontab(hour=0, minute=40)},
+    "attendance-purge":      {"task": "haseef.attendance_purge", "schedule": crontab(hour=3, minute=15)},
     "installment-reminders": {"task": "haseef.remind_installments", "schedule": crontab(hour=s.alert_send_hour, minute=10)},
 }
 
@@ -57,6 +58,13 @@ def labor_tasks() -> int:
 def tax_tasks() -> int:
     from .services import governance_service, tax_service
     return tax_service.ensure_all(platform_tx, governance_service.riyadh_today())
+
+
+@celery.task(name="haseef.attendance_purge")
+def attendance_purge() -> int:
+    from .routers.attendance import purge_coordinates
+    with platform_tx() as conn:
+        return purge_coordinates(conn)
 
 
 @celery.task(name="haseef.recompute_scores")

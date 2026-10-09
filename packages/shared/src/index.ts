@@ -13,3 +13,5 @@ export * from "./labor.ts";
 export * from "./tax.ts";
 export * from "./ics.ts";
 export * from "./bot.ts";
+export * from "./attendance.ts";
+export * from "./webauthnBrowser.ts";

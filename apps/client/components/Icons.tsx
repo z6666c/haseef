@@ -205,3 +205,10 @@ export const ChatBot = (p: P) => (
     <circle cx="14.5" cy="10.5" r="1" fill={A} stroke="none" />
   </Svg>
 );
+
+export const MapPinCheck = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z" />
+    <path d="m9.5 10 1.8 1.8 3.4-3.6" stroke={A} />
+  </Svg>
+);

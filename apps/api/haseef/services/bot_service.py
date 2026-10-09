@@ -107,10 +107,24 @@ def process_inbound(c: Connection, *, phone: str, body: str, profile_name: str |
     if not access.get("via") or not settings["enabled"]:
         return "مساعد الموظفين غير مفعّل لمنشأتك حالياً."
     r = handle(body, build_state(c, org_id, dict(member), access, settings))
+    if r.action and r.action.get("attend"):
+        r.text = attendance_reply(c, org_id, member["id"])
     _log(c, org_id, member["id"], "IN", body)
     _apply(c, org_id, dict(member), r)
     _log(c, org_id, member["id"], "OUT", r.text, intent=r.intent, sources=r.sources)
     return r.text
+
+
+def attendance_reply(c: Connection, org_id, member_id) -> str:
+    """«حضور» في واتساب: رابط شخصي جديد لتسجيل الحضور (يتطلب ربط رقم الموظف بسجله وتفعيل خدمة الحضور)."""
+    from ..routers.attendance import issue_link
+    if not pricing.addon_access(c, org_id, "ATTENDANCE")["via"]:
+        return "خدمة تسجيل الحضور غير مفعّلة لمنشأتك."
+    emp = c.execute(text("SELECT employee_id FROM bot_members WHERE id = :m"), {"m": member_id}).scalar_one_or_none()
+    if not emp:
+        return "رقمك غير مربوط بسجلك الوظيفي. اطلب من الموارد البشرية ربطه من صفحة بوت الموظفين."
+    url = issue_link(c, org_id, emp)
+    return f"رابط تسجيل الحضور والانصراف الخاص بك (لا تشاركه):\n{url}\nسيطلب منك الموقع وبصمة جوالك."
 
 
 def simulate(c: Connection, org_id: UUID, *, member_id: UUID | None, body: str) -> dict:
@@ -126,6 +140,8 @@ def simulate(c: Connection, org_id: UUID, *, member_id: UUID | None, body: str) 
     if member is None:
         state.member_name = "تجربة"
     r = handle(body, state)
+    if r.action and r.action.get("attend"):
+        r.text = attendance_reply(c, org_id, member["id"]) if member else "في التجربة بصفة المدير لا يوجد سجل موظف. اختر موظفاً مربوطاً لتجربة رابط الحضور."
     if member:
         _apply(c, org_id, member, r)
     _log(c, org_id, member["id"] if member else None, "IN", body, simulated=True)

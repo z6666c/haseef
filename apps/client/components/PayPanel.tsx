@@ -5,7 +5,13 @@ import { useEffect, useState } from "react";
 import { PLAN_LABEL, formatDate, round2, sar, type CheckoutOptions } from "@haseef/shared";
 import { api } from "@/lib/session";
 
-/** الدفع الإلكتروني: القسط المستحق، أو الاشتراك/التجديد، أو إضافة بوت الموظفين. */
+const ADDON_ACCESS: Record<string, (o: CheckoutOptions) => CheckoutOptions["bot"] | undefined> = { WA_BOT: (o) => o.bot, ATTENDANCE: (o) => o.attendance };
+const ADDON_BLURB: Record<string, string> = {
+  WA_BOT: "مساعد واتساب يجيب موظفيك من سياسات منشأتك.",
+  ATTENDANCE: "تسجيل حضور الموظفين من جوالاتهم داخل نطاق المنشأة مع التحقق بالبصمة.",
+};
+
+/** الدفع الإلكتروني: القسط المستحق، أو الاشتراك/التجديد، أو الإضافات (بوت الموظفين، الحضور بالموقع). */
 export function PayPanel() {
   const router = useRouter();
   const [o, setO] = useState<CheckoutOptions | null>(null);
@@ -20,7 +26,6 @@ export function PayPanel() {
   const vat = 1 + o.vat_rate;
   const plan = o.plans.find((p) => p.tier === tier);
   const price = plan ? (cycle === "YEARLY" ? plan.yearly_price_sar : plan.monthly_price_sar) : 0;
-  const bot = o.addons.find((a) => a.code === "WA_BOT");
 
   async function go(key: string, b: Parameters<typeof api.checkout>[0]) {
     setBusy(key); setError(null);
@@ -62,20 +67,25 @@ export function PayPanel() {
               onClick={() => go("sub", { purpose: "SUBSCRIPTION", plan_tier: tier, billing_cycle: cycle })}>{busy === "sub" ? "جارٍ التحويل…" : "ادفع الآن"}</button>
           </div>
         )}
-        {bot && bot.is_active && (
-          <div className="panel pay-card">
-            <h3>{bot.name}</h3>
-            {o.bot.via === "PLAN" ? <p className="small">مشمول في باقتك مجاناً.</p> : (
-              <>
-                <p className="price">{sar(round2(bot.monthly_price * vat))} <small>شهرياً شامل الضريبة</small></p>
-                <p className="small muted">{o.bot.via === "ADDON" && o.bot.paid_until ? `مفعّل حتى ${formatDate(o.bot.paid_until.slice(0, 10))}.` : "مساعد واتساب يجيب موظفيك من سياسات منشأتك."}
-                  {" "}حتى {bot.limits.members ?? "∞"} موظفاً و{bot.limits.questions ?? "∞"} سؤال شهرياً.</p>
-                <button className="btn" type="button" disabled={!o.can_pay || !!busy}
-                  onClick={() => go("bot", { purpose: "ADDON", addon_code: "WA_BOT" })}>{busy === "bot" ? "جارٍ التحويل…" : o.bot.via ? "مدّد شهراً" : "اشترك في البوت"}</button>
-              </>
-            )}
-          </div>
-        )}
+        {o.addons.filter((a) => a.is_active).map((ad) => {
+          const acc = ADDON_ACCESS[ad.code]?.(o);
+          if (!acc) return null;
+          const k = `addon-${ad.code}`;
+          return (
+            <div key={ad.code} className="panel pay-card">
+              <h3>{ad.name}</h3>
+              {acc.via === "PLAN" ? <p className="small">مشمول في باقتك مجاناً.</p> : (
+                <>
+                  <p className="price">{sar(round2(ad.monthly_price * vat))} <small>شهرياً شامل الضريبة</small></p>
+                  <p className="small muted">{acc.via === "ADDON" && acc.paid_until ? `مفعّل حتى ${formatDate(acc.paid_until.slice(0, 10))}.` : ADDON_BLURB[ad.code]}
+                    {" "}{ad.code === "WA_BOT" ? `حتى ${ad.limits.members ?? "∞"} موظفاً و${ad.limits.questions ?? "∞"} سؤال شهرياً.` : ad.limits.members ? `حتى ${ad.limits.members} موظفاً.` : ""}</p>
+                  <button className="btn" type="button" disabled={!o.can_pay || !!busy}
+                    onClick={() => go(k, { purpose: "ADDON", addon_code: ad.code })}>{busy === k ? "جارٍ التحويل…" : acc.via ? "مدّد شهراً" : "اشترك"}</button>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
       {error && <p className="error" role="alert">{error}</p>}
     </section>

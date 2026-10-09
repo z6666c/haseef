@@ -94,7 +94,7 @@ function ChatTab({ ov, onDone }: { ov: BotOverview; onDone: () => void }) {
     } catch (e) { setChat((c) => [...c, { dir: "out", body: e instanceof Error ? e.message : "تعذّر" }]); }
     finally { setBusy(false); }
   }
-  const samples = ["مساعدة", "السياسات", "كم مدة الإجازة السنوية؟", "ما ساعات الدوام؟", "كم راتب زميلي؟", "أقر 1"];
+  const samples = ["مساعدة", "السياسات", "كم مدة الإجازة السنوية؟", "ما ساعات الدوام؟", "كم راتب زميلي؟", "أقر 1", "حضور"];
   return (
     <section className="gov-section" style={{ marginTop: 8 }}>
       <div className="grid" style={{ marginBottom: 8 }}>
@@ -143,16 +143,23 @@ function MembersTab({ ov, act }: { ov: BotOverview; act: Act }) {
             <div className="field"><label htmlFor="bn">الاسم</label><input id="bn" required minLength={2} value={name} onChange={(e) => setName(e.target.value)} /></div>
             <div className="field"><label htmlFor="bp">الجوال</label><input id="bp" dir="ltr" required pattern="\+9665\d{8}" value={phone} onChange={(e) => setPhone(e.target.value.trim())} /></div>
           </div>
-          <p className="small muted">تصله رسالة دعوة على واتساب، ولا يُفعَّل إلا بعد رده «موافق». أو شارك رمز الانضمام <span className="code-box">انضمام {s.invite_code}</span> ليرسله الموظف بنفسه{s.require_approval ? " وتوافق على طلبه" : ""}.</p>
+          <p className="small muted">تصله رسالة دعوة على واتساب، ولا يُفعَّل إلا بعد رده «موافق». أو شارك رمز الانضمام <span className="code-box">انضمام {s.invite_code}</span> ليرسله الموظف بنفسه{s.require_approval ? " وتوافق على طلبه" : ""}.
+            اربط رقم الموظف بسجله الوظيفي ليستطيع طلب رابط الحضور بكتابة «حضور».</p>
           <div><button className="btn btn-action" type="submit">أرسل الدعوة</button></div>
         </form>
       )}
       <table className="deadlines labor-table">
-        <thead><tr><th>الموظف</th><th>الحالة</th><th>الإقرارات</th><th /></tr></thead>
+        <thead><tr><th>الموظف</th><th>الحالة</th><th>سجله الوظيفي</th><th>الإقرارات</th><th /></tr></thead>
         <tbody>{(ov.members ?? []).map((m) => (
           <tr key={m.id}>
             <td><b>{m.full_name}</b><div className="small muted" dir="ltr" style={{ textAlign: "start" }}>{m.phone}</div></td>
             <td><span className="status-chip" data-s={STATUS[m.status]?.[0]}>{STATUS[m.status]?.[1] ?? m.status}</span><div className="small muted">{m.joined_via === "CODE" ? "انضم بالرمز" : "بدعوة"}</div></td>
+            <td>{ov.can_manage && ov.employees ? (
+              <select aria-label={`ربط ${m.full_name} بسجل موظف`} value={m.employee_id ?? ""} style={{ maxWidth: 180 }}
+                onChange={(e) => act(() => api.botLinkMember(m.id, e.target.value || null), e.target.value ? `رُبط ${m.full_name} بسجله الوظيفي` : `أُلغي ربط ${m.full_name}`)}>
+                <option value="">غير مربوط</option>
+                {ov.employees.map((x) => <option key={x.id} value={x.id}>{x.full_name}</option>)}
+              </select>) : <span className="small muted">{m.employee_id ? "مربوط" : "—"}</span>}</td>
             <td>{m.acks}</td>
             <td>{ov.can_manage && <div style={{ display: "flex", gap: 6 }}>
               {m.status === "PENDING" && <button className="btn btn-action btn-xs" type="button" onClick={() => act(() => api.botApprove(m.id), `فُعّل ${m.full_name}`)}>موافقة</button>}

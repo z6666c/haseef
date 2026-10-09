@@ -58,6 +58,7 @@ def overview(t: Tenant = Depends(get_tenant)):
                (SELECT count(*) FROM policy_acknowledgments a WHERE a.policy_id = p.id AND a.policy_version = p.version) AS acks
         FROM internal_policies p WHERE p.status = 'ACTIVE' ORDER BY p.title""")).mappings()]
     faqs = [dict(r) for r in c.execute(text("SELECT id, question, answer, is_active FROM bot_faqs ORDER BY created_at")).mappings()]
+    employees = [dict(r) for r in c.execute(text("SELECT id, full_name FROM org_employees WHERE is_active ORDER BY full_name")).mappings()]
     log = [dict(r) for r in c.execute(text("""
         SELECT b.id, b.direction, b.body, b.intent, b.simulated, b.created_at, m.full_name
         FROM bot_messages b LEFT JOIN bot_members m ON m.id = b.member_id ORDER BY b.id DESC LIMIT 60""")).mappings()]
@@ -69,7 +70,7 @@ def overview(t: Tenant = Depends(get_tenant)):
         WHERE o.intent = 'NO_ANSWER' AND NOT o.simulated ORDER BY o.id DESC LIMIT 20""")).mappings()]
     active = sum(1 for m in members if m["status"] == "ACTIVE")
     return {**out, "settings": {k: _ser(v) for k, v in s.items() if k != "org_id"},
-            "members": [{k: _ser(v) for k, v in m.items()} for m in members], "policies": pols, "faqs": faqs,
+            "members": [{k: _ser(v) for k, v in m.items()} for m in members], "policies": pols, "faqs": faqs, "employees": employees,
             "log": [{k: _ser(v) for k, v in m.items()} for m in log], "unanswered": [{k: _ser(v) for k, v in m.items()} for m in unanswered],
             "stats": {"members_active": active, "members_total": len(members),
                       "questions_month": bot_service.questions_this_month(c, t.org_id),
@@ -140,6 +141,23 @@ def approve(member_id: UUID, t: Tenant = Depends(get_tenant)):
     if not n:
         raise HTTPException(status.HTTP_409_CONFLICT, "لا يوجد طلب انضمام بانتظار الموافقة")
     _audit(t.conn, t, "APPROVE", "bot_member", member_id)
+    return {"ok": True}
+
+
+class MemberLinkIn(BaseModel):
+    employee_id: UUID | None = None
+
+
+@router.patch("/members/{member_id}")
+def link_member(member_id: UUID, body: MemberLinkIn, t: Tenant = Depends(get_tenant)):
+    """ربط رقم الموظف في البوت بسجله الوظيفي (يلزم لرابط الحضور)."""
+    _need(t)
+    if body.employee_id and not t.conn.execute(text("SELECT 1 FROM org_employees WHERE id = :e AND is_active"), {"e": body.employee_id}).first():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "الموظف غير موجود")
+    if not t.conn.execute(text("UPDATE bot_members SET employee_id = :e WHERE id = :m AND status <> 'REMOVED'"),
+                          {"e": body.employee_id, "m": member_id}).rowcount:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "العضو غير موجود")
+    _audit(t.conn, t, "LINK", "bot_member", member_id, {"employee_id": str(body.employee_id) if body.employee_id else None})
     return {"ok": True}
 
 
