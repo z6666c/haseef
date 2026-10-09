@@ -9,6 +9,7 @@ import {
   SIZE_LABEL, countDays, formatDate, type AdminMember, type AdminOrgDetail, type AuditEntry,
 } from "@haseef/shared";
 import { Dialog, ReasonDialog, TempPasswordDialog, fmtDateTime, useCan } from "@/components/ui";
+import { usePlanPrices } from "@/components/usePlanPrices";
 import { api } from "@/lib/session";
 
 type Pending =
@@ -286,7 +287,7 @@ function PaymentDialog({ open, org, onClose, onSubmit }: {
 }) {
   const s = org.subscription;
   const f = useForm(open, { cycle: "MONTHLY" as "MONTHLY" | "YEARLY", tier: s?.plan_tier ?? "PROFESSIONAL_GRC", amount: "", reference: "", note: "" });
-  const prices: Record<string, [number, number]> = { ESSENTIAL: [199, 1990], PROFESSIONAL_GRC: [499, 4990], ENTERPRISE: [1299, 12990] };
+  const prices = usePlanPrices();
   const expected = prices[f.v.tier]?.[f.v.cycle === "YEARLY" ? 1 : 0];
   return (
     <Dialog open={open} title="تسجيل دفعة" onClose={onClose}>

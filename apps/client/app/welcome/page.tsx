@@ -8,11 +8,11 @@ import { Logo } from "@/components/Logo";
 import { api } from "@/lib/session";
 
 const PLANS = [
-  { key: "ESSENTIAL", name: "الأساس", m: 199, y: 1990, for: "المؤسسات والمنشآت الناشئة",
+  { key: "ESSENTIAL", name: "الأساس", m: 219, y: 2190, for: "المؤسسات والمنشآت الناشئة",
     items: ["التراخيص والوثائق وتنبيهاتها", "200 رسالة واتساب شهرياً", "الالتزامات النظامية حسب كيانك", "العمل والموظفين: التأمينات وحماية الأجور وقوى", "المكتبة المرجعية"] },
-  { key: "PROFESSIONAL_GRC", name: "الحوكمة والنمو", m: 499, y: 4990, for: "الشركات النامية", featured: true,
+  { key: "PROFESSIONAL_GRC", name: "الحوكمة والنمو", m: 549, y: 5490, for: "الشركات النامية", featured: true,
     items: ["كل ما في الأساس", "هيكل الحوكمة وفحصه على 30 معياراً", "السياسات: تبنٍّ واعتماد ومراجعة", "مركز حماية البيانات وتقييم الأثر", "1,000 رسالة واتساب شهرياً", "خصم 15% على الاستشارات القانونية"] },
-  { key: "ENTERPRISE", name: "كبار العملاء", m: 1299, y: 12990, for: "المجموعات وشركات المساهمة",
+  { key: "ENTERPRISE", name: "كبار العملاء", m: 1429, y: 14290, for: "المجموعات وشركات المساهمة",
     items: ["كل ما في الحوكمة والنمو", "لوحة موحدة لعدة منشآت وفروع", "تقرير مجلس الإدارة السنوي", "رسائل بلا حد", "خصم 25% على الاستشارات القانونية"] },
 ] as const;
 
@@ -53,6 +53,18 @@ export default function WelcomePage() {
     return x ? [x.monthly_price_sar, x.yearly_price_sar] : fallback;
   };
   const extras = (pricing?.addons ?? []).filter((a) => a.is_active !== false);
+  /** سطر لكل مجموعة إضافات: الموارد البشرية (أقل شريحة)، البوت، والحزمة. */
+  const addonLines = (tier: string): string[] => {
+    if (!extras.length) return [];
+    if (extras.every((a) => a.included_tiers.includes(tier))) return ["الموارد البشرية وبوت الموظفين: مشمولة"];
+    const hr = extras.filter((a) => a.code === "ATTENDANCE" || a.code === "ATTENDANCE_75");
+    const bot = extras.find((a) => a.code === "WA_BOT"), bundle = extras.find((a) => a.code === "STAFF_BUNDLE");
+    const out: string[] = [];
+    if (hr.length) out.push(hr.some((a) => a.included_tiers.includes(tier)) ? "الموارد البشرية: مشمولة" : `الموارد البشرية: من ${Math.min(...hr.map((a) => a.monthly_price))} ريال/شهر`);
+    if (bot) out.push(bot.included_tiers.includes(tier) ? "بوت الموظفين: مشمول" : `بوت الموظفين: ${bot.monthly_price} ريال/شهر`);
+    if (bundle && !bundle.included_tiers.includes(tier)) out.push(`أو حزمة الموظفين (الاثنين): ${bundle.monthly_price} ريال/شهر`);
+    return out;
+  };
   const [f, setF] = useState<TrialInput>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -91,7 +103,7 @@ export default function WelcomePage() {
           <p className="lp-kicker">منصة سعودية للحوكمة والامتثال وحماية البيانات</p>
           <h1>كل التزامات منشأتك<br />في رادار واحد.</h1>
           <p className="lp-lead">حصيف يتابع تراخيصك ويذكّرك قبل انتهائها، ويبني هيكل حوكمتك وسياساتك من نماذج جاهزة،
-            ويجهّزك لنظام حماية البيانات الشخصية — بالعربية، وبيانات داخل المملكة، من 199 ريالاً شهرياً.</p>
+            ويجهّزك لنظام حماية البيانات الشخصية — بالعربية، وبيانات داخل المملكة، من {priceOf("ESSENTIAL", [219, 2190])[0]} ريالاً شهرياً.</p>
           <div className="lp-cta">
             <Link className="btn btn-action lp-btn-lg" href="/signup">ابدأ مجاناً 14 يوماً</Link>
             <Link className="btn btn-quiet lp-btn-lg" href="/login">جرّب النسخة التجريبية</Link>
@@ -159,7 +171,7 @@ export default function WelcomePage() {
               <p className="lp-muted">{p.for}</p>
               <p className="lp-price"><b>{priceOf(p.key, [p.m, p.y])[yearly ? 1 : 0].toLocaleString("en-US")}</b> ريال / {yearly ? "سنة" : "شهر"}</p>
               <ul>{p.items.map((i) => <li key={i}>{i}</li>)}
-                {extras.map((a) => <li key={a.code}>{a.included_tiers.includes(p.key) ? `${a.name}: مشمول` : `${a.name}: إضافة ${a.monthly_price} ريال/شهر`}</li>)}</ul>
+                {addonLines(p.key).map((t) => <li key={t}>{t}</li>)}</ul>
               <Link className={`btn ${"featured" in p ? "btn-action" : "btn-quiet"}`} href="/signup">ابدأ مجاناً 14 يوماً</Link>
               <button type="button" className="link-btn small" onClick={() => pick(p.key)}>أو اطلب عرضاً من فريقنا</button>
             </div>

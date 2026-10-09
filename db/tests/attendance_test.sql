@@ -19,7 +19,7 @@ BEGIN
     RAISE EXCEPTION 'radius below 20m accepted';
   EXCEPTION WHEN check_violation THEN NULL;
   END;
-  IF (SELECT monthly_price FROM addon_catalog WHERE code = 'ATTENDANCE') <> 49 THEN RAISE EXCEPTION 'attendance price seed'; END IF;
+  IF (SELECT monthly_price FROM addon_catalog WHERE code = 'ATTENDANCE') <> 149 THEN RAISE EXCEPTION 'attendance price seed'; END IF;
   PERFORM set_config('att_test.a', a::text, false);
 END $$;
 BEGIN;

@@ -9,6 +9,7 @@ import {
   type FinanceStatement, type PaymentPlanDetail, type VatReturn,
 } from "@haseef/shared";
 import { Dialog, ReasonDialog, fmtDateTime, useCan } from "@/components/ui";
+import { usePlanPrices } from "@/components/usePlanPrices";
 import { api } from "@/lib/session";
 
 type Tab = "overview" | "plans" | "invoices" | "expenses" | "vat" | "profile";
@@ -554,7 +555,6 @@ function Profile() {
 
 // ---------------------------------------------------------------- الأقساط السنوية
 const COUNTS: [number, string][] = [[1, "دفعة واحدة"], [2, "قسطان (كل 6 أشهر)"], [3, "3 أقساط (كل 4 أشهر)"], [4, "4 أقساط ربعية"], [6, "6 أقساط (كل شهرين)"], [12, "12 قسطاً شهرياً"]];
-const YEARLY: Record<string, number> = { ESSENTIAL: 1990, PROFESSIONAL_GRC: 4990, ENTERPRISE: 12990 };
 const PLAN_STATUS: Record<string, string> = { ACTIVE: "فعّالة", COMPLETED: "مكتملة السداد", CANCELED: "ملغاة" };
 
 function Plans({ focus }: { focus: string | null }) {
@@ -686,6 +686,8 @@ function CreatePlan({ onClose, onDone }: { onClose: () => void; onDone: (id: str
     total: "", note: "", pay_first: true, first_reference: "" });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const prices = usePlanPrices();
+  const YEARLY = Object.fromEntries(Object.entries(prices).map(([k, v]) => [k, v[1]])) as Record<string, number>;
   useEffect(() => { api.admin.organizations().then((o) => { setOrgList(o); setF((x) => ({ ...x, org_id: x.org_id || o[0]?.id || "" })); }).catch(() => {}); }, []);
   const total = Number(f.total) || YEARLY[f.plan_tier];
   const each = round2(total / f.installments);

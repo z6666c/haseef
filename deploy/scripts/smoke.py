@@ -175,8 +175,11 @@ assert call("GET", "/v1/attendance/overview", org_id=so)["access"]["via"] is Non
 call("POST", "/v1/attendance/sites", {"name": "المقر", "lat": 24.7136, "lng": 46.6753}, expect=402, org_id=so)
 token = admin_token
 att = next(a for a in call("GET", "/v1/admin/pricing")["addons"] if a["code"] == "ATTENDANCE")
-assert att["monthly_price"] == 49 and att["included_tiers"] == ["ENTERPRISE"], att
-call("PUT", "/v1/admin/pricing/addons/ATTENDANCE", {"monthly_price": 49, "included_tiers": ["ENTERPRISE", "ESSENTIAL"], "members": 50,
+assert att["monthly_price"] == 149 and att["included_tiers"] == ["ENTERPRISE"] and att["limits"]["members"] == 25, att
+tiers = {a["code"]: a for a in call("GET", "/v1/admin/pricing")["addons"]}
+assert tiers["ATTENDANCE_75"]["monthly_price"] == 249 and tiers["STAFF_BUNDLE"]["monthly_price"] == 199, tiers
+assert {p["tier"]: p["monthly_price_sar"] for p in call("GET", "/v1/admin/pricing")["plans"]} == {"ESSENTIAL": 219, "PROFESSIONAL_GRC": 549, "ENTERPRISE": 1429}
+call("PUT", "/v1/admin/pricing/addons/ATTENDANCE", {"monthly_price": 149, "included_tiers": ["ENTERPRISE", "ESSENTIAL"], "members": 25,
                                                      "questions": None, "included_unlimited": True, "is_active": True})
 token = su["access_token"]
 ao = call("GET", "/v1/attendance/overview", org_id=so)
@@ -247,9 +250,9 @@ step("تقويم المناسبات وتفعيل تهنئة الموظفين")
 token = admin_token
 call("PUT", "/v1/admin/pricing/addons/WA_BOT", {"monthly_price": 99, "included_tiers": ["ENTERPRISE"], "members": 50,
                                                  "questions": 1000, "included_unlimited": True, "is_active": True})
-call("PUT", "/v1/admin/pricing/addons/ATTENDANCE", {"monthly_price": 49, "included_tiers": ["ENTERPRISE"], "members": 50,
+call("PUT", "/v1/admin/pricing/addons/ATTENDANCE", {"monthly_price": 149, "included_tiers": ["ENTERPRISE"], "members": 25,
                                                      "questions": None, "included_unlimited": True, "is_active": True})
 pub = {a["code"]: a for a in call("GET", "/v1/public/pricing")["addons"]}
-assert pub["WA_BOT"]["monthly_price"] == 99 and pub["ATTENDANCE"]["monthly_price"] == 49, pub
+assert pub["WA_BOT"]["monthly_price"] == 99 and pub["ATTENDANCE"]["monthly_price"] == 149, pub
 step("التسعير من غرفة العمليات، وبوت الموظفين يجيب من الأسئلة الشائعة ويرفض الأسئلة الحساسة")
 print("اكتمل الفحص المالي والعمالي والتسجيل والبوت والحضور")

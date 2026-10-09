@@ -54,7 +54,10 @@ def options(t: Tenant = Depends(get_tenant)):
             {"o": t.org_id}).mappings().one_or_none()
         bot = pricing.addon_access(c, t.org_id, "WA_BOT")
         att = pricing.addon_access(c, t.org_id, "ATTENDANCE")
-        return {"plans": pricing.plans(c), "addons": pricing.addons(c), "vat_rate": float(_vat_rate(c)),
+        catalog = pricing.addons(c)
+        access = {a["code"]: {k: _f(v) for k, v in pricing.addon_access(c, t.org_id, a["code"]).items()} for a in catalog}
+        employees = c.execute(text("SELECT count(*) FROM org_employees WHERE org_id = :o AND is_active"), {"o": t.org_id}).scalar_one()
+        return {"plans": pricing.plans(c), "addons": catalog, "addon_access": access, "employees": employees, "vat_rate": float(_vat_rate(c)),
                 "subscription": {k: _f(v) for k, v in sub.items() if k in ("plan_tier", "billing_cycle", "billing_status", "ends_at")} if sub else None,
                 "next_installment": {k: _f(v) for k, v in dict(due).items()} if due else None,
                 "bot": bot, "attendance": att, "can_pay": t.role in PAYERS,

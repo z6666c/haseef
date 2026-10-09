@@ -786,7 +786,8 @@ export interface GosiMonth {
 // ---------- التسعير والتسجيل والدفع
 export interface PlanPrice { tier: string; name_ar: string; monthly_price_sar: number; yearly_price_sar: number; monthly_whatsapp_alerts: number | null }
 export interface AddonPrice { code: string; name: string; monthly_price: number; included_tiers: string[];
-  limits: { members?: number | null; questions?: number | null; included_unlimited?: boolean; extra_members_block?: number; extra_block_price?: number }; is_active: boolean }
+  limits: { members?: number | null; questions?: number | null; included_unlimited?: boolean; extra_members_block?: number; extra_block_price?: number;
+    /** إضافات تشملها هذه (شريحة أكبر أو حزمة) */ grants?: string[] }; is_active: boolean }
 export interface PublicPricing { plans: PlanPrice[]; addons: AddonPrice[] }
 export interface SignupInput {
   company_name: string; cr_number: string; entity_legal_type: string; full_name: string; email: string; phone_number: string | null;
@@ -802,13 +803,15 @@ export interface OnboardingInput {
   vat_registered: boolean; vat_frequency: "MONTHLY" | "QUARTERLY"; withholding_applies: boolean; fiscal_year_end_month: number; alert_phone: string | null;
 }
 export interface AddonAccess { code: string; name: string; price: number | null; via: "PLAN" | "ADDON" | null; paid_until: string | null;
-  limits: { members?: number | null; questions?: number | null }; plan_tier: string | null }
+  limits: { members?: number | null; questions?: number | null }; plan_tier: string | null; granted_by?: string }
 export interface CheckoutOptions {
   plans: PlanPrice[]; addons: AddonPrice[]; vat_rate: number; provider: string; can_pay: boolean;
   subscription: { plan_tier: string; billing_cycle: string; billing_status: string; ends_at: string } | null;
   next_installment: { id: string; seq: number; due_date: string; amount_net: number; installments: number } | null;
   bot: AddonAccess;
   attendance?: AddonAccess;
+  addon_access?: Record<string, AddonAccess>;
+  employees?: number;
 }
 export interface PaymentIntent { id: string; purpose: string; description: string; amount_net: number; vat_amount: number; total: number;
   status: "INITIATED" | "PAID" | "FAILED" | "EXPIRED"; created_at: string; paid_at: string | null; invoice_id: string | null; provider: string }
