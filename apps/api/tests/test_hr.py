@@ -37,7 +37,7 @@ class LeaveTests(unittest.TestCase):
         self.assertIsNone(self._v(leave_type="EMERGENCY", policy=em, start=date(2026, 12, 30), end=date(2026, 12, 30), days=1))
         self.assertIn("الحد الأقصى", self._v(leave_type="EMERGENCY", policy=em, days=4))
         self.assertIn("الحد السنوي", self._v(leave_type="EMERGENCY", policy=em, days=2, used_this_year_type=4))
-        self.assertIsNone(self._v(leave_type="REGULAR", policy=hr.DEFAULT_POLICIES["REGULAR"], balance=0))
+        self.assertIsNone(self._v(leave_type="REGULAR", policy=hr.DEFAULT_POLICIES["REGULAR"], balance=0, is_paid=False))
 
 
 class SickTests(unittest.TestCase):
@@ -67,6 +67,17 @@ class AttachmentTests(unittest.TestCase):
         self.assertEqual(hr.safe_file_name("../../etc/passwd", "application/pdf"), ".._.._etc_passwd.pdf")
         self.assertEqual(hr.safe_file_name("تقرير.jpg", "image/jpeg"), "تقرير.jpg")
         self.assertEqual(hr.safe_file_name("", "image/png"), "مرفق.png")
+
+
+class PayChoiceTests(LeaveTests):
+    def test_pay_choice(self):
+        reg, ann = hr.DEFAULT_POLICIES["REGULAR"], hr.DEFAULT_POLICIES["ANNUAL"]
+        self.assertTrue(hr.resolve_paid(reg, None))
+        self.assertFalse(hr.resolve_paid(reg, False))
+        self.assertTrue(hr.resolve_paid(ann, False))
+        self.assertFalse(hr.resolve_paid({**reg, "pay_mode": "UNPAID"}, True))
+        self.assertIn("الرصيد", self._v(leave_type="REGULAR", policy=reg, balance=2, is_paid=True))
+        self.assertIsNone(self._v(leave_type="REGULAR", policy=reg, balance=0, is_paid=False))
 
 
 class DeductionTests(unittest.TestCase):

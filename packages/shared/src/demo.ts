@@ -15,6 +15,7 @@ import { TAX_LABEL, addDaysIso, taxPeriodLabel, taxPlan, type TaxKind } from "./
 import { buildIcs } from "./ics.ts";
 import { botHandle, type BotState } from "./bot.ts";
 import { ATT_FLAG, ATT_REASON, evaluateAttendance, type AttResult } from "./attendance.ts";
+import { resolvePaid, type PayMode } from "./hr.ts";
 import { DEFAULT_POLICIES, FINE_KINDS, KIND_LABEL, LEAVE_LABEL, LEAVE_TYPES, addDays as isoAddDays, annualEntitlement, countLeaveDays, dailyWage, diffDays, fmtDays, holidayDates,
   lateAmount, lateReturnDays, sickNote, validateDeduction, validateLeave, weekday0, type DeductionKind, type LeavePolicy, type LeaveType } from "./hr.ts";
 import { EXPENSE_CATEGORY, VAT_RATE, invoiceLine, invoiceNumber, periodRange, round2, zatcaTlv, type InvoiceLine } from "./finance.ts";
@@ -1620,7 +1621,7 @@ function attendanceRoute(method: string, p: string, q: URLSearchParams, body: Re
 type DemoLeave = { id: string; employee_id: string; leave_type: LeaveType; start_date: string; end_date: string; days: number; reason: string | null;
   medical_ref: string | null; status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED"; source: "LINK" | "BOT" | "HR"; decision_note: string | null;
   decided_at: string | null; return_date: string | null; return_submitted_at: string | null; return_confirmed_at: string | null; created_at: string;
-  attachment?: { name: string; mime: string; b64: string } | null };
+  attachment?: { name: string; mime: string; b64: string } | null; is_paid: boolean };
 type DemoNotice = { id: string; employee_id: string; kind: DeductionKind; incident_date: string; description: string; amount: number; payroll_month: string;
   status: "ISSUED" | "OBJECTED" | "CONFIRMED" | "CANCELLED"; seen_at: string | null; objection_text: string | null; objected_at: string | null;
   decision_note: string | null; decided_at: string | null; created_at: string; leave_request_id: string | null };
@@ -1651,13 +1652,13 @@ const hrToday = () => riyadhIso(riyadhNow()).slice(0, 10);
 const hrHolidays = () => holidayDates(eventsDemo);
 const hrEmp = (id: string) => { const e = employeesDemo.find((x) => x.id === id && x.is_active); if (!e) throw new DemoError(404, "الموظف غير موجود"); return e; };
 const hrDaysOf = (t: LeaveType, s: string, e: string) => countLeaveDays(s, e, { workDays: attSettings.work_days, holidays: hrHolidays(), workdaysOnly: hrSettingsDemo.count_workdays_only && t !== "SICK" });
-const usedOf = (emp: string, year: number, types: LeaveType[]) => leavesDemo.filter((l) => l.employee_id === emp && ["PENDING", "APPROVED"].includes(l.status)
-  && types.includes(l.leave_type) && l.start_date.startsWith(String(year))).reduce((a, l) => a + l.days, 0);
+const usedOf = (emp: string, year: number, types: LeaveType[], paidOnly = false) => leavesDemo.filter((l) => l.employee_id === emp && ["PENDING", "APPROVED"].includes(l.status)
+  && types.includes(l.leave_type) && l.start_date.startsWith(String(year)) && (!paidOnly || l.is_paid)).reduce((a, l) => a + l.days, 0);
 function balanceOf(empId: string, year: number) {
   const e = hrEmp(empId);
   const ent = annualEntitlement(e.start_date, `${year}-12-31`);
   const adj = leaveAdj.filter((a) => a.employee_id === empId && a.year === year).reduce((x, a) => x + a.days, 0);
-  const used = usedOf(empId, year, LEAVE_TYPES.filter((t) => hrPoliciesDemo[t].from_balance));
+  const used = usedOf(empId, year, LEAVE_TYPES.filter((t) => hrPoliciesDemo[t].from_balance), true);
   return { year, entitlement: ent, adjustments: adj, used, balance: Math.round((ent + adj - used) * 10) / 10 };
 }
 /** المرفق في نسخة العرض: يُتحقق من نوعه من أول بايتات الملف كما في الخادم. */
@@ -1676,13 +1677,15 @@ const DEMO_REPORT_B64 = btoa("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endo
   + "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 420 220]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
   + "4 0 obj<</Length 98>>stream\nBT /F1 16 Tf 30 160 Td (Medical leave report - DEMO) Tj 0 -30 Td /F1 11 Tf (Sample attachment for Haseef demo only.) Tj ET\nendstream endobj\n"
   + "5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF");
+const body_paid = (b: Record<string, unknown>) => (typeof b.is_paid === "boolean" ? b.is_paid : null);
 function createLeaveDemo(empId: string, b: Record<string, unknown>, source: DemoLeave["source"], byHr: boolean, approve: boolean) {
   const t = String(b.leave_type) as LeaveType;
   if (!LEAVE_TYPES.includes(t)) throw new DemoError(422, "نوع الإجازة غير معروف");
   const s = String(b.start_date ?? ""), en = String(b.end_date ?? "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || !/^\d{4}-\d{2}-\d{2}$/.test(en)) throw new DemoError(422, "حدد تاريخ البداية والنهاية");
   const days = hrDaysOf(t, s, en);
-  const err = validateLeave({ leaveType: t, start: s, end: en, days, today: hrToday(), policy: hrPoliciesDemo[t], byHr,
+  const paid = resolvePaid(hrPoliciesDemo[t], body_paid(b));
+  const err = validateLeave({ leaveType: t, isPaid: paid, start: s, end: en, days, today: hrToday(), policy: hrPoliciesDemo[t], byHr,
     balance: balanceOf(empId, Number(s.slice(0, 4))).balance, usedThisYearType: usedOf(empId, Number(s.slice(0, 4)), [t]) });
   if (err) throw new DemoError(422, err);
   const ref = String(b.medical_ref ?? "").trim();
@@ -1692,9 +1695,9 @@ function createLeaveDemo(empId: string, b: Record<string, unknown>, source: Demo
     throw new DemoError(409, "يوجد طلب إجازة آخر يتداخل مع هذه الفترة");
   const l: DemoLeave = { id: uid(), employee_id: empId, leave_type: t, start_date: s, end_date: en, days, reason: (b.reason as string) || null, medical_ref: ref || null,
     status: approve ? "APPROVED" : "PENDING", source, decision_note: null, decided_at: approve ? new Date().toISOString() : null, return_date: null,
-    return_submitted_at: null, return_confirmed_at: null, created_at: new Date().toISOString(), attachment: att };
+    return_submitted_at: null, return_confirmed_at: null, created_at: new Date().toISOString(), attachment: att, is_paid: paid };
   leavesDemo.push(l);
-  return { id: l.id, days, status: l.status, has_attachment: !!att, ...(t === "SICK" ? { pay_note: sickNote(usedOf(empId, Number(s.slice(0, 4)), ["SICK"]) - days, days) } : {}) };
+  return { id: l.id, days, status: l.status, is_paid: paid, has_attachment: !!att, ...(t === "SICK" ? { pay_note: sickNote(usedOf(empId, Number(s.slice(0, 4)), ["SICK"]) - days, days) } : {}) };
 }
 function annotateSickDemo<T extends { leave_type: LeaveType; status: string; start_date: string; days: number; employee_id?: string; pay_note?: string }>(rows: T[]) {
   const used = new Map<string, number>();
@@ -1744,13 +1747,13 @@ function createNoticeDemo(b: Record<string, unknown>) {
   const mk = (n: string, type: LeaveType, s: string, e: string, st: DemoLeave["status"], src: DemoLeave["source"], extra: Partial<DemoLeave> = {}) =>
     leavesDemo.push({ id: uid(), employee_id: by(n).id, leave_type: type, start_date: s, end_date: e, days: hrDaysOf(type, s, e), reason: null, medical_ref: null,
       status: st, source: src, decision_note: null, decided_at: st === "PENDING" ? null : ts(-5), return_date: null, return_submitted_at: null,
-      return_confirmed_at: null, created_at: ts(-6), ...extra });
+      return_confirmed_at: null, created_at: ts(-6), is_paid: true, ...extra });
   const s1 = nextWorkday(d(14));
   mk("فهد القحطاني", "ANNUAL", s1, isoAddDays(s1, 11), "PENDING", "LINK", { reason: "إجازة عائلية" });
   mk("رامش كومار", "SICK", d(-1), d(1), "PENDING", "LINK", { medical_ref: "SL-2026-4471", reason: "التهاب حاد",
     attachment: { name: "تقرير-طبي.pdf", mime: "application/pdf", b64: DEMO_REPORT_B64 } });
   mk("ريم السبيعي", "ANNUAL", d(-2), d(6), "APPROVED", "LINK");
-  mk("محمد رفيق", "EMERGENCY", d(-6), d(-4), "APPROVED", "BOT", { reason: "ظرف عائلي" });
+  mk("محمد رفيق", "EMERGENCY", d(-6), d(-4), "APPROVED", "BOT", { reason: "ظرف عائلي", is_paid: false });
   mk("أحمد حسن", "ANNUAL", d(-30), d(-20), "APPROVED", "HR", { return_date: d(-16), return_submitted_at: ts(-16), return_confirmed_at: ts(-16) });
   mk("جون ماثيو", "REGULAR", d(-40), d(-36), "REJECTED", "LINK", { decision_note: "ذروة تسليم المشروع" });
   if (employeesDemo[1]) employeesDemo[1].mobile = "+966500000041";
@@ -1827,7 +1830,16 @@ function deductionsDemo(month: string) {
       total: live.reduce((a, n) => a + n.amount, 0), confirmed: live.filter((n) => n.status === "CONFIRMED").reduce((a, n) => a + n.amount, 0),
       fine_cap: Math.round(dailyWage(e.basic_wage, e.housing_allowance) * 500) / 100, half_wage: (e.basic_wage + e.housing_allowance) / 2 }];
   });
-  return { month, notices, suggestions: sug, summary, objection_days: hrSettingsDemo.objection_days };
+  const [yy, mm] = month.split("-").map(Number);
+  const mStart = `${month}-01`, mEnd = isoAddDays(mm === 12 ? `${yy + 1}-01-01` : `${yy}-${String(mm + 1).padStart(2, "0")}-01`, -1);
+  const unpaid_leaves = leavesDemo.filter((l) => l.status === "APPROVED" && !l.is_paid && l.start_date <= mEnd && l.end_date >= mStart).flatMap((l) => {
+    const e = employeesDemo.find((x) => x.id === l.employee_id); if (!e) return [];
+    const a = l.start_date > mStart ? l.start_date : mStart, b = l.end_date < mEnd ? l.end_date : mEnd;
+    const days = hrDaysOf(l.leave_type, a, b); if (!days) return [];
+    return [{ leave_id: l.id, employee_id: l.employee_id, full_name: e.full_name, leave_type: l.leave_type, label: LEAVE_LABEL[l.leave_type], from_date: a, to_date: b,
+      days, amount: round2(days * dailyWage(e.basic_wage, e.housing_allowance)) }];
+  });
+  return { month, notices, suggestions: sug, summary, unpaid_leaves, objection_days: hrSettingsDemo.objection_days };
 }
 function personHrDemo(empId: string) {
   const y = Number(hrToday().slice(0, 4));
@@ -1917,7 +1929,9 @@ function hrRoute(method: string, p: string, q: URLSearchParams, body: Record<str
   if ((m = p.match(/^\/hr\/policies\/([A-Z]+)$/)) && method === "PUT") {
     const t = m[1] as LeaveType; if (!LEAVE_TYPES.includes(t)) throw new DemoError(404, "نوع غير معروف");
     const n = (v: unknown) => (v == null || v === "" ? null : Number(v));
-    Object.assign(hrPoliciesDemo[t], { is_paid: !!body.is_paid, from_balance: !!body.from_balance, max_days_per_request: n(body.max_days_per_request),
+    const mode = (["PAID", "UNPAID", "CHOICE"].includes(String(body.pay_mode)) ? body.pay_mode : "PAID") as PayMode;
+    if ((t === "ANNUAL" || t === "SICK") && mode !== "PAID") throw new DemoError(422, "الإجازة السنوية والمرضية مدفوعة نظاماً (المرضية بشرائح المادة 117)");
+    Object.assign(hrPoliciesDemo[t], { pay_mode: mode, is_paid: mode !== "UNPAID", from_balance: !!body.from_balance, max_days_per_request: n(body.max_days_per_request),
       yearly_cap: n(body.yearly_cap), min_notice_days: Number(body.min_notice_days) || 0, is_active: body.is_active !== false }); return { ok: true };
   }
   if ((m = p.match(/^\/hr\/leaves\/([^/]+)\/attachment$/))) {
@@ -1930,6 +1944,13 @@ function hrRoute(method: string, p: string, q: URLSearchParams, body: Record<str
     const l = leavesDemo.find((x) => x.id === m![1]); if (!l) throw new DemoError(404, "الطلب غير موجود");
     if (m[2] === "decide") {
       if (l.status !== "PENDING") throw new DemoError(409, "تم البت في هذا الطلب مسبقاً");
+      if (body.approve && typeof body.is_paid === "boolean" && body.is_paid !== l.is_paid) {
+        const pol = hrPoliciesDemo[l.leave_type];
+        if (pol.pay_mode !== "CHOICE") throw new DemoError(422, "سياسة هذا النوع لا تسمح بتغيير الأجر");
+        if (body.is_paid && pol.from_balance) { const b = balanceOf(l.employee_id, Number(l.start_date.slice(0, 4))).balance;
+          if (l.days > b) throw new DemoError(422, `الرصيد غير كافٍ: المتبقي ${fmtDays(b)} يوم`); }
+        l.is_paid = body.is_paid;
+      }
       Object.assign(l, { status: body.approve ? "APPROVED" : "REJECTED", decided_at: new Date().toISOString(), decision_note: (body.note as string) || null });
       return { status: l.status };
     }

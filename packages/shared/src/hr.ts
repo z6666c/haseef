@@ -4,12 +4,14 @@ export type LeaveType = "ANNUAL" | "REGULAR" | "EMERGENCY" | "SICK";
 export type DeductionKind = "LATE" | "ABSENCE" | "LATE_RETURN" | "VIOLATION" | "OTHER";
 export const LEAVE_TYPES: LeaveType[] = ["ANNUAL", "REGULAR", "EMERGENCY", "SICK"];
 export const LEAVE_LABEL: Record<LeaveType, string> = { ANNUAL: "سنوية", REGULAR: "اعتيادية", EMERGENCY: "اضطرارية", SICK: "مرضية" };
-export interface LeavePolicy { is_paid: boolean; from_balance: boolean; max_days_per_request: number | null; yearly_cap: number | null; min_notice_days: number; is_active?: boolean }
+export type PayMode = "PAID" | "UNPAID" | "CHOICE";
+export const PAY_MODE_LABEL: Record<PayMode, string> = { PAID: "مدفوعة دائماً", UNPAID: "بدون أجر دائماً", CHOICE: "يختار الموظف: مدفوعة أو بدون أجر" };
+export interface LeavePolicy { pay_mode: PayMode; is_paid: boolean; from_balance: boolean; max_days_per_request: number | null; yearly_cap: number | null; min_notice_days: number; is_active?: boolean }
 export const DEFAULT_POLICIES: Record<LeaveType, LeavePolicy> = {
-  ANNUAL: { is_paid: true, from_balance: true, max_days_per_request: null, yearly_cap: null, min_notice_days: 0 },
-  REGULAR: { is_paid: false, from_balance: false, max_days_per_request: 30, yearly_cap: null, min_notice_days: 0 },
-  EMERGENCY: { is_paid: true, from_balance: true, max_days_per_request: 3, yearly_cap: 5, min_notice_days: 0 },
-  SICK: { is_paid: true, from_balance: false, max_days_per_request: null, yearly_cap: 120, min_notice_days: 0 },
+  ANNUAL: { pay_mode: "PAID", is_paid: true, from_balance: true, max_days_per_request: null, yearly_cap: null, min_notice_days: 0 },
+  REGULAR: { pay_mode: "CHOICE", is_paid: true, from_balance: true, max_days_per_request: 30, yearly_cap: null, min_notice_days: 0 },
+  EMERGENCY: { pay_mode: "CHOICE", is_paid: true, from_balance: true, max_days_per_request: 3, yearly_cap: 5, min_notice_days: 0 },
+  SICK: { pay_mode: "PAID", is_paid: true, from_balance: false, max_days_per_request: null, yearly_cap: 120, min_notice_days: 0 },
 };
 export const SICK_BACKDATE_DAYS = 7;
 const SICK_TIERS: [number, number][] = [[30, 1], [60, 0.75], [30, 0]];
@@ -52,8 +54,14 @@ export function lateReturnDays(endDate: string, returnDate: string, workDays: nu
 
 export const fmtDays = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
 
+/** أجر الطلب: يفرضه نوع الإجازة، أو يختاره مقدم الطلب إن كانت السياسة «حسب الاختيار» (الافتراضي مدفوعة). */
+export function resolvePaid(p: Pick<LeavePolicy, "pay_mode" | "is_paid">, requested?: boolean | null): boolean {
+  const mode = p.pay_mode ?? (p.is_paid ? "PAID" : "UNPAID");
+  return mode === "PAID" ? true : mode === "UNPAID" ? false : requested ?? true;
+}
+
 export function validateLeave(o: { leaveType: LeaveType; start: string; end: string; days: number; today: string; policy: LeavePolicy; byHr: boolean;
-  balance: number; usedThisYearType: number }): string | null {
+  balance: number; usedThisYearType: number; isPaid?: boolean }): string | null {
   const p = o.policy;
   if (p.is_active === false) return `الإجازة ال${LEAVE_LABEL[o.leaveType]} غير متاحة في منشأتك`;
   if (o.end < o.start) return "تاريخ النهاية قبل البداية";
@@ -69,7 +77,7 @@ export function validateLeave(o: { leaveType: LeaveType; start: string; end: str
   }
   if (p.max_days_per_request && o.days > p.max_days_per_request) return `الحد الأقصى للطلب الواحد ${p.max_days_per_request} يوم`;
   if (p.yearly_cap && o.usedThisYearType + o.days > p.yearly_cap) return `تجاوزت الحد السنوي (${p.yearly_cap} يوم) لهذا النوع؛ المتبقي ${Math.max(p.yearly_cap - o.usedThisYearType, 0)}`;
-  if (p.from_balance && o.days > o.balance) return `الرصيد غير كافٍ: المتبقي ${fmtDays(o.balance)} يوم`;
+  if ((o.isPaid ?? true) && p.from_balance && o.days > o.balance) return `الرصيد غير كافٍ: المتبقي ${fmtDays(o.balance)} يوم`;
   return null;
 }
 

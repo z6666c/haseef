@@ -41,9 +41,9 @@ def policies(c: Connection, org_id) -> dict[str, dict]:
     for t in hr.LEAVE_TYPES:
         if t not in rows:
             d = hr.DEFAULT_POLICIES[t]
-            c.execute(text("""INSERT INTO hr_leave_policies (org_id, leave_type, is_paid, from_balance, max_days_per_request, yearly_cap, min_notice_days)
-                              VALUES (:o, :t, :p, :b, :m, :y, :n) ON CONFLICT DO NOTHING"""),
-                      {"o": org_id, "t": t, "p": d["is_paid"], "b": d["from_balance"], "m": d["max_days_per_request"],
+            c.execute(text("""INSERT INTO hr_leave_policies (org_id, leave_type, pay_mode, is_paid, from_balance, max_days_per_request, yearly_cap, min_notice_days)
+                              VALUES (:o, :t, :pm, :p, :b, :m, :y, :n) ON CONFLICT DO NOTHING"""),
+                      {"o": org_id, "t": t, "pm": d["pay_mode"], "p": d["is_paid"], "b": d["from_balance"], "m": d["max_days_per_request"],
                        "y": d["yearly_cap"], "n": d["min_notice_days"]})
             rows[t] = {"org_id": org_id, "leave_type": t, "is_active": True, **d}
     return rows
@@ -82,10 +82,10 @@ def employee(c: Connection, org_id, emp_id) -> dict:
     return dict(e)
 
 
-def used_days(c: Connection, emp_id, year: int, types: tuple[str, ...]) -> int:
+def used_days(c: Connection, emp_id, year: int, types: tuple[str, ...], paid_only: bool = False) -> int:
     return int(c.execute(text("""SELECT COALESCE(sum(days), 0) FROM leave_requests WHERE employee_id = :e AND status IN ('PENDING','APPROVED')
-                                AND leave_type = ANY(:t) AND extract(year FROM start_date) = :y"""),
-                         {"e": emp_id, "t": list(types), "y": year}).scalar_one())
+                                AND leave_type = ANY(:t) AND extract(year FROM start_date) = :y AND (is_paid OR NOT :po)"""),
+                         {"e": emp_id, "t": list(types), "y": year, "po": paid_only}).scalar_one())
 
 
 def balance(c: Connection, org_id, emp: dict, year: int, pols: dict[str, dict] | None = None) -> dict:
@@ -94,7 +94,7 @@ def balance(c: Connection, org_id, emp: dict, year: int, pols: dict[str, dict] |
     adj = float(c.execute(text("SELECT COALESCE(sum(days), 0) FROM leave_adjustments WHERE employee_id = :e AND year = :y"),
                           {"e": emp["id"], "y": year}).scalar_one())
     from_bal = tuple(t for t, p in pols.items() if p["from_balance"])
-    used = used_days(c, emp["id"], year, from_bal) if from_bal else 0
+    used = used_days(c, emp["id"], year, from_bal, paid_only=True) if from_bal else 0
     return {"year": year, "entitlement": ent, "adjustments": adj, "used": used, "balance": round(ent + adj - used, 1)}
 
 
@@ -148,7 +148,7 @@ def attach(c: Connection, org_id, emp_id, leave_id, att: dict) -> None:
 
 def create_leave(c: Connection, org_id, emp_id, *, leave_type: str, start: date, end: date, reason: str | None,
                  source: str, by_hr: bool, user_id=None, approve: bool = False, medical_ref: str | None = None,
-                 attachment: dict | None = None) -> dict:
+                 attachment: dict | None = None, is_paid: bool | None = None) -> dict:
     emp = employee(c, org_id, emp_id)
     pols = policies(c, org_id)
     if leave_type not in pols:
@@ -157,7 +157,8 @@ def create_leave(c: Connection, org_id, emp_id, *, leave_type: str, start: date,
     wd, hol, _ = work_calendar(c, org_id)
     days = hr.count_days(start, end, work_days=wd, holidays=hol, workdays_only=s["count_workdays_only"] and leave_type != "SICK")  # المرضية بالأيام التقويمية
     bal = balance(c, org_id, emp, start.year, pols)
-    err = hr.validate_leave(leave_type=leave_type, start=start, end=end, days=days, today=today(), policy=pols[leave_type], by_hr=by_hr,
+    paid = hr.resolve_paid(pols[leave_type], is_paid)
+    err = hr.validate_leave(leave_type=leave_type, start=start, end=end, days=days, today=today(), policy=pols[leave_type], by_hr=by_hr, is_paid=paid,
                             balance=bal["balance"], used_this_year_type=used_days(c, emp_id, start.year, (leave_type,)))
     if err:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, err)
@@ -168,14 +169,14 @@ def create_leave(c: Connection, org_id, emp_id, *, leave_type: str, start: date,
     if leave_type == "SICK" and not by_hr and decoded is None:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "أرفق التقرير الطبي (صورة أو PDF) للإجازة المرضية")
     st = "APPROVED" if approve else "PENDING"
-    lid = c.execute(text("""INSERT INTO leave_requests (org_id, employee_id, leave_type, start_date, end_date, days, reason, medical_ref, status, source,
+    lid = c.execute(text("""INSERT INTO leave_requests (org_id, employee_id, leave_type, start_date, end_date, days, reason, medical_ref, is_paid, status, source,
                                                         decided_by, decided_at)
-                            VALUES (:o, :e, :t, :s, :en, :d, :r, :mr, :st, :src, :u, CASE WHEN :ap THEN now() END) RETURNING id"""),
+                            VALUES (:o, :e, :t, :s, :en, :d, :r, :mr, :paid, :st, :src, :u, CASE WHEN :ap THEN now() END) RETURNING id"""),
                     {"o": org_id, "e": emp_id, "t": leave_type, "s": start, "en": end, "d": days, "r": reason, "mr": (medical_ref or "").strip() or None,
-                     "st": st, "ap": approve, "src": source, "u": user_id if approve else None}).scalar_one()
+                     "st": st, "paid": paid, "ap": approve, "src": source, "u": user_id if approve else None}).scalar_one()
     if decoded:
         _save_attachment(c, org_id, lid, decoded)
-    out = {"id": lid, "days": days, "status": st, "has_attachment": decoded is not None}
+    out = {"id": lid, "days": days, "status": st, "is_paid": paid, "has_attachment": decoded is not None}
     if leave_type == "SICK":
         out["pay_note"] = hr.sick_note(used_days(c, emp_id, start.year, ("SICK",)) - days, days)
     return out
@@ -192,16 +193,27 @@ def annotate_sick(leaves: list[dict]) -> None:
         used[k] = used.get(k, 0) + l["days"]
 
 
-def decide_leave(c: Connection, org_id, leave_id, *, approve: bool, note: str | None, user_id) -> dict:
+def decide_leave(c: Connection, org_id, leave_id, *, approve: bool, note: str | None, user_id, is_paid: bool | None = None) -> dict:
     lr = c.execute(text("SELECT * FROM leave_requests WHERE id = :i AND org_id = :o"), {"i": leave_id, "o": org_id}).mappings().one_or_none()
     if lr is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "الطلب غير موجود")
     if lr["status"] != "PENDING":
         raise HTTPException(status.HTTP_409_CONFLICT, "تم البت في هذا الطلب مسبقاً")
     st = "APPROVED" if approve else "REJECTED"
-    c.execute(text("""UPDATE leave_requests SET status = :s, decided_by = :u, decided_at = now(), decision_note = :n WHERE id = :i"""),
-              {"s": st, "u": user_id, "n": note, "i": leave_id})
-    label = hr.LEAVE_LABEL[lr["leave_type"]]
+    paid = lr["is_paid"]
+    if approve and is_paid is not None and is_paid != paid:
+        # الموارد البشرية تعتمدها بأجر أو بدونه (مثلاً عند عدم كفاية الرصيد) إن سمحت سياسة النوع بالاختيار
+        pol = policies(c, org_id)[lr["leave_type"]]
+        if pol["pay_mode"] != "CHOICE":
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "سياسة هذا النوع لا تسمح بتغيير الأجر")
+        if is_paid and pol["from_balance"]:
+            bal = balance(c, org_id, employee(c, org_id, lr["employee_id"]), lr["start_date"].year)["balance"]
+            if lr["days"] > bal:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"الرصيد غير كافٍ: المتبقي {hr.fmt_days(bal)} يوم")
+        paid = is_paid
+    c.execute(text("""UPDATE leave_requests SET status = :s, decided_by = :u, decided_at = now(), decision_note = :n, is_paid = :p WHERE id = :i"""),
+              {"s": st, "u": user_id, "n": note, "p": paid, "i": leave_id})
+    label = hr.LEAVE_LABEL[lr["leave_type"]] + ("" if paid else " (بدون أجر)")
     msg = (f"تمت الموافقة على إجازتك ال{label} من {lr['start_date']:%Y-%m-%d} إلى {lr['end_date']:%Y-%m-%d}. نرجو تسجيل المباشرة عند عودتك."
            if approve else f"نعتذر، لم تتم الموافقة على إجازتك ال{label} من {lr['start_date']:%Y-%m-%d}." + (f" الملاحظة: {note}" if note else ""))
     notify(c, org_id, lr["employee_id"], msg)
@@ -315,7 +327,7 @@ def employee_view(c: Connection, org_id, emp_id) -> dict:
     pols = policies(c, org_id)
     s = hr_settings(c, org_id)
     y = today().year
-    leaves = [row(r) for r in c.execute(text("""SELECT id, leave_type, start_date, end_date, days, reason, medical_ref,
+    leaves = [row(r) for r in c.execute(text("""SELECT id, leave_type, start_date, end_date, days, reason, medical_ref, is_paid,
                                                        attachment_name, (attachment_key IS NOT NULL) AS has_attachment, status, source, decision_note,
                                                        return_date, return_submitted_at, return_confirmed_at, created_at
                                                 FROM leave_requests WHERE employee_id = :e AND org_id = :o ORDER BY start_date DESC LIMIT 30"""),
@@ -329,7 +341,7 @@ def employee_view(c: Connection, org_id, emp_id) -> dict:
                                        {"e": emp_id, "o": org_id}).mappings()]
     c.execute(text("UPDATE deduction_notices SET seen_at = now() WHERE employee_id = :e AND org_id = :o AND seen_at IS NULL"), {"e": emp_id, "o": org_id})
     return {"balance": balance(c, org_id, emp, y, pols),
-            "policies": [{"leave_type": t, "label": hr.LEAVE_LABEL[t], "is_paid": p["is_paid"], "from_balance": p["from_balance"],
+            "policies": [{"leave_type": t, "label": hr.LEAVE_LABEL[t], "pay_mode": p["pay_mode"], "is_paid": p["pay_mode"] != "UNPAID", "from_balance": p["from_balance"],
                           "max_days_per_request": p["max_days_per_request"], "yearly_cap": p["yearly_cap"], "min_notice_days": p["min_notice_days"],
                           "used": used_days(c, emp_id, y, (t,))}
                          for t, p in pols.items() if p["is_active"]],

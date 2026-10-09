@@ -226,10 +226,16 @@ token = None
 ph = call("GET", f"/v1/public/attendance/{atok}/hr")
 assert ph["balance"]["used"] == 5 and len(ph["notices"]) == 1 and len(ph["leaves"]) == 2, ph
 call("POST", f"/v1/public/attendance/{atok}/notices/{nt['id']}/object", {"objection": "كنت في مهمة رسمية خارج المقر"})
+rg = call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "REGULAR", "start_date": str(d0 + _dt.timedelta(days=40)),
+                                                          "end_date": str(d0 + _dt.timedelta(days=41)), "is_paid": False}, expect=201)
+assert rg["is_paid"] is False, rg
+assert call("GET", f"/v1/public/attendance/{atok}/hr")["balance"]["used"] == 5, "unpaid leave must not touch the balance"
 token = su["access_token"]
 dd = call("GET", "/v1/hr/deductions?month=" + d0.strftime("%Y-%m"), org_id=so)
 assert dd["notices"][0]["status"] == "OBJECTED", dd["notices"]
 call("POST", f"/v1/hr/deductions/{nt['id']}/decide", {"confirm": False, "note": "قُبل الاعتراض"}, org_id=so)
+call("PUT", "/v1/hr/policies/ANNUAL", {"pay_mode": "UNPAID", "from_balance": True, "min_notice_days": 0}, expect=422, org_id=so)
+call("PUT", "/v1/hr/policies/EMERGENCY", {"pay_mode": "CHOICE", "from_balance": True, "max_days_per_request": 3, "yearly_cap": 5, "min_notice_days": 0}, org_id=so)
 step("الإجازات الأربع والمرضية بشرائح الأجر، وسقف الغرامة، واعتراض الموظف على الخصم")
 ev = call("GET", "/v1/events", org_id=so)
 assert any(e["code"] == "NATIONAL_DAY" for e in ev["events"]) and not ev["settings"]["enabled"], ev

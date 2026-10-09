@@ -49,7 +49,7 @@ def overview(t: Tenant = Depends(get_tenant)):
         b = svc.balance(c, o, e, today.year, pols)
         people.append({"id": e["id"], "full_name": e["full_name"], "job_title": e["job_title"], "mobile": e["mobile"], **b})
     leaves = [svc.row(r) for r in c.execute(text("""
-        SELECT l.id, l.employee_id, e.full_name, l.leave_type, l.start_date, l.end_date, l.days, l.reason, l.medical_ref, l.attachment_name, (l.attachment_key IS NOT NULL) AS has_attachment, l.status, l.source,
+        SELECT l.id, l.employee_id, e.full_name, l.leave_type, l.start_date, l.end_date, l.days, l.reason, l.medical_ref, l.is_paid, l.attachment_name, (l.attachment_key IS NOT NULL) AS has_attachment, l.status, l.source,
                l.decision_note, l.decided_at, l.return_date, l.return_submitted_at, l.return_confirmed_at, l.created_at
         FROM leave_requests l JOIN org_employees e ON e.id = l.employee_id
         WHERE l.status = 'PENDING' OR l.start_date >= :since OR (l.status = 'APPROVED' AND l.return_confirmed_at IS NULL)
@@ -88,7 +88,7 @@ def put_settings(body: HrSettingsIn, t: Tenant = Depends(get_tenant)):
 
 
 class PolicyIn(BaseModel):
-    is_paid: bool
+    pay_mode: Literal["PAID", "UNPAID", "CHOICE"]
     from_balance: bool
     max_days_per_request: int | None = Field(None, ge=1, le=120)
     yearly_cap: int | None = Field(None, ge=1, le=365)
@@ -100,9 +100,11 @@ class PolicyIn(BaseModel):
 def put_policy(leave_type: LeaveType, body: PolicyIn, t: Tenant = Depends(get_tenant)):
     _need(t)
     svc.policies(t.conn, t.org_id)
-    t.conn.execute(text("""UPDATE hr_leave_policies SET is_paid = :is_paid, from_balance = :from_balance, max_days_per_request = :max_days_per_request,
+    if leave_type in ("ANNUAL", "SICK") and body.pay_mode != "PAID":
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "الإجازة السنوية والمرضية مدفوعة نظاماً (المرضية بشرائح المادة 117)")
+    t.conn.execute(text("""UPDATE hr_leave_policies SET pay_mode = :pay_mode, is_paid = :paid, from_balance = :from_balance, max_days_per_request = :max_days_per_request,
                            yearly_cap = :yearly_cap, min_notice_days = :min_notice_days, is_active = :is_active WHERE org_id = :o AND leave_type = :t"""),
-                   {**body.model_dump(), "o": t.org_id, "t": leave_type})
+                   {**body.model_dump(), "paid": body.pay_mode != "UNPAID", "o": t.org_id, "t": leave_type})
     _audit(t.conn, t, "UPDATE", "leave_policy", None, {"type": leave_type, **body.model_dump()})
     return {"ok": True}
 
@@ -120,6 +122,7 @@ class LeaveIn(BaseModel):
     reason: str | None = Field(None, max_length=500)
     medical_ref: str | None = Field(None, max_length=60)
     attachment: AttachmentIn | None = None
+    is_paid: bool | None = None
     approve: bool = True
 
 
@@ -128,20 +131,21 @@ def add_leave(body: LeaveIn, t: Tenant = Depends(get_tenant)):
     _need(t)
     r = svc.create_leave(t.conn, t.org_id, body.employee_id, leave_type=body.leave_type, start=body.start_date, end=body.end_date,
                          reason=body.reason, source="HR", by_hr=True, user_id=t.principal.user_id, approve=body.approve, medical_ref=body.medical_ref,
-                         attachment=body.attachment.model_dump() if body.attachment else None)
+                         attachment=body.attachment.model_dump() if body.attachment else None, is_paid=body.is_paid)
     _audit(t.conn, t, "CREATE", "leave_request", r["id"], body.model_dump(exclude={"attachment"}))
     return r
 
 
 class DecideIn(BaseModel):
     approve: bool
+    is_paid: bool | None = None
     note: str | None = Field(None, max_length=500)
 
 
 @router.post("/hr/leaves/{leave_id}/decide")
 def decide(leave_id: UUID, body: DecideIn, t: Tenant = Depends(get_tenant)):
     _need(t)
-    r = svc.decide_leave(t.conn, t.org_id, leave_id, approve=body.approve, note=body.note, user_id=t.principal.user_id)
+    r = svc.decide_leave(t.conn, t.org_id, leave_id, approve=body.approve, note=body.note, user_id=t.principal.user_id, is_paid=body.is_paid)
     _audit(t.conn, t, "APPROVE" if body.approve else "REJECT", "leave_request", leave_id, body.model_dump())
     return r
 
@@ -232,8 +236,23 @@ def deductions(month: str, t: Tenant = Depends(get_tenant)):
                         "total": round(sum(n["amount"] for n in live), 2),
                         "confirmed": round(sum(n["amount"] for n in live if n["status"] == "CONFIRMED"), 2),
                         "fine_cap": round(dw * 5, 2), "half_wage": round((float(e["basic_wage"]) + float(e["housing_allowance"])) / 2, 2)})
+    # الإجازات المعتمدة بدون أجر: أيامها الواقعة في هذا الشهر لا يُستحق عنها أجر (ليست جزاءً ولا تحتاج إشعار خصم)
+    hs = svc.hr_settings(c, o)
+    unpaid = []
+    for l in c.execute(text("""SELECT l.id, l.employee_id, l.leave_type, l.start_date, l.end_date FROM leave_requests l
+                               WHERE l.status = 'APPROVED' AND NOT l.is_paid AND l.start_date < :n AND l.end_date >= :m ORDER BY l.start_date"""),
+                       {"m": m, "n": nxt}).mappings():
+        e = emps.get(l["employee_id"])
+        if not e:
+            continue
+        a, b = max(l["start_date"], m), min(l["end_date"], nxt - timedelta(days=1))
+        days = hr.count_days(a, b, work_days=wd, holidays=hol, workdays_only=hs["count_workdays_only"] and l["leave_type"] != "SICK")
+        if days:
+            unpaid.append({"leave_id": l["id"], "employee_id": l["employee_id"], "full_name": e["full_name"], "leave_type": l["leave_type"],
+                           "label": hr.LEAVE_LABEL[l["leave_type"]], "from_date": a, "to_date": b, "days": days,
+                           "amount": round(days * hr.daily_wage(e["basic_wage"], e["housing_allowance"]), 2)})
     return {"month": month, "notices": notices, "suggestions": suggestions, "summary": [svc.row(s) for s in summary],
-            "objection_days": svc.hr_settings(c, o)["objection_days"]}
+            "unpaid_leaves": [svc.row(u) for u in unpaid], "objection_days": hs["objection_days"]}
 
 
 def _suggest(c, m: date, nxt: date, today: date, emps: dict, notices: list[dict], wd, hol, work_min) -> list[dict]:
@@ -335,6 +354,7 @@ class PersonLeaveIn(BaseModel):
     reason: str | None = Field(None, max_length=500)
     medical_ref: str | None = Field(None, max_length=60)
     attachment: AttachmentIn | None = None
+    is_paid: bool | None = None
 
 
 @router.post("/public/attendance/{token}/leaves", status_code=201)
@@ -347,7 +367,7 @@ def person_leave(token: str, body: PersonLeaveIn):
             raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "طلبات كثيرة اليوم")
         return svc.create_leave(c, p["org_id"], p["employee_id"], leave_type=body.leave_type, start=body.start_date, end=body.end_date,
                                 reason=body.reason, source="LINK", by_hr=False, medical_ref=body.medical_ref,
-                                attachment=body.attachment.model_dump() if body.attachment else None)
+                                attachment=body.attachment.model_dump() if body.attachment else None, is_paid=body.is_paid)
 
 
 @router.post("/public/attendance/{token}/leaves/{leave_id}/attachment")

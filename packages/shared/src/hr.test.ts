@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_POLICIES, annualEntitlement, countLeaveDays, dailyWage, holidayDates, lateAmount, lateReturnDays, sickNote, sickSplit, validateDeduction, validateLeave } from "./hr.ts";
+import { DEFAULT_POLICIES, annualEntitlement, countLeaveDays, dailyWage, holidayDates, lateAmount, lateReturnDays, resolvePaid, sickNote, sickSplit, validateDeduction, validateLeave } from "./hr.ts";
 
 const WD = [0, 1, 2, 3, 4];
 
@@ -41,3 +41,14 @@ test("سقوف الخصم", () => {
   assert.equal(validateDeduction({ ...b, kind: "ABSENCE", amount: 3000, incident: "2026-12-01" }), null);
   assert.match(validateDeduction({ ...b, kind: "ABSENCE", amount: 3000, monthTotal: 2000 })!, /نصف الأجر/);
 });
+
+test("أجر الاعتيادية والاضطرارية باختيار الموظف", () => {
+  const reg = DEFAULT_POLICIES.REGULAR;
+  assert.equal(resolvePaid(reg, null), true);
+  assert.equal(resolvePaid(reg, false), false);
+  assert.equal(resolvePaid(DEFAULT_POLICIES.ANNUAL, false), true);
+  const base = { leaveType: "REGULAR" as const, start: "2027-01-10", end: "2027-01-11", days: 2, today: "2027-01-01", policy: reg, byHr: false, usedThisYearType: 0 };
+  assert.match(validateLeave({ ...base, balance: 1, isPaid: true }) ?? "", /الرصيد/);
+  assert.equal(validateLeave({ ...base, balance: 0, isPaid: false }), null);
+});
+
