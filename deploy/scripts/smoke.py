@@ -133,7 +133,7 @@ su = call("POST", "/v1/public/signup", {"company_name": "منشأة تسجيل �
                                          "full_name": "مسجّل تجريبي", "email": f"self{scr}@example.com", "password": secrets.token_urlsafe(14),
                                          "plan_tier": "ESSENTIAL", "consent": True}, expect=201)
 token, so = su["access_token"], su["org_id"]
-call("POST", "/v1/public/signup", {"company_name": "مكرر", "cr_number": scr, "entity_legal_type": "LLC", "full_name": "س",
+call("POST", "/v1/public/signup", {"company_name": "مكرر", "cr_number": scr, "entity_legal_type": "LLC", "full_name": "سامي",
                                    "email": f"dup{scr}@example.com", "password": "x" * 12, "consent": True}, expect=409)
 ob = call("GET", "/v1/onboarding", org_id=so)
 assert ob["needs_onboarding"] and ob["billing_status"] == "TRIAL" and not ob["email_verified"], ob
