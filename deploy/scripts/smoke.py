@@ -126,6 +126,16 @@ step("سجل الموظفين وحاسبة التأمينات في باقة ال
 al = call("GET", "/v1/alerts/overview", org_id=o)
 assert "LABOR_TASK" in al["rules"], al["rules"]
 step(f"تقويم العمل: {len(lo['tasks'])} مهام شهرية، وتأكيد سداد التأمينات، وقواعد التنبيه")
+# عرض الإطلاق: شهر مجاني على الموارد البشرية لمشترك مدفوع، مرة واحدة، بالشريحة المناسبة لعدد موظفيه
+op = call("GET", "/v1/billing/checkout/options", org_id=o)
+assert op["promo"]["eligible"] and op["promo"]["tier_code"] == "ATTENDANCE" and op["hr_tier"] == "ATTENDANCE", op["promo"]
+cl = call("POST", "/v1/billing/promo/HR_LAUNCH/claim", org_id=o)
+assert cl["addon_code"] == "ATTENDANCE", cl
+call("POST", "/v1/billing/promo/HR_LAUNCH/claim", expect=409, org_id=o)
+assert call("GET", "/v1/attendance/overview", org_id=o)["access"]["via"] == "ADDON"
+pp = call("GET", "/v1/public/pricing")
+assert pp["promo"]["active"] and pp["promo"]["remaining"] == 49 and any(a["code"] == "ATTENDANCE_200" and a["monthly_price"] == 399 for a in pp["addons"]), pp["promo"]
+step("عرض الإطلاق: تفعيل شهر مجاني للموارد البشرية مرة واحدة، والمتبقي 49")
 # التسجيل الذاتي ← معالج الإعداد ← الزكاة والضريبة ← التقويم ← الدفع ← البوت
 token = None
 scr = "71" + str(secrets.randbelow(10**8)).zfill(8)
@@ -153,6 +163,8 @@ assert ics.startswith("BEGIN:VCALENDAR") and "VEVENT" in ics, ics[:200]
 call("GET", "/v1/public/calendar/not-a-real-token.ics", expect=404)
 step("رابط تقويم ICS يعمل ويرفض الرموز غير الصحيحة")
 call("POST", "/v1/billing/checkout", {"purpose": "SUBSCRIPTION", "plan_tier": "ESSENTIAL", "billing_cycle": "MONTHLY"}, expect=503, org_id=so)
+assert not call("GET", "/v1/billing/checkout/options", org_id=so)["promo"]["eligible"]   # التجربة لا تستفيد من العرض
+call("POST", "/v1/billing/promo/HR_LAUNCH/claim", expect=409, org_id=so)
 assert call("GET", "/v1/bot/overview", org_id=so)["access"]["via"] is None
 call("PUT", "/v1/bot/settings", {"enabled": True}, expect=402, org_id=so)
 step("الدفع الإلكتروني متوقف بأمان دون مفتاح البوابة، والبوت مقفل لباقة الأساس")
@@ -176,7 +188,9 @@ call("POST", "/v1/attendance/sites", {"name": "المقر", "lat": 24.7136, "lng
 token = admin_token
 att = next(a for a in call("GET", "/v1/admin/pricing")["addons"] if a["code"] == "ATTENDANCE")
 assert att["monthly_price"] == 149 and att["included_tiers"] == ["ENTERPRISE"] and att["limits"]["members"] == 25, att
-tiers = {a["code"]: a for a in call("GET", "/v1/admin/pricing")["addons"]}
+apr = call("GET", "/v1/admin/pricing")
+tiers = {a["code"]: a for a in apr["addons"]}
+assert apr["hr_mix"]["threshold"] == 0.6 and apr["promotions"][0]["used"] >= 1 and tiers["ATTENDANCE_200"]["limits"]["members"] == 200, apr["promotions"]
 assert tiers["ATTENDANCE_75"]["monthly_price"] == 249 and tiers["STAFF_BUNDLE"]["monthly_price"] == 199, tiers
 assert {p["tier"]: p["monthly_price_sar"] for p in call("GET", "/v1/admin/pricing")["plans"]} == {"ESSENTIAL": 219, "PROFESSIONAL_GRC": 549, "ENTERPRISE": 1429}
 call("PUT", "/v1/admin/pricing/addons/ATTENDANCE", {"monthly_price": 149, "included_tiers": ["ENTERPRISE", "ESSENTIAL"], "members": 25,

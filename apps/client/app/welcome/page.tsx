@@ -57,10 +57,11 @@ export default function WelcomePage() {
   const addonLines = (tier: string): string[] => {
     if (!extras.length) return [];
     if (extras.every((a) => a.included_tiers.includes(tier))) return ["الموارد البشرية وبوت الموظفين: مشمولة"];
-    const hr = extras.filter((a) => a.code === "ATTENDANCE" || a.code === "ATTENDANCE_75");
+    const hr = extras.filter((a) => a.code === "ATTENDANCE" || (a.limits.grants?.length === 1 && a.limits.grants[0] === "ATTENDANCE"));
     const bot = extras.find((a) => a.code === "WA_BOT"), bundle = extras.find((a) => a.code === "STAFF_BUNDLE");
     const out: string[] = [];
-    if (hr.length) out.push(hr.some((a) => a.included_tiers.includes(tier)) ? "الموارد البشرية: مشمولة" : `الموارد البشرية: من ${Math.min(...hr.map((a) => a.monthly_price))} ريال/شهر`);
+    if (hr.length) out.push(hr.some((a) => a.included_tiers.includes(tier)) ? "الموارد البشرية: مشمولة"
+      : `الموارد البشرية: من ${Math.min(...hr.map((a) => a.monthly_price))} ريال/شهر (حتى ${Math.max(...hr.map((a) => a.limits.members ?? 0))} موظفاً)`);
     if (bot) out.push(bot.included_tiers.includes(tier) ? "بوت الموظفين: مشمول" : `بوت الموظفين: ${bot.monthly_price} ريال/شهر`);
     if (bundle && !bundle.included_tiers.includes(tier)) out.push(`أو حزمة الموظفين (الاثنين): ${bundle.monthly_price} ريال/شهر`);
     return out;
@@ -159,6 +160,7 @@ export default function WelcomePage() {
 
       <section className="lp-section" id="plans">
         <h2>باقات واضحة</h2>
+        {pricing?.promo?.active && <p style={{ textAlign: "center" }}><span className="lp-promo">🎁 عرض الإطلاق: شهر مجاني على إضافة الموارد البشرية لأول 50 مشتركاً — المتبقي {pricing.promo.remaining}</span></p>}
         <div className="lp-toggle" role="radiogroup" aria-label="دورة الدفع">
           <button type="button" role="radio" aria-checked={!yearly} onClick={() => setYearly(false)}>شهري</button>
           <button type="button" role="radio" aria-checked={yearly} onClick={() => setYearly(true)}>سنوي <small>شهران مجاناً</small></button>

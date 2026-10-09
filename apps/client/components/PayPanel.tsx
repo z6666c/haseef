@@ -11,6 +11,7 @@ const ADDON_BLURB: Record<string, string> = {
   WA_BOT: "مساعد واتساب يجيب موظفيك من سياسات منشأتك.",
   ATTENDANCE: HR,
   ATTENDANCE_75: HR,
+  ATTENDANCE_200: HR,
   STAFF_BUNDLE: "الموارد البشرية وبوت الواتساب معاً بسعر أقل.",
 };
 
@@ -22,9 +23,14 @@ export function PayPanel() {
   const [cycle, setCycle] = useState<"MONTHLY" | "YEARLY">("YEARLY");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    api.checkoutOptions().then((x) => { setO(x); if (x.subscription) setTier(x.subscription.plan_tier); }).catch((e: Error) => setError(e.message));
-  }, []);
+  const [promoMsg, setPromoMsg] = useState<string | null>(null);
+  const loadOptions = () => api.checkoutOptions().then((x) => { setO(x); if (x.subscription) setTier(x.subscription.plan_tier); }).catch((e: Error) => setError(e.message));
+  useEffect(() => { loadOptions(); }, []);
+  async function claim(code: string) {
+    setBusy("promo"); setError(null);
+    try { const r = await api.claimPromo(code); setPromoMsg(`فُعّلت «${r.addon_name}» مجاناً حتى ${formatDate(r.paid_until.slice(0, 10))}.`); await loadOptions(); }
+    catch (e) { setError(e instanceof Error ? e.message : "تعذّر تفعيل العرض"); } finally { setBusy(null); }
+  }
   if (!o) return error ? <p className="error">{error}</p> : null;
   const vat = 1 + o.vat_rate;
   const plan = o.plans.find((p) => p.tier === tier);
@@ -45,6 +51,18 @@ export function PayPanel() {
       <p className="muted small">مدى وفيزا وماستركارد وApple Pay عبر بوابة دفع سعودية مرخصة. تصدر الفاتورة الضريبية تلقائياً بعد نجاح الدفع.
         {o.provider === "fake" && " (نسخة تجريبية: الدفع محاكاة ولا تُخصم أي مبالغ.)"}</p>
       {!o.can_pay && <p className="hint-box">الدفع متاح لمدير المنشأة ومسؤول الامتثال.</p>}
+      {promoMsg && <p className="notice" role="status">{promoMsg}</p>}
+      {o.promo?.active && o.promo.eligible && (
+        <div className="panel promo-card">
+          <div><b>🎁 {o.promo.name}</b>
+            <p className="small muted" style={{ margin: "4px 0 0" }}>يُفعَّل لك «{o.promo.tier_name}» مجاناً لمدة {o.promo.free_months === 1 ? "شهر" : `${o.promo.free_months} أشهر`} حسب عدد موظفيك ({o.employees}).
+              بعدها تختار الاشتراك أو تتوقف بلا التزام. المتبقي {o.promo.remaining} من {o.promo.max ?? 50}.</p></div>
+          <button className="btn btn-action" type="button" disabled={!o.can_pay || !!busy} onClick={() => claim(o.promo!.code)}>{busy === "promo" ? "جارٍ التفعيل…" : "فعّل الشهر المجاني"}</button>
+        </div>
+      )}
+      {o.hr_tier === null && (o.employees ?? 0) > 0 && (
+        <p className="hint-box">عندك {o.employees} موظفاً، أكثر من أكبر شريحة للموارد البشرية (200). باقة كبار العملاء تشمل الموارد البشرية وبوت الموظفين بلا حد للموظفين.</p>
+      )}
       <div className="pay-grid">
         {o.next_installment ? (
           <div className="panel pay-card">
@@ -77,8 +95,7 @@ export function PayPanel() {
           const via = acc.granted_by && acc.granted_by !== ad.code ? o.addons.find((x) => x.code === acc.granted_by) : null;
           const emp = o.employees ?? 0;
           const fits = ad.limits.members == null || emp <= ad.limits.members;
-          const hrTier = ad.code === "ATTENDANCE" || ad.code === "ATTENDANCE_75";
-          const best = hrTier && fits && (ad.code === "ATTENDANCE_75" ? emp > 25 : true);
+          const best = !!o.hr_tier && ad.code === o.hr_tier;
           return (
             <div key={ad.code} className={`panel pay-card${best && !acc.via ? " pay-best" : ""}`}>
               <h3>{ad.name}</h3>
@@ -88,7 +105,7 @@ export function PayPanel() {
                   <p className="price">{sar(round2(ad.monthly_price * vat))} <small>شهرياً شامل الضريبة</small></p>
                   <p className="small muted">{acc.via === "ADDON" && acc.paid_until ? `مفعّل حتى ${formatDate(acc.paid_until.slice(0, 10))}.` : ADDON_BLURB[ad.code]}
                     {" "}{ad.limits.questions ? `حتى ${ad.limits.members ?? "∞"} موظفاً و${ad.limits.questions} سؤال شهرياً.` : ad.limits.members ? `حتى ${ad.limits.members} موظفاً.` : ""}
-                    {!fits && ` عندك ${emp} موظفاً، فالشريحة الأكبر أنسب.`}</p>
+                    {!fits && ad.code.startsWith("ATTENDANCE") && ` عندك ${emp} موظفاً، فالشريحة الأكبر أنسب.`}</p>
                   <button className="btn" type="button" disabled={!o.can_pay || !!busy}
                     onClick={() => go(k, { purpose: "ADDON", addon_code: ad.code })}>{busy === k ? "جارٍ التحويل…" : acc.via ? "مدّد شهراً" : "اشترك"}</button>
                 </>

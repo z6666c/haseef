@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -57,11 +58,32 @@ def options(t: Tenant = Depends(get_tenant)):
         catalog = pricing.addons(c)
         access = {a["code"]: {k: _f(v) for k, v in pricing.addon_access(c, t.org_id, a["code"]).items()} for a in catalog}
         employees = c.execute(text("SELECT count(*) FROM org_employees WHERE org_id = :o AND is_active"), {"o": t.org_id}).scalar_one()
-        return {"plans": pricing.plans(c), "addons": catalog, "addon_access": access, "employees": employees, "vat_rate": float(_vat_rate(c)),
+        tier = pricing.tier_for(c, employees)
+        promo = pricing.promo_status(c, "HR_LAUNCH", t.org_id)
+        return {"plans": pricing.plans(c), "addons": catalog, "addon_access": access, "employees": employees,
+                "hr_tier": tier["code"] if tier else None, "promo": {k: _f(v) for k, v in promo.items()} if promo else None,
+                "vat_rate": float(_vat_rate(c)),
                 "subscription": {k: _f(v) for k, v in sub.items() if k in ("plan_tier", "billing_cycle", "billing_status", "ends_at")} if sub else None,
                 "next_installment": {k: _f(v) for k, v in dict(due).items()} if due else None,
                 "bot": bot, "attendance": att, "can_pay": t.role in PAYERS,
                 "provider": get_settings().payment_provider}
+
+
+@router.post("/billing/promo/{code}/claim")
+def claim_promo(code: str, t: Tenant = Depends(get_tenant)):
+    """عرض الإطلاق: يفعّل شريحة الموارد البشرية المناسبة مجاناً، مرة واحدة لكل منشأة وضمن العدد المتاح."""
+    t.require(*PAYERS)
+    with platform_tx() as c:
+        try:
+            r = pricing.claim_promo(c, code, t.org_id, t.principal.user_id)
+        except LookupError as e:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+        except PermissionError as e:
+            raise HTTPException(status.HTTP_409_CONFLICT, str(e))
+        c.execute(text("""INSERT INTO audit_log (org_id, actor_user_id, action, entity_type, changes)
+                          VALUES (:o, :u, 'PROMO_CLAIMED', 'promotion', CAST(:ch AS jsonb))"""),
+                  {"o": t.org_id, "u": t.principal.user_id, "ch": json.dumps({"promo": code, "addon": r["addon_code"]})})
+    return {**r, "paid_until": r["paid_until"].isoformat()}
 
 
 class CheckoutIn(BaseModel):
