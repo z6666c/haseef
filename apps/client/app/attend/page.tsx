@@ -140,6 +140,7 @@ function LeavesPanel({ token }: { token: string }) {
   const [form, setForm] = useState(false);
   const [v, setV] = useState({ leave_type: "ANNUAL" as LeaveType, start_date: todayIso(), end_date: todayIso(), reason: "", medical_ref: "" });
   const [att, setAtt] = useState<LeaveAttachment | null>(null);
+  const [paid, setPaid] = useState(true);
   const [attFor, setAttFor] = useState<string | null>(null);   // إرفاق لاحق لطلب قائم
   const [late, setLate] = useState<LeaveAttachment | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -165,16 +166,23 @@ function LeavesPanel({ token }: { token: string }) {
         <form className="panel inline-form" onSubmit={async (e) => { e.preventDefault();
           if (v.leave_type === "SICK" && !att) { setE2("أرفق التقرير الطبي: صوّره بالجوال أو اختر ملف PDF."); return; }
           if (await run(() => api.personLeave(token, { ...v, reason: v.reason || null, medical_ref: v.medical_ref || null,
-            attachment: v.leave_type === "SICK" ? att : null }),
+            attachment: v.leave_type === "SICK" ? att : null, is_paid: pol?.pay_mode === "CHOICE" ? paid : null }),
             (r) => `أُرسل طلبك (${r.days} يوم) إلى الموارد البشرية.${r.pay_note ? ` ${r.pay_note}.` : ""}`)) { setForm(false); setAtt(null); } }}>
           <div className="field"><label htmlFor="pt">نوع الإجازة</label>
             <select id="pt" value={v.leave_type} onChange={(e) => setV({ ...v, leave_type: e.target.value as LeaveType })}>
               {d.policies.map((x) => <option key={x.leave_type} value={x.leave_type}>{x.label}</option>)}</select></div>
           {pol && <p className="small muted">
-            {pol.is_paid ? "مدفوعة" : "غير مدفوعة"}{pol.from_balance ? "، تُخصم من رصيدك السنوي" : ""}
+            {pol.pay_mode === "CHOICE" ? "تختار: مدفوعة أو بدون أجر" : pol.pay_mode === "UNPAID" ? "بدون أجر" : pol.leave_type === "SICK" ? "بأجر حسب شرائح نظام العمل" : "مدفوعة"}
+            {pol.from_balance && pol.pay_mode !== "UNPAID" ? `، ${pol.pay_mode === "CHOICE" ? "المدفوعة " : ""}تُخصم من رصيدك السنوي` : ""}
             {pol.max_days_per_request ? `، حتى ${pol.max_days_per_request} يوم للطلب` : ""}{pol.yearly_cap ? `، والمتبقي هذا العام ${Math.max(pol.yearly_cap - pol.used, 0)} يوم` : ""}
             {pol.leave_type === "EMERGENCY" ? "، وتُرفع خلال 3 أيام من بدايتها" : pol.leave_type === "SICK" ? "، وتُرفع خلال 7 أيام من بدايتها مع إرفاق التقرير الطبي" : ""}.
           </p>}
+          {pol?.pay_mode === "CHOICE" && (
+            <fieldset className="field pay-choice"><legend>الأجر</legend>
+              <label className="checks-inline"><input type="radio" name="paid" checked={paid} onChange={() => setPaid(true)} />
+                مدفوعة{pol.from_balance ? ` (تُخصم من رصيدك: ${fmtDays(d.balance.balance)} يوم)` : ""}</label>
+              <label className="checks-inline"><input type="radio" name="paid" checked={!paid} onChange={() => setPaid(false)} /> بدون أجر (لا تمس رصيدك، ويُحسم أجر أيامها)</label>
+            </fieldset>)}
           <div className="grid">
             <div className="field"><label htmlFor="ps">من</label><input id="ps" type="date" required value={v.start_date} onChange={(e) => setV({ ...v, start_date: e.target.value, end_date: e.target.value > v.end_date ? e.target.value : v.end_date })} /></div>
             <div className="field"><label htmlFor="pe">إلى</label><input id="pe" type="date" required min={v.start_date} value={v.end_date} onChange={(e) => setV({ ...v, end_date: e.target.value })} /></div>
@@ -195,7 +203,7 @@ function LeavesPanel({ token }: { token: string }) {
         const canReturn = l.status === "APPROVED" && !l.return_confirmed_at && l.end_date < today;
         return (
           <div key={l.id} className="panel" style={{ display: "grid", gap: 6 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><b>إجازة {l.label} · {l.days} يوم</b>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><b>إجازة {l.label} · {l.days} يوم{l.is_paid === false ? " · بدون أجر" : ""}</b>
               <span className="status-chip" data-s={l.status === "APPROVED" ? "IN_PLACE" : l.status === "PENDING" ? "PENDING" : "EXPIRED"}>{LEAVE_STATUS[l.status]}</span></div>
             <div className="small muted">{formatDate(l.start_date)} ← {formatDate(l.end_date)}{l.pay_note ? ` · ${l.pay_note}` : ""}</div>
             {l.has_attachment && <div className="small">📎 التقرير مرفق{l.attachment_name ? `: ${l.attachment_name}` : ""}</div>}

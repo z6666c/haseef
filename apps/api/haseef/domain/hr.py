@@ -15,11 +15,12 @@ from datetime import date, timedelta
 LEAVE_TYPES = ("ANNUAL", "REGULAR", "EMERGENCY", "SICK")
 LEAVE_LABEL = {"ANNUAL": "سنوية", "REGULAR": "اعتيادية", "EMERGENCY": "اضطرارية", "SICK": "مرضية"}
 DEFAULT_POLICIES = {
-    "ANNUAL":    {"is_paid": True,  "from_balance": True,  "max_days_per_request": None, "yearly_cap": None, "min_notice_days": 0},
-    "REGULAR":   {"is_paid": False, "from_balance": False, "max_days_per_request": 30,   "yearly_cap": None, "min_notice_days": 0},
-    "EMERGENCY": {"is_paid": True,  "from_balance": True,  "max_days_per_request": 3,    "yearly_cap": 5,    "min_notice_days": 0},
+    "ANNUAL":    {"pay_mode": "PAID",   "is_paid": True, "from_balance": True,  "max_days_per_request": None, "yearly_cap": None, "min_notice_days": 0},
+    # الاعتيادية والاضطرارية: مدفوعة (من الرصيد السنوي) أو بدون أجر، يختار الموظف في كل طلب
+    "REGULAR":   {"pay_mode": "CHOICE", "is_paid": True, "from_balance": True,  "max_days_per_request": 30,   "yearly_cap": None, "min_notice_days": 0},
+    "EMERGENCY": {"pay_mode": "CHOICE", "is_paid": True, "from_balance": True,  "max_days_per_request": 3,    "yearly_cap": 5,    "min_notice_days": 0},
     # المادة 117: خلال السنة الواحدة 30 يوماً بأجر كامل، ثم 60 بثلاثة أرباع الأجر، ثم 30 دون أجر
-    "SICK":      {"is_paid": True,  "from_balance": False, "max_days_per_request": None, "yearly_cap": 120,  "min_notice_days": 0},
+    "SICK":      {"pay_mode": "PAID",   "is_paid": True, "from_balance": False, "max_days_per_request": None, "yearly_cap": 120,  "min_notice_days": 0},
 }
 SICK_TIERS = ((30, 1.0), (60, 0.75), (30, 0.0))
 SICK_BACKDATE_DAYS = 7
@@ -64,8 +65,22 @@ def late_return_days(end_date: date, return_date: date, *, work_days: list[int],
     return count_days(end_date + timedelta(days=1), return_date - timedelta(days=1), work_days=work_days, holidays=holidays, workdays_only=True)
 
 
+PAY_MODES = ("PAID", "UNPAID", "CHOICE")
+PAY_MODE_LABEL = {"PAID": "مدفوعة دائماً", "UNPAID": "بدون أجر دائماً", "CHOICE": "يختار الموظف: مدفوعة أو بدون أجر"}
+
+
+def resolve_paid(policy: dict, requested: bool | None) -> bool:
+    """أجر الطلب: يفرضه نوع الإجازة، أو يختاره مقدم الطلب إن كانت السياسة «حسب الاختيار» (الافتراضي مدفوعة)."""
+    mode = policy.get("pay_mode") or ("PAID" if policy.get("is_paid", True) else "UNPAID")
+    if mode == "PAID":
+        return True
+    if mode == "UNPAID":
+        return False
+    return True if requested is None else bool(requested)
+
+
 def validate_leave(*, leave_type: str, start: date, end: date, days: int, today: date, policy: dict, by_hr: bool,
-                   balance: float, used_this_year_type: int) -> str | None:
+                   balance: float, used_this_year_type: int, is_paid: bool = True) -> str | None:
     if leave_type not in LEAVE_TYPES:
         return "نوع الإجازة غير معروف"
     if not policy.get("is_active", True):
@@ -89,7 +104,7 @@ def validate_leave(*, leave_type: str, start: date, end: date, days: int, today:
     cap = policy.get("yearly_cap")
     if cap and used_this_year_type + days > cap:
         return f"تجاوزت الحد السنوي ({cap} يوم) لهذا النوع؛ المتبقي {max(cap - used_this_year_type, 0)}"
-    if policy.get("from_balance") and days > balance:
+    if is_paid and policy.get("from_balance") and days > balance:
         return f"الرصيد غير كافٍ: المتبقي {fmt_days(balance)} يوم"
     return None
 

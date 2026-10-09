@@ -186,10 +186,10 @@ export function createApi(
     // ---------- الموارد البشرية: الإجازات والمباشرة والخصومات
     hrOverview: () => req<HrOverview>("/hr/overview"),
     hrSettings: (b: HrSettings) => req<{ ok: boolean }>("/hr/settings", { method: "PUT", body: JSON.stringify(b) }),
-    hrPolicy: (type: LeaveType, b: LeavePolicy) => req<{ ok: boolean }>(`/hr/policies/${type}`, { method: "PUT", body: JSON.stringify(b) }),
-    hrAddLeave: (b: { employee_id: string; leave_type: LeaveType; start_date: string; end_date: string; reason?: string | null; medical_ref?: string | null; attachment?: LeaveAttachment | null; approve: boolean }) =>
-      req<{ id: string; days: number; status: string; pay_note?: string }>("/hr/leaves", { method: "POST", body: JSON.stringify(b) }),
-    hrDecideLeave: (id: string, b: { approve: boolean; note?: string | null }) => req<{ status: string }>(`/hr/leaves/${id}/decide`, { method: "POST", body: JSON.stringify(b) }),
+    hrPolicy: (type: LeaveType, b: Omit<LeavePolicy, "is_paid">) => req<{ ok: boolean }>(`/hr/policies/${type}`, { method: "PUT", body: JSON.stringify(b) }),
+    hrAddLeave: (b: { employee_id: string; leave_type: LeaveType; start_date: string; end_date: string; reason?: string | null; medical_ref?: string | null; attachment?: LeaveAttachment | null; is_paid?: boolean | null; approve: boolean }) =>
+      req<{ id: string; days: number; status: string; is_paid: boolean; pay_note?: string }>("/hr/leaves", { method: "POST", body: JSON.stringify(b) }),
+    hrDecideLeave: (id: string, b: { approve: boolean; note?: string | null; is_paid?: boolean | null }) => req<{ status: string }>(`/hr/leaves/${id}/decide`, { method: "POST", body: JSON.stringify(b) }),
     hrLeaveAttachment: (id: string) => reqBlob(`/hr/leaves/${id}/attachment`, true),
     hrCancelLeave: (id: string) => req<{ ok: boolean }>(`/hr/leaves/${id}/cancel`, { method: "POST", body: "{}" }),
     hrConfirmReturn: (id: string, return_date: string) => req<{ late_days: number }>(`/hr/leaves/${id}/return`, { method: "POST", body: JSON.stringify({ return_date }) }),
@@ -200,8 +200,8 @@ export function createApi(
     hrDecideNotice: (id: string, b: { confirm: boolean; note?: string | null }) => req<{ ok: boolean }>(`/hr/deductions/${id}/decide`, { method: "POST", body: JSON.stringify(b) }),
     personHr: (token: string) => req<PersonHr>(`/public/attendance/${encodeURIComponent(token)}/hr`, { org: false }),
     personLeave: (token: string, b: { leave_type: LeaveType; start_date: string; end_date: string; reason?: string | null; medical_ref?: string | null;
-      attachment?: LeaveAttachment | null }) =>
-      req<{ id: string; days: number; status: string; pay_note?: string }>(`/public/attendance/${encodeURIComponent(token)}/leaves`, { method: "POST", org: false, body: JSON.stringify(b) }),
+      attachment?: LeaveAttachment | null; is_paid?: boolean | null }) =>
+      req<{ id: string; days: number; status: string; is_paid: boolean; pay_note?: string }>(`/public/attendance/${encodeURIComponent(token)}/leaves`, { method: "POST", org: false, body: JSON.stringify(b) }),
     personAttach: (token: string, id: string, a: LeaveAttachment) =>
       req<{ ok: boolean }>(`/public/attendance/${encodeURIComponent(token)}/leaves/${id}/attachment`, { method: "POST", org: false, body: JSON.stringify(a) }),
     personCancelLeave: (token: string, id: string) => req<{ ok: boolean }>(`/public/attendance/${encodeURIComponent(token)}/leaves/${id}/cancel`, { method: "POST", org: false, body: "{}" }),
@@ -862,7 +862,7 @@ export interface LeaveAttachment { file_name: string; file_base64: string }
 export interface HrSettings { count_workdays_only: boolean; objection_days: number; notify_employees: boolean }
 export interface LeaveBalance { year: number; entitlement: number; adjustments: number; used: number; balance: number }
 export interface LeaveRow { id: string; employee_id: string; full_name: string; leave_type: LeaveType; label: string; start_date: string; end_date: string; days: number;
-  reason: string | null; medical_ref: string | null; has_attachment: boolean; attachment_name: string | null;
+  reason: string | null; medical_ref: string | null; is_paid: boolean; has_attachment: boolean; attachment_name: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED"; source: "LINK" | "BOT" | "HR";
   decision_note: string | null; decided_at: string | null; return_date: string | null; return_submitted_at: string | null; return_confirmed_at: string | null;
   created_at: string; on_leave_now: boolean; awaiting_return: boolean; late_return_days: number; pay_note?: string }
@@ -877,7 +877,9 @@ export interface NoticeRow { id: string; employee_id: string; full_name: string;
   objected_at: string | null; decision_note: string | null; decided_at: string | null; created_at: string; leave_request_id: string | null }
 export interface DeductionSuggestion { employee_id: string; full_name: string; kind: DeductionKind; kind_label: string; incident_date: string; amount: number;
   description: string; leave_request_id?: string | null }
-export interface HrDeductions { month: string; notices: NoticeRow[]; suggestions: DeductionSuggestion[]; objection_days: number;
+export interface UnpaidLeaveDays { leave_id: string; employee_id: string; full_name: string; leave_type: LeaveType; label: string; from_date: string; to_date: string;
+  days: number; amount: number }
+export interface HrDeductions { month: string; notices: NoticeRow[]; suggestions: DeductionSuggestion[]; objection_days: number; unpaid_leaves: UnpaidLeaveDays[];
   summary: { employee_id: string; full_name: string; fines: number; total: number; confirmed: number; fine_cap: number; half_wage: number }[] }
 export interface PersonHr {
   balance: LeaveBalance; objection_days: number; count_workdays_only: boolean;

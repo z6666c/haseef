@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
-  KIND_LABEL, LEAVE_LABEL, LEAVE_STATUS, LEAVE_TYPES, NOTICE_STATUS, fmtDays, formatDate, sar,
-  type DeductionKind, type DeductionSuggestion, type HrDeductions, type HrOverview, type LeaveAttachment, type LeaveRow, type LeaveType,
+  KIND_LABEL, LEAVE_LABEL, PAY_MODE_LABEL, LEAVE_STATUS, LEAVE_TYPES, NOTICE_STATUS, fmtDays, formatDate, sar,
+  type DeductionKind, type PayMode, type DeductionSuggestion, type HrDeductions, type HrOverview, type LeaveAttachment, type LeaveRow, type LeaveType,
 } from "@haseef/shared";
 import { AttachPicker } from "@/components/AttachPicker";
 import { api } from "@/lib/session";
@@ -99,7 +99,7 @@ function LeaveCells({ l, canView }: { l: LeaveRow; canView: boolean }) {
   return (
     <>
       <td><b>{l.full_name}</b><div className="small muted">{SRC[l.source]}</div></td>
-      <td>{l.label}<div className="small muted">{l.days} يوم{l.pay_note ? ` · ${l.pay_note}` : ""}</div>{l.medical_ref && <div className="small muted">رقم التقرير: {l.medical_ref}</div>}
+      <td>{l.label}{l.is_paid === false && <span className="tag tag-quiet">بدون أجر</span>}<div className="small muted">{l.days} يوم{l.pay_note ? ` · ${l.pay_note}` : ""}</div>{l.medical_ref && <div className="small muted">رقم التقرير: {l.medical_ref}</div>}
         {l.has_attachment ? (canView ? <ViewAttachment l={l} /> : <div className="small muted">📎 تقرير مرفق</div>)
           : l.leave_type === "SICK" && <div className="small" style={{ color: "var(--amber, #b45309)" }}>بلا تقرير مرفق</div>}</td>
       <td className="small">{formatDate(l.start_date)} ← {formatDate(l.end_date)}{l.reason && <div className="muted">{l.reason}</div>}</td>
@@ -108,8 +108,10 @@ function LeaveCells({ l, canView }: { l: LeaveRow; canView: boolean }) {
 }
 
 function RequestsTab({ ov, act }: { ov: HrOverview; act: Act }) {
+  const canChoose = (l: LeaveRow) => ov.policies.find((p) => p.leave_type === l.leave_type)?.pay_mode === "CHOICE";
   const [adding, setAdding] = useState(false);
   const [decide, setDecide] = useState<{ l: LeaveRow; approve: boolean } | null>(null);
+  const [dPaid, setDPaid] = useState(true);
   const [note, setNote] = useState("");
   const pending = ov.leaves.filter((l) => l.status === "PENDING");
   const returns = ov.leaves.filter((l) => l.awaiting_return || (l.return_submitted_at && !l.return_confirmed_at));
@@ -127,7 +129,7 @@ function RequestsTab({ ov, act }: { ov: HrOverview; act: Act }) {
           <tbody>{pending.map((l) => (
             <tr key={l.id}><LeaveCells l={l} canView={ov.can_manage} />
               <td>{ov.can_manage && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <button className="btn btn-action btn-xs" type="button" onClick={() => { setDecide({ l, approve: true }); setNote(""); }}>موافقة</button>
+                <button className="btn btn-action btn-xs" type="button" onClick={() => { setDecide({ l, approve: true }); setDPaid(l.is_paid); setNote(""); }}>موافقة</button>
                 <button className="btn btn-quiet btn-xs" type="button" onClick={() => { setDecide({ l, approve: false }); setNote(""); }}>رفض</button></div>}</td>
             </tr>))}</tbody>
         </table>
@@ -162,9 +164,17 @@ function RequestsTab({ ov, act }: { ov: HrOverview; act: Act }) {
       {decide && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && setDecide(null)}>
           <form className="modal" onSubmit={async (e) => { e.preventDefault();
-            if (await act(() => api.hrDecideLeave(decide.l.id, { approve: decide.approve, note: note || null }), decide.approve ? `اعتُمدت إجازة ${decide.l.full_name}` : `رُفض طلب ${decide.l.full_name}`)) setDecide(null); }}>
+            if (await act(() => api.hrDecideLeave(decide.l.id, { approve: decide.approve, note: note || null,
+              is_paid: decide.approve && canChoose(decide.l) ? dPaid : null }), decide.approve ? `اعتُمدت إجازة ${decide.l.full_name}` : `رُفض طلب ${decide.l.full_name}`)) setDecide(null); }}>
             <h2>{decide.approve ? "اعتماد" : "رفض"} إجازة {decide.l.full_name}</h2>
-            <p className="small">{decide.l.label} · {decide.l.days} يوم · {formatDate(decide.l.start_date)} ← {formatDate(decide.l.end_date)}</p>
+            <p className="small">{decide.l.label} · {decide.l.days} يوم · {formatDate(decide.l.start_date)} ← {formatDate(decide.l.end_date)}
+              {" · "}طلبها {decide.l.is_paid ? "مدفوعة" : "بدون أجر"}</p>
+            {decide.approve && canChoose(decide.l) && (
+              <fieldset className="field"><legend>اعتمادها</legend>
+                <label className="checks-inline"><input type="radio" name="dp" checked={dPaid} onChange={() => setDPaid(true)} /> مدفوعة
+                  {ov.policies.find((p) => p.leave_type === decide.l.leave_type)?.from_balance ? ` (رصيده ${fmtDays(ov.people.find((x) => x.id === decide.l.employee_id)?.balance ?? 0)} يوم)` : ""}</label>
+                <label className="checks-inline"><input type="radio" name="dp" checked={!dPaid} onChange={() => setDPaid(false)} /> بدون أجر</label>
+              </fieldset>)}
             <div className="field"><label htmlFor="dn">ملاحظة للموظف {decide.approve ? "(اختياري)" : ""}</label>
               <textarea id="dn" rows={2} maxLength={500} required={!decide.approve} value={note} onChange={(e) => setNote(e.target.value)} /></div>
             <p className="small muted">يصل الموظف إشعار واتساب بالقرار إن كان جواله مسجلاً.</p>
@@ -199,9 +209,12 @@ function ReturnRow({ l, ov, act }: { l: LeaveRow; ov: HrOverview; act: Act }) {
 function AddLeave({ ov, act, onDone }: { ov: HrOverview; act: Act; onDone: () => void }) {
   const [v, setV] = useState({ employee_id: ov.people[0]?.id ?? "", leave_type: "ANNUAL" as LeaveType, start_date: today(), end_date: today(), reason: "", medical_ref: "", approve: true });
   const [att, setAtt] = useState<LeaveAttachment | null>(null);
+  const [paid, setPaid] = useState(true);
+  const pol = ov.policies.find((p) => p.leave_type === v.leave_type);
   return (
     <form className="panel inline-form" style={{ marginTop: 8 }} onSubmit={async (e) => { e.preventDefault();
-      if (await act(() => api.hrAddLeave({ ...v, reason: v.reason || null, medical_ref: v.medical_ref || null, attachment: v.leave_type === "SICK" ? att : null }), "أُضيفت الإجازة")) onDone(); }}>
+      if (await act(() => api.hrAddLeave({ ...v, reason: v.reason || null, medical_ref: v.medical_ref || null, attachment: v.leave_type === "SICK" ? att : null,
+        is_paid: pol?.pay_mode === "CHOICE" ? paid : null }), "أُضيفت الإجازة")) onDone(); }}>
       <h2>إدخال إجازة</h2>
       <div className="grid">
         <div className="field"><label htmlFor="le">الموظف</label><select id="le" value={v.employee_id} onChange={(e) => setV({ ...v, employee_id: e.target.value })}>
@@ -214,6 +227,8 @@ function AddLeave({ ov, act, onDone }: { ov: HrOverview; act: Act; onDone: () =>
           <div className="field"><label htmlFor="lm">رقم التقرير (اختياري)</label><input id="lm" maxLength={60} value={v.medical_ref} onChange={(e) => setV({ ...v, medical_ref: e.target.value })} /></div>
           <div className="field-wide"><AttachPicker value={att} onChange={setAtt} /></div>
         </>}
+        {pol?.pay_mode === "CHOICE" && <div className="field"><label htmlFor="lp">الأجر</label>
+          <select id="lp" value={paid ? "1" : "0"} onChange={(e) => setPaid(e.target.value === "1")}><option value="1">مدفوعة{pol.from_balance ? " (من الرصيد)" : ""}</option><option value="0">بدون أجر</option></select></div>}
         <div className="field field-wide"><label htmlFor="lr">ملاحظة</label><input id="lr" maxLength={500} value={v.reason} onChange={(e) => setV({ ...v, reason: e.target.value })} /></div>
       </div>
       <label className="checks-inline"><input type="checkbox" checked={v.approve} onChange={(e) => setV({ ...v, approve: e.target.checked })} /> معتمدة مباشرة</label>
@@ -266,7 +281,8 @@ function DeductionsTab({ ov, act }: { ov: HrOverview; act: Act }) {
   function csv() {
     if (!d) return;
     const lines = [["الموظف", "النوع", "تاريخ الواقعة", "الوصف", "المبلغ", "الحالة"], ...d.notices.filter((n) => n.status !== "CANCELLED")
-      .map((n) => [n.full_name, n.kind_label, n.incident_date, n.description, n.amount.toFixed(2), NOTICE_STATUS[n.status]])]
+      .map((n) => [n.full_name, n.kind_label, n.incident_date, n.description, n.amount.toFixed(2), NOTICE_STATUS[n.status]]),
+      ...d.unpaid_leaves.map((u) => [u.full_name, `إجازة ${u.label} بدون أجر`, u.from_date, `${u.days} يوم (${u.from_date} إلى ${u.to_date})`, u.amount.toFixed(2), "معتمدة"])]
       .map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
     const url = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = `deductions-${month}.csv`; a.click(); URL.revokeObjectURL(url);
@@ -304,6 +320,13 @@ function DeductionsTab({ ov, act }: { ov: HrOverview; act: Act }) {
           <h2 style={{ marginTop: 20 }}>ملخص الشهر لكل موظف</h2>
           <table className="deadlines labor-table"><thead><tr><th>الموظف</th><th>الغرامات / السقف</th><th>مجموع الحسم / نصف الأجر</th><th>المؤكد</th></tr></thead>
             <tbody>{d.summary.map((s) => <tr key={s.employee_id}><td>{s.full_name}</td><td>{sar(s.fines)} / {sar(s.fine_cap)}</td><td>{sar(s.total)} / {sar(s.half_wage)}</td><td><b>{sar(s.confirmed)}</b></td></tr>)}</tbody></table>
+        </>}
+        {d.unpaid_leaves.length > 0 && <>
+          <h2 style={{ marginTop: 20 }}>إجازات بدون أجر هذا الشهر</h2>
+          <p className="small muted">أيام لا يُستحق عنها أجر (ليست جزاءً ولا تحتاج إشعار خصم)، وتدخل في ملف مسيّر الرواتب.</p>
+          <table className="deadlines labor-table"><thead><tr><th>الموظف</th><th>الإجازة</th><th>الأيام في الشهر</th><th>المبلغ</th></tr></thead>
+            <tbody>{d.unpaid_leaves.map((u) => <tr key={u.leave_id}><td>{u.full_name}</td><td>{u.label}<div className="small muted">{formatDate(u.from_date)} ← {formatDate(u.to_date)}</div></td>
+              <td>{u.days}</td><td><b>{sar(u.amount)}</b></td></tr>)}</tbody></table>
         </>}
         <h2 style={{ marginTop: 20 }}>اقتراحات من سجل الحضور والمباشرة</h2>
         <p className="small muted">لا يصدر شيء تلقائياً: راجع كل اقتراح، ولك أن تكتفي بالتنبيه أو الإنذار وفق لائحة تنظيم العمل في منشأتك.</p>
@@ -383,16 +406,20 @@ function PolicyCard({ p, dis, act }: { p: HrOverview["policies"][number]; dis: b
   const [v, setV] = useState(p);
   const num = (x: string) => (x === "" ? null : Number(x));
   return (
-    <form className="panel pay-card" onSubmit={(e) => { e.preventDefault(); act(() => api.hrPolicy(p.leave_type, { is_paid: v.is_paid, from_balance: v.from_balance,
+    <form className="panel pay-card" onSubmit={(e) => { e.preventDefault(); act(() => api.hrPolicy(p.leave_type, { pay_mode: v.pay_mode, from_balance: v.from_balance,
       max_days_per_request: v.max_days_per_request, yearly_cap: v.yearly_cap, min_notice_days: v.min_notice_days, is_active: v.is_active }), `حُفظت الإجازة ال${LEAVE_LABEL[p.leave_type]}`); }}>
       <h3>الإجازة ال{LEAVE_LABEL[p.leave_type]}</h3>
       <label className="checks-inline"><input type="checkbox" disabled={dis} checked={v.is_active} onChange={(e) => setV({ ...v, is_active: e.target.checked })} /> متاحة للموظفين</label>
-      <label className="checks-inline"><input type="checkbox" disabled={dis} checked={v.is_paid} onChange={(e) => setV({ ...v, is_paid: e.target.checked })} /> مدفوعة الأجر</label>
-      <label className="checks-inline"><input type="checkbox" disabled={dis || p.leave_type === "ANNUAL"} checked={v.from_balance} onChange={(e) => setV({ ...v, from_balance: e.target.checked })} /> تُخصم من الرصيد السنوي</label>
+      <div className="field"><label>الأجر</label>
+        <select disabled={dis || p.leave_type === "ANNUAL" || p.leave_type === "SICK"} value={v.pay_mode} onChange={(e) => setV({ ...v, pay_mode: e.target.value as PayMode })}>
+          {(Object.keys(PAY_MODE_LABEL) as PayMode[]).map((k) => <option key={k} value={k}>{PAY_MODE_LABEL[k]}</option>)}</select></div>
+      {v.pay_mode !== "UNPAID" && p.leave_type !== "SICK" && <label className="checks-inline"><input type="checkbox" disabled={dis || p.leave_type === "ANNUAL"} checked={v.from_balance}
+        onChange={(e) => setV({ ...v, from_balance: e.target.checked })} /> المدفوعة تُخصم من الرصيد السنوي</label>}
+      {v.pay_mode === "CHOICE" && <p className="small muted">يختار الموظف عند الطلب، ولك تعديل اختياره عند الاعتماد. بدون أجر لا تمس الرصيد ويُحسم أجر أيامها من راتب الشهر.</p>}
       <div className="field"><label>أقصى مدة للطلب الواحد</label><input type="number" min={1} max={120} placeholder="بلا حد" disabled={dis} value={v.max_days_per_request ?? ""} onChange={(e) => setV({ ...v, max_days_per_request: num(e.target.value) })} /></div>
       <div className="field"><label>الحد السنوي (يوم)</label><input type="number" min={1} max={365} placeholder="بلا حد" disabled={dis} value={v.yearly_cap ?? ""} onChange={(e) => setV({ ...v, yearly_cap: num(e.target.value) })} /></div>
       {p.leave_type !== "EMERGENCY" && p.leave_type !== "SICK" && <div className="field"><label>إشعار مسبق (يوم)</label><input type="number" min={0} max={90} disabled={dis} value={v.min_notice_days} onChange={(e) => setV({ ...v, min_notice_days: Number(e.target.value) || 0 })} /></div>}
-      {p.leave_type === "SICK" && <p className="small muted">المادة 117: 30 يوماً بأجر كامل، ثم 60 بثلاثة أرباع الأجر، ثم 30 دون أجر خلال السنة. يُطلب رقم التقرير الطبي من الموظف.</p>}
+      {p.leave_type === "SICK" && <p className="small muted">المادة 117: 30 يوماً بأجر كامل، ثم 60 بثلاثة أرباع الأجر، ثم 30 دون أجر خلال السنة. يُطلب إرفاق التقرير الطبي من الموظف.</p>}
       {p.leave_type === "EMERGENCY" && <p className="small muted">تُقبل حتى 3 أيام بعد بدايتها.</p>}
       {!dis && <button className="btn btn-xs" type="submit">حفظ</button>}
     </form>
