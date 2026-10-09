@@ -3,7 +3,8 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { LEAVE_STATUS, NOTICE_STATUS, KIND_LABEL, fmtDays, formatDate, registerDevice, sar, signWithDevice, webauthnSupported,
-  type AttendCheckResult, type AttendPage, type LeaveType, type PersonHr } from "@haseef/shared";
+  type AttendCheckResult, type AttendPage, type LeaveAttachment, type LeaveType, type PersonHr } from "@haseef/shared";
+import { AttachPicker } from "@/components/AttachPicker";
 import { Logo } from "@/components/Logo";
 import { api } from "@/lib/session";
 
@@ -138,6 +139,9 @@ function LeavesPanel({ token }: { token: string }) {
   const { d, err, load } = usePersonHr(token);
   const [form, setForm] = useState(false);
   const [v, setV] = useState({ leave_type: "ANNUAL" as LeaveType, start_date: todayIso(), end_date: todayIso(), reason: "", medical_ref: "" });
+  const [att, setAtt] = useState<LeaveAttachment | null>(null);
+  const [attFor, setAttFor] = useState<string | null>(null);   // إرفاق لاحق لطلب قائم
+  const [late, setLate] = useState<LeaveAttachment | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [e2, setE2] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -159,21 +163,27 @@ function LeavesPanel({ token }: { token: string }) {
       {e2 && <p className="error" role="alert">{e2}</p>}
       {!form ? <button className="btn btn-action attend-btn" type="button" onClick={() => setForm(true)}>طلب إجازة</button> : (
         <form className="panel inline-form" onSubmit={async (e) => { e.preventDefault();
-          if (await run(() => api.personLeave(token, { ...v, reason: v.reason || null, medical_ref: v.medical_ref || null }),
-            (r) => `أُرسل طلبك (${r.days} يوم) إلى الموارد البشرية.${r.pay_note ? ` ${r.pay_note}.` : ""}`)) setForm(false); }}>
+          if (v.leave_type === "SICK" && !att) { setE2("أرفق التقرير الطبي: صوّره بالجوال أو اختر ملف PDF."); return; }
+          if (await run(() => api.personLeave(token, { ...v, reason: v.reason || null, medical_ref: v.medical_ref || null,
+            attachment: v.leave_type === "SICK" ? att : null }),
+            (r) => `أُرسل طلبك (${r.days} يوم) إلى الموارد البشرية.${r.pay_note ? ` ${r.pay_note}.` : ""}`)) { setForm(false); setAtt(null); } }}>
           <div className="field"><label htmlFor="pt">نوع الإجازة</label>
             <select id="pt" value={v.leave_type} onChange={(e) => setV({ ...v, leave_type: e.target.value as LeaveType })}>
               {d.policies.map((x) => <option key={x.leave_type} value={x.leave_type}>{x.label}</option>)}</select></div>
           {pol && <p className="small muted">
             {pol.is_paid ? "مدفوعة" : "غير مدفوعة"}{pol.from_balance ? "، تُخصم من رصيدك السنوي" : ""}
             {pol.max_days_per_request ? `، حتى ${pol.max_days_per_request} يوم للطلب` : ""}{pol.yearly_cap ? `، والمتبقي هذا العام ${Math.max(pol.yearly_cap - pol.used, 0)} يوم` : ""}
-            {pol.leave_type === "EMERGENCY" ? "، وتُرفع خلال 3 أيام من بدايتها" : pol.leave_type === "SICK" ? "، وتُرفع خلال 7 أيام من بدايتها مع رقم التقرير الطبي" : ""}.
+            {pol.leave_type === "EMERGENCY" ? "، وتُرفع خلال 3 أيام من بدايتها" : pol.leave_type === "SICK" ? "، وتُرفع خلال 7 أيام من بدايتها مع إرفاق التقرير الطبي" : ""}.
           </p>}
           <div className="grid">
             <div className="field"><label htmlFor="ps">من</label><input id="ps" type="date" required value={v.start_date} onChange={(e) => setV({ ...v, start_date: e.target.value, end_date: e.target.value > v.end_date ? e.target.value : v.end_date })} /></div>
             <div className="field"><label htmlFor="pe">إلى</label><input id="pe" type="date" required min={v.start_date} value={v.end_date} onChange={(e) => setV({ ...v, end_date: e.target.value })} /></div>
           </div>
-          {v.leave_type === "SICK" && <div className="field"><label htmlFor="pm">رقم التقرير الطبي (منصة صحة)</label><input id="pm" required maxLength={60} value={v.medical_ref} onChange={(e) => setV({ ...v, medical_ref: e.target.value })} /></div>}
+          {v.leave_type === "SICK" && <>
+            <AttachPicker value={att} onChange={setAtt} required />
+            <div className="field"><label htmlFor="pm">رقم التقرير في منصة صحة (اختياري)</label><input id="pm" maxLength={60} value={v.medical_ref} onChange={(e) => setV({ ...v, medical_ref: e.target.value })} /></div>
+            <p className="small muted">التقرير بيانات صحية: لا يطّلع عليه إلا مدير المنشأة ومسؤول الامتثال، ويُسجَّل كل اطلاع.</p>
+          </>}
           <div className="field"><label htmlFor="pr">ملاحظة (اختياري)</label><input id="pr" maxLength={500} value={v.reason} onChange={(e) => setV({ ...v, reason: e.target.value })} /></div>
           <div style={{ display: "flex", gap: 8 }}><button className="btn btn-action" type="submit" disabled={busy}>إرسال الطلب</button>
             <button className="btn btn-quiet" type="button" onClick={() => setForm(false)}>إلغاء</button></div>
@@ -188,6 +198,17 @@ function LeavesPanel({ token }: { token: string }) {
             <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><b>إجازة {l.label} · {l.days} يوم</b>
               <span className="status-chip" data-s={l.status === "APPROVED" ? "IN_PLACE" : l.status === "PENDING" ? "PENDING" : "EXPIRED"}>{LEAVE_STATUS[l.status]}</span></div>
             <div className="small muted">{formatDate(l.start_date)} ← {formatDate(l.end_date)}{l.pay_note ? ` · ${l.pay_note}` : ""}</div>
+            {l.has_attachment && <div className="small">📎 التقرير مرفق{l.attachment_name ? `: ${l.attachment_name}` : ""}</div>}
+            {l.status === "PENDING" && l.leave_type === "SICK" && (attFor === l.id ? (
+              <div style={{ display: "grid", gap: 6 }}>
+                <AttachPicker value={late} onChange={setLate} required label={l.has_attachment ? "استبدال التقرير" : "إرفاق التقرير"} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn btn-action btn-xs" type="button" disabled={busy || !late}
+                    onClick={async () => { if (late && await run(() => api.personAttach(token, l.id, late), "أُرفق التقرير")) { setAttFor(null); setLate(null); } }}>رفع</button>
+                  <button className="btn btn-quiet btn-xs" type="button" onClick={() => { setAttFor(null); setLate(null); }}>إلغاء</button>
+                </div>
+              </div>) : (
+              <button className="link-btn" type="button" onClick={() => { setAttFor(l.id); setLate(null); }}>{l.has_attachment ? "استبدال التقرير" : "إرفاق التقرير الطبي"}</button>))}
             {l.decision_note && <div className="small">ملاحظة الموارد البشرية: {l.decision_note}</div>}
             {l.return_confirmed_at && l.return_date && <div className="small">✓ باشرت {formatDate(l.return_date)}</div>}
             {canReturn && l.return_submitted_at && <div className="small">أبلغت بالمباشرة {formatDate(l.return_date!)} — بانتظار تأكيد الموارد البشرية</div>}

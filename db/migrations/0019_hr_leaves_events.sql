@@ -37,6 +37,11 @@ CREATE TABLE leave_requests (
     days                smallint NOT NULL CHECK (days BETWEEN 0 AND 366),
     reason              varchar(500),
     medical_ref         varchar(60),                           -- رقم التقرير الطبي (منصة صحة) للإجازة المرضية
+    attachment_key      varchar(200),                          -- مرفق الإجازة (التقرير الطبي): مسار داخلي في مساحة الملفات، لا يحمل اسم المستخدم
+    attachment_name     varchar(200),
+    attachment_mime     varchar(60) CHECK (attachment_mime IS NULL OR attachment_mime IN ('application/pdf','image/jpeg','image/png')),
+    attachment_size     integer CHECK (attachment_size IS NULL OR attachment_size BETWEEN 1 AND 10485760),
+    attachment_at       timestamptz,
     status              varchar(10) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','REJECTED','CANCELLED')),
     source              varchar(4) NOT NULL CHECK (source IN ('LINK','BOT','HR')),
     decided_by          uuid REFERENCES users(id) ON DELETE SET NULL,

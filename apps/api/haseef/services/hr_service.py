@@ -6,8 +6,12 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
+import uuid
 from datetime import date, datetime, time, timedelta
+from pathlib import Path
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -94,8 +98,57 @@ def balance(c: Connection, org_id, emp: dict, year: int, pols: dict[str, dict] |
     return {"year": year, "entitlement": ent, "adjustments": adj, "used": used, "balance": round(ent + adj - used, 1)}
 
 
+def decode_attachment(att: dict | None) -> tuple[bytes, str, str] | None:
+    """يتحقق من المرفق قبل أي كتابة: الحجم، والنوع من محتوى الملف (PDF/JPEG/PNG فقط)."""
+    if not att:
+        return None
+    try:
+        data = base64.b64decode(att.get("file_base64") or "", validate=True)
+    except (binascii.Error, ValueError):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "تعذّرت قراءة المرفق")
+    if not data:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "المرفق فارغ")
+    if len(data) > hr.ATTACH_MAX_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "حجم المرفق يتجاوز 6 ميجابايت")
+    mime = hr.sniff_mime(data)
+    if mime is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "المرفق يجب أن يكون صورة (JPG/PNG) أو PDF")
+    return data, mime, hr.safe_file_name(att.get("file_name") or "", mime)
+
+
+def _save_attachment(c: Connection, org_id, leave_id, decoded: tuple[bytes, str, str]) -> None:
+    from ..config import get_settings
+    data, mime, name = decoded
+    root = Path(get_settings().storage_dir)
+    old = c.execute(text("SELECT attachment_key FROM leave_requests WHERE id = :i AND org_id = :o"), {"i": leave_id, "o": org_id}).scalar_one_or_none()
+    key = f"leave/{org_id}/{uuid.uuid4().hex}{hr.ATTACH_EXT[mime]}"
+    path = root / key
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    c.execute(text("""UPDATE leave_requests SET attachment_key = :k, attachment_name = :n, attachment_mime = :m, attachment_size = :z,
+                      attachment_at = now() WHERE id = :i AND org_id = :o"""),
+              {"k": key, "n": name, "m": mime, "z": len(data), "i": leave_id, "o": org_id})
+    if old:
+        try:
+            (root / old).unlink(missing_ok=True)
+        except OSError:
+            log.warning("could not remove old attachment %s", old)
+
+
+def attach(c: Connection, org_id, emp_id, leave_id, att: dict) -> None:
+    """إرفاق التقرير بعد رفع الطلب (أو استبداله) ما دام الطلب لم يُبت فيه."""
+    st = c.execute(text("SELECT status FROM leave_requests WHERE id = :i AND org_id = :o AND employee_id = :e"),
+                   {"i": leave_id, "o": org_id, "e": emp_id}).scalar_one_or_none()
+    if st is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "الطلب غير موجود")
+    if st != "PENDING":
+        raise HTTPException(status.HTTP_409_CONFLICT, "يُرفق التقرير قبل البت في الطلب فقط. تواصل مع الموارد البشرية.")
+    _save_attachment(c, org_id, leave_id, decode_attachment(att))
+
+
 def create_leave(c: Connection, org_id, emp_id, *, leave_type: str, start: date, end: date, reason: str | None,
-                 source: str, by_hr: bool, user_id=None, approve: bool = False, medical_ref: str | None = None) -> dict:
+                 source: str, by_hr: bool, user_id=None, approve: bool = False, medical_ref: str | None = None,
+                 attachment: dict | None = None) -> dict:
     emp = employee(c, org_id, emp_id)
     pols = policies(c, org_id)
     if leave_type not in pols:
@@ -111,15 +164,18 @@ def create_leave(c: Connection, org_id, emp_id, *, leave_type: str, start: date,
     if c.execute(text("""SELECT 1 FROM leave_requests WHERE employee_id = :e AND status IN ('PENDING','APPROVED')
                          AND start_date <= :end AND end_date >= :start"""), {"e": emp_id, "start": start, "end": end}).first():
         raise HTTPException(status.HTTP_409_CONFLICT, "يوجد طلب إجازة آخر يتداخل مع هذه الفترة")
-    if leave_type == "SICK" and not by_hr and not (medical_ref or "").strip():
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "أدخل رقم التقرير الطبي (من منصة صحة) للإجازة المرضية")
+    decoded = decode_attachment(attachment)
+    if leave_type == "SICK" and not by_hr and decoded is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "أرفق التقرير الطبي (صورة أو PDF) للإجازة المرضية")
     st = "APPROVED" if approve else "PENDING"
     lid = c.execute(text("""INSERT INTO leave_requests (org_id, employee_id, leave_type, start_date, end_date, days, reason, medical_ref, status, source,
                                                         decided_by, decided_at)
                             VALUES (:o, :e, :t, :s, :en, :d, :r, :mr, :st, :src, :u, CASE WHEN :ap THEN now() END) RETURNING id"""),
                     {"o": org_id, "e": emp_id, "t": leave_type, "s": start, "en": end, "d": days, "r": reason, "mr": (medical_ref or "").strip() or None,
                      "st": st, "ap": approve, "src": source, "u": user_id if approve else None}).scalar_one()
-    out = {"id": lid, "days": days, "status": st}
+    if decoded:
+        _save_attachment(c, org_id, lid, decoded)
+    out = {"id": lid, "days": days, "status": st, "has_attachment": decoded is not None}
     if leave_type == "SICK":
         out["pay_note"] = hr.sick_note(used_days(c, emp_id, start.year, ("SICK",)) - days, days)
     return out
@@ -259,7 +315,8 @@ def employee_view(c: Connection, org_id, emp_id) -> dict:
     pols = policies(c, org_id)
     s = hr_settings(c, org_id)
     y = today().year
-    leaves = [row(r) for r in c.execute(text("""SELECT id, leave_type, start_date, end_date, days, reason, medical_ref, status, source, decision_note,
+    leaves = [row(r) for r in c.execute(text("""SELECT id, leave_type, start_date, end_date, days, reason, medical_ref,
+                                                       attachment_name, (attachment_key IS NOT NULL) AS has_attachment, status, source, decision_note,
                                                        return_date, return_submitted_at, return_confirmed_at, created_at
                                                 FROM leave_requests WHERE employee_id = :e AND org_id = :o ORDER BY start_date DESC LIMIT 30"""),
                                       {"e": emp_id, "o": org_id}).mappings()]

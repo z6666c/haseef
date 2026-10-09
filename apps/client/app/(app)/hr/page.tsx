@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   KIND_LABEL, LEAVE_LABEL, LEAVE_STATUS, LEAVE_TYPES, NOTICE_STATUS, fmtDays, formatDate, sar,
-  type DeductionKind, type DeductionSuggestion, type HrDeductions, type HrOverview, type LeaveRow, type LeaveType,
+  type DeductionKind, type DeductionSuggestion, type HrDeductions, type HrOverview, type LeaveAttachment, type LeaveRow, type LeaveType,
 } from "@haseef/shared";
+import { AttachPicker } from "@/components/AttachPicker";
 import { api } from "@/lib/session";
 
 type Tab = "requests" | "balances" | "deductions" | "settings";
@@ -77,11 +78,30 @@ export default function HrPage() {
   );
 }
 
-function LeaveCells({ l }: { l: LeaveRow }) {
+/** فتح التقرير الطبي: يُنزَّل بتوكن المستخدم (بيانات صحية لمدير المنشأة ومسؤول الامتثال فقط، ويُسجَّل الاطلاع). */
+function ViewAttachment({ l }: { l: LeaveRow }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function open() {
+    setBusy(true); setErr(null);
+    const w = window.open("", "_blank");
+    try {
+      const url = URL.createObjectURL(await api.hrLeaveAttachment(l.id));
+      if (w) w.location.href = url; else window.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) { w?.close(); setErr(e instanceof Error ? e.message : "تعذّر فتح المرفق"); } finally { setBusy(false); }
+  }
+  return <div><button className="link-btn small" type="button" disabled={busy} onClick={open}>📎 {busy ? "جارٍ الفتح…" : "عرض التقرير الطبي"}</button>
+    {err && <div className="error small">{err}</div>}</div>;
+}
+
+function LeaveCells({ l, canView }: { l: LeaveRow; canView: boolean }) {
   return (
     <>
       <td><b>{l.full_name}</b><div className="small muted">{SRC[l.source]}</div></td>
-      <td>{l.label}<div className="small muted">{l.days} يوم{l.pay_note ? ` · ${l.pay_note}` : ""}</div>{l.medical_ref && <div className="small muted">تقرير طبي: {l.medical_ref}</div>}</td>
+      <td>{l.label}<div className="small muted">{l.days} يوم{l.pay_note ? ` · ${l.pay_note}` : ""}</div>{l.medical_ref && <div className="small muted">رقم التقرير: {l.medical_ref}</div>}
+        {l.has_attachment ? (canView ? <ViewAttachment l={l} /> : <div className="small muted">📎 تقرير مرفق</div>)
+          : l.leave_type === "SICK" && <div className="small" style={{ color: "var(--amber, #b45309)" }}>بلا تقرير مرفق</div>}</td>
       <td className="small">{formatDate(l.start_date)} ← {formatDate(l.end_date)}{l.reason && <div className="muted">{l.reason}</div>}</td>
     </>
   );
@@ -105,7 +125,7 @@ function RequestsTab({ ov, act }: { ov: HrOverview; act: Act }) {
         <table className="deadlines labor-table">
           <thead><tr><th>الموظف</th><th>النوع</th><th>الفترة</th><th /></tr></thead>
           <tbody>{pending.map((l) => (
-            <tr key={l.id}><LeaveCells l={l} />
+            <tr key={l.id}><LeaveCells l={l} canView={ov.can_manage} />
               <td>{ov.can_manage && <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button className="btn btn-action btn-xs" type="button" onClick={() => { setDecide({ l, approve: true }); setNote(""); }}>موافقة</button>
                 <button className="btn btn-quiet btn-xs" type="button" onClick={() => { setDecide({ l, approve: false }); setNote(""); }}>رفض</button></div>}</td>
@@ -125,7 +145,7 @@ function RequestsTab({ ov, act }: { ov: HrOverview; act: Act }) {
       {current.length > 0 && <>
         <h2 style={{ marginTop: 20 }}>في إجازة الآن</h2>
         <table className="deadlines labor-table"><thead><tr><th>الموظف</th><th>النوع</th><th>الفترة</th><th /></tr></thead>
-          <tbody>{current.map((l) => <tr key={l.id}><LeaveCells l={l} /><td>{ov.can_manage && !l.return_date &&
+          <tbody>{current.map((l) => <tr key={l.id}><LeaveCells l={l} canView={ov.can_manage} /><td>{ov.can_manage && !l.return_date &&
             <button className="link-btn" type="button" onClick={() => act(() => api.hrCancelLeave(l.id), `أُلغيت إجازة ${l.full_name}`)}>إلغاء</button>}</td></tr>)}</tbody></table>
       </>}
 
@@ -133,7 +153,7 @@ function RequestsTab({ ov, act }: { ov: HrOverview; act: Act }) {
       <table className="deadlines labor-table">
         <thead><tr><th>الموظف</th><th>النوع</th><th>الفترة</th><th>الحالة</th></tr></thead>
         <tbody>{history.map((l) => (
-          <tr key={l.id}><LeaveCells l={l} /><td><span className="status-chip" data-s={CHIP[l.status]}>{LEAVE_STATUS[l.status]}</span>
+          <tr key={l.id}><LeaveCells l={l} canView={ov.can_manage} /><td><span className="status-chip" data-s={CHIP[l.status]}>{LEAVE_STATUS[l.status]}</span>
             {l.decision_note && <div className="small muted">{l.decision_note}</div>}
             {l.return_confirmed_at && l.return_date && <div className="small muted">باشر {formatDate(l.return_date)}</div>}</td></tr>))}
           {history.length === 0 && <tr><td colSpan={4} className="muted">لا سجل بعد.</td></tr>}</tbody>
@@ -178,9 +198,10 @@ function ReturnRow({ l, ov, act }: { l: LeaveRow; ov: HrOverview; act: Act }) {
 
 function AddLeave({ ov, act, onDone }: { ov: HrOverview; act: Act; onDone: () => void }) {
   const [v, setV] = useState({ employee_id: ov.people[0]?.id ?? "", leave_type: "ANNUAL" as LeaveType, start_date: today(), end_date: today(), reason: "", medical_ref: "", approve: true });
+  const [att, setAtt] = useState<LeaveAttachment | null>(null);
   return (
     <form className="panel inline-form" style={{ marginTop: 8 }} onSubmit={async (e) => { e.preventDefault();
-      if (await act(() => api.hrAddLeave({ ...v, reason: v.reason || null, medical_ref: v.medical_ref || null }), "أُضيفت الإجازة")) onDone(); }}>
+      if (await act(() => api.hrAddLeave({ ...v, reason: v.reason || null, medical_ref: v.medical_ref || null, attachment: v.leave_type === "SICK" ? att : null }), "أُضيفت الإجازة")) onDone(); }}>
       <h2>إدخال إجازة</h2>
       <div className="grid">
         <div className="field"><label htmlFor="le">الموظف</label><select id="le" value={v.employee_id} onChange={(e) => setV({ ...v, employee_id: e.target.value })}>
@@ -189,7 +210,10 @@ function AddLeave({ ov, act, onDone }: { ov: HrOverview; act: Act; onDone: () =>
           {ov.policies.filter((p) => p.is_active).map((p) => <option key={p.leave_type} value={p.leave_type}>{p.label}</option>)}</select></div>
         <div className="field"><label htmlFor="ls">من</label><input id="ls" type="date" required value={v.start_date} onChange={(e) => setV({ ...v, start_date: e.target.value, end_date: e.target.value > v.end_date ? e.target.value : v.end_date })} /></div>
         <div className="field"><label htmlFor="ld">إلى</label><input id="ld" type="date" required min={v.start_date} value={v.end_date} onChange={(e) => setV({ ...v, end_date: e.target.value })} /></div>
-        {v.leave_type === "SICK" && <div className="field"><label htmlFor="lm">رقم التقرير الطبي</label><input id="lm" maxLength={60} value={v.medical_ref} onChange={(e) => setV({ ...v, medical_ref: e.target.value })} /></div>}
+        {v.leave_type === "SICK" && <>
+          <div className="field"><label htmlFor="lm">رقم التقرير (اختياري)</label><input id="lm" maxLength={60} value={v.medical_ref} onChange={(e) => setV({ ...v, medical_ref: e.target.value })} /></div>
+          <div className="field-wide"><AttachPicker value={att} onChange={setAtt} /></div>
+        </>}
         <div className="field field-wide"><label htmlFor="lr">ملاحظة</label><input id="lr" maxLength={500} value={v.reason} onChange={(e) => setV({ ...v, reason: e.target.value })} /></div>
       </div>
       <label className="checks-inline"><input type="checkbox" checked={v.approve} onChange={(e) => setV({ ...v, approve: e.target.checked })} /> معتمدة مباشرة</label>

@@ -146,3 +146,25 @@ def validate_deduction(*, kind: str, amount: float, incident: date, today: date,
     if month_total + amount > half:
         return f"مجموع الحسم في الشهر لا يتجاوز نصف الأجر ({half:.2f} ريال)؛ المتاح {max(half - month_total, 0):.2f}"
     return None
+
+
+# مرفقات الإجازة (التقرير الطبي): PDF أو صورة. النوع يُحدد من محتوى الملف لا من اسمه.
+ATTACH_EXT = {"application/pdf": ".pdf", "image/jpeg": ".jpg", "image/png": ".png"}
+ATTACH_MAX_BYTES = 6 * 1024 * 1024
+
+
+def sniff_mime(data: bytes) -> str | None:
+    if data.startswith(b"%PDF-"):
+        return "application/pdf"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    return None
+
+
+def safe_file_name(name: str, mime: str) -> str:
+    import re
+    base = re.sub(r"[\\/\x00-\x1f<>:\"|?*]", "_", (name or "").strip())[:150] or "مرفق"
+    ext = ATTACH_EXT[mime]
+    return base if base.lower().endswith(ext) or (mime == "image/jpeg" and base.lower().endswith(".jpeg")) else base + ext

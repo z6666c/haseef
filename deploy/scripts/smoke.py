@@ -207,10 +207,16 @@ lv = call("POST", "/v1/hr/leaves", {"employee_id": emp, "leave_type": "ANNUAL", 
                                      "end_date": str(d0 + _dt.timedelta(days=26)), "approve": True}, expect=201, org_id=so)
 assert lv["status"] == "APPROVED" and lv["days"] == 5, lv
 token = None
-call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "SICK", "start_date": str(d0), "end_date": str(d0)}, expect=422)
-sk = call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "SICK", "start_date": str(d0), "end_date": str(d0), "medical_ref": "SL-1"}, expect=201)
-assert sk["status"] == "PENDING" and "بأجر كامل" in sk["pay_note"], sk
+import base64 as _b64
+_pdf = _b64.b64encode(b"%PDF-1.4\n% smoke medical report\n%%EOF").decode()
+call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "SICK", "start_date": str(d0), "end_date": str(d0), "medical_ref": "SL-1"}, expect=422)
+call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "SICK", "start_date": str(d0), "end_date": str(d0),
+                                                     "attachment": {"file_name": "x.html", "file_base64": _b64.b64encode(b"<html><script>").decode()}}, expect=422)
+sk = call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "SICK", "start_date": str(d0), "end_date": str(d0), "medical_ref": "SL-1",
+                                                          "attachment": {"file_name": "تقرير.pdf", "file_base64": _pdf}}, expect=201)
+assert sk["status"] == "PENDING" and sk["has_attachment"] and "بأجر كامل" in sk["pay_note"], sk
 token = su["access_token"]
+assert call("GET", f"/v1/hr/leaves/{sk['id']}/attachment", org_id=so, raw=True).startswith("%PDF")
 call("POST", f"/v1/hr/leaves/{sk['id']}/decide", {"approve": True}, org_id=so)
 call("POST", "/v1/hr/deductions", {"employee_id": emp, "kind": "VIOLATION", "incident_date": str(d0), "description": "مخالفة فحص",
                                    "amount": 5000, "payroll_month": d0.strftime("%Y-%m")}, expect=422, org_id=so)

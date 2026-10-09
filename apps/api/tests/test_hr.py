@@ -55,6 +55,20 @@ class SickTests(unittest.TestCase):
         self.assertIn("الحد السنوي", hr.validate_leave(start=date(2026, 12, 30), **{**kw, "used_this_year_type": 119}))
 
 
+class AttachmentTests(unittest.TestCase):
+    def test_sniff(self):
+        self.assertEqual(hr.sniff_mime(b"%PDF-1.7 ..."), "application/pdf")
+        self.assertEqual(hr.sniff_mime(b"\xff\xd8\xff\xe0rest"), "image/jpeg")
+        self.assertEqual(hr.sniff_mime(b"\x89PNG\r\n\x1a\nrest"), "image/png")
+        self.assertIsNone(hr.sniff_mime(b"<html><script>"))
+        self.assertIsNone(hr.sniff_mime(b"MZ\x90\x00"))
+
+    def test_safe_name(self):
+        self.assertEqual(hr.safe_file_name("../../etc/passwd", "application/pdf"), ".._.._etc_passwd.pdf")
+        self.assertEqual(hr.safe_file_name("تقرير.jpg", "image/jpeg"), "تقرير.jpg")
+        self.assertEqual(hr.safe_file_name("", "image/png"), "مرفق.png")
+
+
 class DeductionTests(unittest.TestCase):
     def _v(self, **kw):
         base = dict(kind="LATE", amount=100, incident=date(2027, 1, 10), today=date(2027, 1, 15), dwage=300, monthly_wage=9000,

@@ -1619,7 +1619,8 @@ function attendanceRoute(method: string, p: string, q: URLSearchParams, body: Re
 // ---------- الموارد البشرية: الإجازات والمباشرة والخصومات + تقويم المناسبات (نسخة العرض) ----------
 type DemoLeave = { id: string; employee_id: string; leave_type: LeaveType; start_date: string; end_date: string; days: number; reason: string | null;
   medical_ref: string | null; status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED"; source: "LINK" | "BOT" | "HR"; decision_note: string | null;
-  decided_at: string | null; return_date: string | null; return_submitted_at: string | null; return_confirmed_at: string | null; created_at: string };
+  decided_at: string | null; return_date: string | null; return_submitted_at: string | null; return_confirmed_at: string | null; created_at: string;
+  attachment?: { name: string; mime: string; b64: string } | null };
 type DemoNotice = { id: string; employee_id: string; kind: DeductionKind; incident_date: string; description: string; amount: number; payroll_month: string;
   status: "ISSUED" | "OBJECTED" | "CONFIRMED" | "CANCELLED"; seen_at: string | null; objection_text: string | null; objected_at: string | null;
   decision_note: string | null; decided_at: string | null; created_at: string; leave_request_id: string | null };
@@ -1659,6 +1660,22 @@ function balanceOf(empId: string, year: number) {
   const used = usedOf(empId, year, LEAVE_TYPES.filter((t) => hrPoliciesDemo[t].from_balance));
   return { year, entitlement: ent, adjustments: adj, used, balance: Math.round((ent + adj - used) * 10) / 10 };
 }
+/** المرفق في نسخة العرض: يُتحقق من نوعه من أول بايتات الملف كما في الخادم. */
+function demoAttachment(a: unknown): DemoLeave["attachment"] {
+  if (!a || typeof a !== "object") return null;
+  const { file_name, file_base64 } = a as { file_name?: string; file_base64?: string };
+  let head = "";
+  try { head = atob(String(file_base64 ?? "").slice(0, 16)); } catch { throw new DemoError(422, "تعذّرت قراءة المرفق"); }
+  const mime = head.startsWith("%PDF-") ? "application/pdf" : head.startsWith("\xff\xd8\xff") ? "image/jpeg" : head.startsWith("\x89PNG") ? "image/png" : null;
+  if (!mime) throw new DemoError(422, "المرفق يجب أن يكون صورة (JPG/PNG) أو PDF");
+  if (String(file_base64).length > 8_500_000) throw new DemoError(413, "حجم المرفق يتجاوز 6 ميجابايت");
+  return { name: String(file_name || "مرفق"), mime, b64: String(file_base64) };
+}
+// تقرير طبي تجريبي (PDF صغير) للبيانات المزروعة
+const DEMO_REPORT_B64 = btoa("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+  + "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 420 220]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
+  + "4 0 obj<</Length 98>>stream\nBT /F1 16 Tf 30 160 Td (Medical leave report - DEMO) Tj 0 -30 Td /F1 11 Tf (Sample attachment for Haseef demo only.) Tj ET\nendstream endobj\n"
+  + "5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF");
 function createLeaveDemo(empId: string, b: Record<string, unknown>, source: DemoLeave["source"], byHr: boolean, approve: boolean) {
   const t = String(b.leave_type) as LeaveType;
   if (!LEAVE_TYPES.includes(t)) throw new DemoError(422, "نوع الإجازة غير معروف");
@@ -1669,14 +1686,15 @@ function createLeaveDemo(empId: string, b: Record<string, unknown>, source: Demo
     balance: balanceOf(empId, Number(s.slice(0, 4))).balance, usedThisYearType: usedOf(empId, Number(s.slice(0, 4)), [t]) });
   if (err) throw new DemoError(422, err);
   const ref = String(b.medical_ref ?? "").trim();
-  if (t === "SICK" && !byHr && !ref) throw new DemoError(422, "أدخل رقم التقرير الطبي (من منصة صحة) للإجازة المرضية");
+  const att = demoAttachment(b.attachment);
+  if (t === "SICK" && !byHr && !att) throw new DemoError(422, "أرفق التقرير الطبي (صورة أو PDF) للإجازة المرضية");
   if (leavesDemo.some((l) => l.employee_id === empId && ["PENDING", "APPROVED"].includes(l.status) && l.start_date <= en && l.end_date >= s))
     throw new DemoError(409, "يوجد طلب إجازة آخر يتداخل مع هذه الفترة");
   const l: DemoLeave = { id: uid(), employee_id: empId, leave_type: t, start_date: s, end_date: en, days, reason: (b.reason as string) || null, medical_ref: ref || null,
     status: approve ? "APPROVED" : "PENDING", source, decision_note: null, decided_at: approve ? new Date().toISOString() : null, return_date: null,
-    return_submitted_at: null, return_confirmed_at: null, created_at: new Date().toISOString() };
+    return_submitted_at: null, return_confirmed_at: null, created_at: new Date().toISOString(), attachment: att };
   leavesDemo.push(l);
-  return { id: l.id, days, status: l.status, ...(t === "SICK" ? { pay_note: sickNote(usedOf(empId, Number(s.slice(0, 4)), ["SICK"]) - days, days) } : {}) };
+  return { id: l.id, days, status: l.status, has_attachment: !!att, ...(t === "SICK" ? { pay_note: sickNote(usedOf(empId, Number(s.slice(0, 4)), ["SICK"]) - days, days) } : {}) };
 }
 function annotateSickDemo<T extends { leave_type: LeaveType; status: string; start_date: string; days: number; employee_id?: string; pay_note?: string }>(rows: T[]) {
   const used = new Map<string, number>();
@@ -1687,8 +1705,10 @@ function annotateSickDemo<T extends { leave_type: LeaveType; status: string; sta
   }
   return rows;
 }
-function leaveRowDemo(l: DemoLeave) {
+const leavePublic = ({ attachment, ...l }: DemoLeave) => ({ ...l, has_attachment: !!attachment, attachment_name: attachment?.name ?? null });
+function leaveRowDemo(src: DemoLeave) {
   const today = hrToday();
+  const l = leavePublic(src);
   const ended = l.status === "APPROVED" && l.end_date < today;
   return { ...l, full_name: employeesDemo.find((e) => e.id === l.employee_id)?.full_name ?? "—", label: LEAVE_LABEL[l.leave_type],
     on_leave_now: l.status === "APPROVED" && l.start_date <= today && today <= l.end_date, awaiting_return: ended && !l.return_confirmed_at,
@@ -1727,7 +1747,8 @@ function createNoticeDemo(b: Record<string, unknown>) {
       return_confirmed_at: null, created_at: ts(-6), ...extra });
   const s1 = nextWorkday(d(14));
   mk("فهد القحطاني", "ANNUAL", s1, isoAddDays(s1, 11), "PENDING", "LINK", { reason: "إجازة عائلية" });
-  mk("رامش كومار", "SICK", d(-1), d(1), "PENDING", "BOT", { medical_ref: "SL-2026-4471", reason: "التهاب حاد" });
+  mk("رامش كومار", "SICK", d(-1), d(1), "PENDING", "LINK", { medical_ref: "SL-2026-4471", reason: "التهاب حاد",
+    attachment: { name: "تقرير-طبي.pdf", mime: "application/pdf", b64: DEMO_REPORT_B64 } });
   mk("ريم السبيعي", "ANNUAL", d(-2), d(6), "APPROVED", "LINK");
   mk("محمد رفيق", "EMERGENCY", d(-6), d(-4), "APPROVED", "BOT", { reason: "ظرف عائلي" });
   mk("أحمد حسن", "ANNUAL", d(-30), d(-20), "APPROVED", "HR", { return_date: d(-16), return_submitted_at: ts(-16), return_confirmed_at: ts(-16) });
@@ -1813,7 +1834,7 @@ function personHrDemo(empId: string) {
   for (const n of noticesDemo) if (n.employee_id === empId && !n.seen_at) n.seen_at = new Date().toISOString();
   return { balance: balanceOf(empId, y), objection_days: hrSettingsDemo.objection_days, count_workdays_only: hrSettingsDemo.count_workdays_only,
     policies: LEAVE_TYPES.filter((t) => hrPoliciesDemo[t].is_active).map((t) => ({ ...hrPoliciesDemo[t], leave_type: t, label: LEAVE_LABEL[t], used: usedOf(empId, y, [t]) })),
-    leaves: annotateSickDemo(leavesDemo.filter((l) => l.employee_id === empId).map((l) => ({ ...l, label: LEAVE_LABEL[l.leave_type] })))
+    leaves: annotateSickDemo(leavesDemo.filter((l) => l.employee_id === empId).map((l) => ({ ...leavePublic(l), label: LEAVE_LABEL[l.leave_type] })))
       .sort((a, b) => b.start_date.localeCompare(a.start_date)),
     notices: noticesDemo.filter((n) => n.employee_id === empId) };
 }
@@ -1827,7 +1848,7 @@ function submitReturnDemo(l: DemoLeave, date: string, byHr: boolean) {
   return { late_days: lateReturnDays(l.end_date, date, attSettings.work_days, hrHolidays()) };
 }
 function hrPublicRoute(method: string, p: string, body: Record<string, unknown>): unknown {
-  const m = p.match(/^\/public\/attendance\/([^/]+)\/(hr|leaves|leaves\/([^/]+)\/(cancel|return)|notices\/([^/]+)\/object)$/);
+  const m = p.match(/^\/public\/attendance\/([^/]+)\/(hr|leaves|leaves\/([^/]+)\/(cancel|return|attachment)|notices\/([^/]+)\/object)$/);
   if (!m) return NO_ROUTE;
   const e = attPerson(decodeURIComponent(m[1]));
   if (m[2] === "hr") return personHrDemo(e.id);
@@ -1835,6 +1856,10 @@ function hrPublicRoute(method: string, p: string, body: Record<string, unknown>)
   if (m[3]) {
     const l = leavesDemo.find((x) => x.id === m[3] && x.employee_id === e.id); if (!l) throw new DemoError(404, "الطلب غير موجود");
     if (m[4] === "cancel") { if (l.status !== "PENDING") throw new DemoError(409, "يمكن إلغاء الطلب قبل البت فيه فقط"); l.status = "CANCELLED"; return { ok: true }; }
+    if (m[4] === "attachment") {
+      if (l.status !== "PENDING") throw new DemoError(409, "يُرفق التقرير قبل البت في الطلب فقط. تواصل مع الموارد البشرية.");
+      l.attachment = demoAttachment(body); if (!l.attachment) throw new DemoError(422, "المرفق فارغ"); return { ok: true };
+    }
     return submitReturnDemo(l, String(body.return_date ?? ""), false);
   }
   const n = noticesDemo.find((x) => x.id === m[5] && x.employee_id === e.id); if (!n) throw new DemoError(404, "الإشعار غير موجود");
@@ -1894,6 +1919,11 @@ function hrRoute(method: string, p: string, q: URLSearchParams, body: Record<str
     const n = (v: unknown) => (v == null || v === "" ? null : Number(v));
     Object.assign(hrPoliciesDemo[t], { is_paid: !!body.is_paid, from_balance: !!body.from_balance, max_days_per_request: n(body.max_days_per_request),
       yearly_cap: n(body.yearly_cap), min_notice_days: Number(body.min_notice_days) || 0, is_active: body.is_active !== false }); return { ok: true };
+  }
+  if ((m = p.match(/^\/hr\/leaves\/([^/]+)\/attachment$/))) {
+    const l = leavesDemo.find((x) => x.id === m![1]);
+    if (!l?.attachment) throw new DemoError(404, "لا يوجد مرفق");
+    return { __file: l.attachment.b64, mime: l.attachment.mime };
   }
   if (p === "/hr/leaves" && method === "POST") { hrEmp(String(body.employee_id)); return createLeaveDemo(String(body.employee_id), body, "HR", true, body.approve !== false); }
   if ((m = p.match(/^\/hr\/leaves\/([^/]+)\/(decide|cancel|return)$/))) {

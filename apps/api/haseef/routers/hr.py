@@ -19,6 +19,7 @@ from ..domain import hr
 from ..services import hr_service as svc
 from .attendance import MANAGERS, RIYADH, _need, _person
 from .compliance import _audit
+from .governance import file_response
 
 router = APIRouter(tags=["hr"])
 LeaveType = Literal["ANNUAL", "REGULAR", "EMERGENCY", "SICK"]
@@ -48,7 +49,7 @@ def overview(t: Tenant = Depends(get_tenant)):
         b = svc.balance(c, o, e, today.year, pols)
         people.append({"id": e["id"], "full_name": e["full_name"], "job_title": e["job_title"], "mobile": e["mobile"], **b})
     leaves = [svc.row(r) for r in c.execute(text("""
-        SELECT l.id, l.employee_id, e.full_name, l.leave_type, l.start_date, l.end_date, l.days, l.reason, l.medical_ref, l.status, l.source,
+        SELECT l.id, l.employee_id, e.full_name, l.leave_type, l.start_date, l.end_date, l.days, l.reason, l.medical_ref, l.attachment_name, (l.attachment_key IS NOT NULL) AS has_attachment, l.status, l.source,
                l.decision_note, l.decided_at, l.return_date, l.return_submitted_at, l.return_confirmed_at, l.created_at
         FROM leave_requests l JOIN org_employees e ON e.id = l.employee_id
         WHERE l.status = 'PENDING' OR l.start_date >= :since OR (l.status = 'APPROVED' AND l.return_confirmed_at IS NULL)
@@ -106,6 +107,11 @@ def put_policy(leave_type: LeaveType, body: PolicyIn, t: Tenant = Depends(get_te
     return {"ok": True}
 
 
+class AttachmentIn(BaseModel):
+    file_name: str = Field("", max_length=200)
+    file_base64: str = Field(min_length=8, max_length=8_500_000)   # ~6 ميجابايت بعد فك الترميز
+
+
 class LeaveIn(BaseModel):
     employee_id: UUID
     leave_type: LeaveType
@@ -113,6 +119,7 @@ class LeaveIn(BaseModel):
     end_date: date
     reason: str | None = Field(None, max_length=500)
     medical_ref: str | None = Field(None, max_length=60)
+    attachment: AttachmentIn | None = None
     approve: bool = True
 
 
@@ -120,8 +127,9 @@ class LeaveIn(BaseModel):
 def add_leave(body: LeaveIn, t: Tenant = Depends(get_tenant)):
     _need(t)
     r = svc.create_leave(t.conn, t.org_id, body.employee_id, leave_type=body.leave_type, start=body.start_date, end=body.end_date,
-                         reason=body.reason, source="HR", by_hr=True, user_id=t.principal.user_id, approve=body.approve, medical_ref=body.medical_ref)
-    _audit(t.conn, t, "CREATE", "leave_request", r["id"], body.model_dump())
+                         reason=body.reason, source="HR", by_hr=True, user_id=t.principal.user_id, approve=body.approve, medical_ref=body.medical_ref,
+                         attachment=body.attachment.model_dump() if body.attachment else None)
+    _audit(t.conn, t, "CREATE", "leave_request", r["id"], body.model_dump(exclude={"attachment"}))
     return r
 
 
@@ -146,6 +154,18 @@ def hr_cancel(leave_id: UUID, t: Tenant = Depends(get_tenant)):
         raise HTTPException(status.HTTP_409_CONFLICT, "لا يمكن إلغاء هذا الطلب")
     _audit(t.conn, t, "CANCEL", "leave_request", leave_id)
     return {"ok": True}
+
+
+@router.get("/hr/leaves/{leave_id}/attachment")
+def leave_attachment(leave_id: UUID, t: Tenant = Depends(get_tenant)):
+    """التقرير الطبي بيانات صحية حساسة: لمدير المنشأة ومسؤول الامتثال فقط، ويُسجَّل كل اطلاع."""
+    _need(t)
+    r = t.conn.execute(text("SELECT attachment_key, attachment_name, attachment_mime FROM leave_requests WHERE id = :i"),
+                       {"i": leave_id}).mappings().one_or_none()
+    if not r or not r["attachment_key"]:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "لا يوجد مرفق")
+    _audit(t.conn, t, "VIEW_ATTACHMENT", "leave_request", leave_id)
+    return file_response(r["attachment_key"], r["attachment_name"], r["attachment_mime"])
 
 
 class ReturnIn(BaseModel):
@@ -314,6 +334,7 @@ class PersonLeaveIn(BaseModel):
     end_date: date
     reason: str | None = Field(None, max_length=500)
     medical_ref: str | None = Field(None, max_length=60)
+    attachment: AttachmentIn | None = None
 
 
 @router.post("/public/attendance/{token}/leaves", status_code=201)
@@ -325,7 +346,16 @@ def person_leave(token: str, body: PersonLeaveIn):
         if n >= 10:
             raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "طلبات كثيرة اليوم")
         return svc.create_leave(c, p["org_id"], p["employee_id"], leave_type=body.leave_type, start=body.start_date, end=body.end_date,
-                                reason=body.reason, source="LINK", by_hr=False, medical_ref=body.medical_ref)
+                                reason=body.reason, source="LINK", by_hr=False, medical_ref=body.medical_ref,
+                                attachment=body.attachment.model_dump() if body.attachment else None)
+
+
+@router.post("/public/attendance/{token}/leaves/{leave_id}/attachment")
+def person_attach(token: str, leave_id: UUID, body: AttachmentIn):
+    with platform_tx() as c:
+        p = _person(c, token)
+        svc.attach(c, p["org_id"], p["employee_id"], leave_id, body.model_dump())
+    return {"ok": True}
 
 
 @router.post("/public/attendance/{token}/leaves/{leave_id}/cancel")
