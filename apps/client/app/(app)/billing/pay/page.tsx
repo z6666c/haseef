@@ -25,7 +25,7 @@ function Pay() {
   if (!it) return <div className="boot" aria-busy="true" />;
 
   return (
-    <section className="panel inline-form" style={{ maxWidth: 520 }}>
+    <section className="panel inline-form" style={{ maxWidth: 520, marginInline: "auto" }}>
       <h1>{it.status === "PAID" ? "تم الدفع بنجاح" : it.status === "FAILED" ? "لم يكتمل الدفع" : "إتمام الدفع"}</h1>
       <dl className="ropa-facts">
         <div><dt>البيان</dt><dd>{it.description}</dd></div>

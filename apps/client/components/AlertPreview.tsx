@@ -112,7 +112,7 @@ export function AlertPreview({ ov, orgName }: { ov: AlertsOverview; orgName: str
         <li><b>بلا اشتراك فعّال</b> تتوقف التنبيهات التلقائية، ويبقى التذكير اليدوي من صفحة التراخيص متاحاً.</li>
       </ol>
       {(ov.whatsapp.provider === "console" || !ov.whatsapp.live) && (
-        <p className="hint-box">الإرسال الفعلي على واتساب يبدأ بعد اعتماد القوالب الثلاثة لدى Meta وربط الحساب. المعاينة أعلاه مطابقة لما سيصل حرفياً.</p>
+        <p className="hint-box">الإرسال الفعلي على واتساب يبدأ بعد اعتماد القوالب لدى Meta وربط الحساب. المعاينة أعلاه مطابقة لما سيصل حرفياً.</p>
       )}
     </section>
   );
