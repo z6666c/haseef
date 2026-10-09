@@ -5,7 +5,7 @@
  */
 import { duePhrase, formatDate } from "./format.ts";
 
-export type TemplateKey = "haseef_license_expiring" | "haseef_license_expired" | "haseef_policy_review_due" | "haseef_payment_due" | "haseef_labor_due" | "haseef_tax_due" | "haseef_bot_invite" | "haseef_hr_update" | "haseef_greeting";
+export type TemplateKey = "haseef_license_expiring" | "haseef_license_expired" | "haseef_policy_review_due" | "haseef_payment_due" | "haseef_labor_due" | "haseef_tax_due" | "haseef_bot_invite" | "haseef_hr_update" | "haseef_greeting" | "haseef_promo_ending";
 
 export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; footer: string }> = {
   haseef_license_expiring: {
@@ -42,6 +42,11 @@ export const WA_TEMPLATES: Record<TemplateKey, { title: string; body: string; fo
     title: "إشعار موارد بشرية للموظف",
     body: "مرحباً {{1}}،\nإشعار من {{2}}:\n{{3}}",
     footer: "رسالة خدمية عبر منصة حصيف",
+  },
+  haseef_promo_ending: {
+    title: "قرب انتهاء الشهر المجاني",
+    body: "مرحباً {{1}}،\nشهرك المجاني من عرض الإطلاق على «{{3}}» لمنشأة {{2}} ينتهي {{4}}، بتاريخ {{5}}.\nللاستمرار دون انقطاع اشترك بـ{{6}} شهرياً قبل الضريبة من صفحة «الاشتراك والدفعات»:\n{{7}}\nفريق حصيف",
+    footer: "رسالة خدمية من منصة حصيف",
   },
   haseef_greeting: {
     title: "تهنئة بمناسبة",

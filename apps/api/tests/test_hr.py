@@ -101,3 +101,13 @@ class DeductionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PromoTemplateTests(unittest.TestCase):
+    def test_promo_ending_renders(self):
+        from haseef.domain.email_templates import render
+        subject, body = render("haseef_promo_ending", ["سارة", "منشأة النخبة", "الموارد البشرية — حتى 25 موظفاً", "بعد 5 أيام",
+                                                        "14 نوفمبر 2026", "149 ريال", "https://app.haseef.sa/billing"])
+        self.assertIn("بعد 5 أيام", subject)
+        self.assertNotIn("{{", subject + body)
+        self.assertIn("149 ريال", body)

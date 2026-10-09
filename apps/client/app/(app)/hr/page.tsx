@@ -56,6 +56,11 @@ export default function HrPage() {
         <h1>الإجازات والخصومات</h1>
         <p className="muted">طلبات الإجازة والمباشرة وأرصدة الموظفين وإشعارات الخصم. الموظف يرفع طلبه من رابطه الشخصي أو بكتابة «إجازة» لمساعد واتساب.</p>
       </header>
+      {ov.access.via === "ADDON" && ov.access.paid_until && (() => {
+        const d = Math.ceil((new Date(ov.access.paid_until).getTime() - Date.now()) / 86_400_000);
+        return d <= 5 ? <p className="hint-box">اشتراك الموارد البشرية ينتهي {d <= 0 ? "اليوم" : d === 1 ? "غداً" : `بعد ${d} أيام`} ({formatDate(ov.access.paid_until.slice(0, 10))}).
+          بعده تتوقف طلبات الإجازة وإشعارات الخصم وتبقى البيانات محفوظة. {ov.can_manage && <Link href="/billing">اشترك أو جدّد الآن</Link>}</p> : null;
+      })()}
       <dl className="obl-stats labor-stats">
         <div><dt>بانتظار قرارك</dt><dd data-s={ov.stats.pending ? "PENDING" : undefined}>{ov.stats.pending}</dd></div>
         <div><dt>في إجازة الآن</dt><dd>{ov.stats.on_leave}</dd></div>

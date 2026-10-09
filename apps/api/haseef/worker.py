@@ -28,6 +28,7 @@ celery.conf.beat_schedule = {
     "event-greetings":       {"task": "haseef.event_greetings",  "schedule": crontab(hour=9, minute=5)},
     "attendance-purge":      {"task": "haseef.attendance_purge", "schedule": crontab(hour=3, minute=15)},
     "installment-reminders": {"task": "haseef.remind_installments", "schedule": crontab(hour=s.alert_send_hour, minute=10)},
+    "promo-ending-reminders": {"task": "haseef.remind_promo_endings", "schedule": crontab(hour=s.alert_send_hour, minute=20)},
 }
 
 
@@ -46,6 +47,12 @@ def send_due_alerts() -> int:
 def remind_installments() -> int:
     from .services import installments_service
     return installments_service.send_due_reminders(platform_tx, build_senders(s), f"{s.client_base_url}/billing")
+
+
+@celery.task(name="haseef.remind_promo_endings")
+def remind_promo_endings() -> int:
+    from .services import promo_service
+    return promo_service.send_reminders(platform_tx, build_senders(s), f"{s.client_base_url}/billing")
 
 
 @celery.task(name="haseef.labor_tasks")
