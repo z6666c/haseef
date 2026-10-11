@@ -32,6 +32,25 @@
 .side nav .nav-soon { color: rgb(248 250 252 / 0.38); cursor: default; }
 .side nav .nav-soon small { margin-inline-start: auto; font-size: var(--t-xs); white-space: nowrap; }
 
+/* أقسام القائمة المنسدلة */
+.side nav .nav-head {
+  display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 4px; padding: 9px 10px; border: 0; border-radius: var(--r-sm);
+  background: none; color: var(--paper); font: inherit; font-size: var(--t-sm); font-weight: 700; text-align: start; cursor: pointer;
+}
+.side nav .nav-head:hover, .side nav .nav-group[data-open] > .nav-head, .side nav .nav-group[data-active] > .nav-head { background: rgb(30 62 98 / 0.55); }
+.side nav .nav-head:focus-visible { outline: 2px solid var(--emerald); outline-offset: 1px; }
+.side nav .nav-chev { margin-inline-start: auto; display: inline-flex; transform: rotate(90deg); transition: transform .18s ease; }
+.side nav .nav-group[data-open] .nav-chev { transform: none; }
+.side nav .nav-head .nav-badge + .nav-chev { margin-inline-start: 6px; }
+.side nav .nav-items { display: none; gap: 1px; margin: 2px 14px 4px 0; border-inline-start: 1px solid rgb(248 250 252 / 0.14); }
+.side nav .nav-group[data-open] > .nav-items { display: grid; }
+.side nav a.nav-sub { padding: 7px 12px; font-size: 0.8125rem; }
+.side nav .nav-badge {
+  margin-inline-start: auto; min-width: 20px; padding: 1px 7px; border-radius: 999px; text-align: center;
+  background: var(--emerald); color: var(--ink); font-size: var(--t-xs); font-weight: 700; line-height: 1.5;
+}
+@media (prefers-reduced-motion: reduce) { .side nav .nav-chev { transition: none; } }
+
 .org-card { margin-top: auto; padding: 14px; border-radius: var(--r-md); background: var(--ink-2); display: grid; gap: 4px; font-size: var(--t-sm); }
 .org-card p { margin: 0; }
 .org-name { font-weight: 600; }
@@ -194,6 +213,10 @@
   .side nav { display: flex; overflow-x: auto; gap: 4px; }
   .side nav a, .side nav .nav-soon { white-space: nowrap; }
   .side nav .nav-soon { display: none; }
+  /* على الجوال: شريط أفقي بكل الصفحات بلا عناوين أقسام */
+  .side nav .nav-group, .side nav .nav-group > .nav-items { display: contents; }
+  .side nav .nav-head { display: none; }
+  .side nav a.nav-sub { padding: 9px 10px; font-size: var(--t-sm); }
   .org-card { margin-top: 0; }
   .score-card { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: 20px; }
   .reasons li { text-align: start; }

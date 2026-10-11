@@ -1,37 +1,104 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { PLAN_LABEL, PLATFORM_LEGAL_PAGES, countDays, type Me, type OnboardingState } from "@haseef/shared";
 import {
-  BellMessage, BookOpen, BuildingBadge, BuildingsGroup, CardReceipt, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, ReceiptPercent, ReportChart, Scales, UsersContract, ChatBot, MapPinCheck, CalendarStar, Suitcase,
+  BellMessage, BookOpen, BuildingBadge, BuildingsGroup, CardReceipt, DocSeal, FileSparkle, FingerprintShield, GavelDocument, ListCheck, Radar, ReceiptPercent, ReportChart, Scales, UsersContract, ChatBot, MapPinCheck, CalendarStar, Suitcase, DocMinus, Chevron,
 } from "@/components/Icons";
 import { Logo } from "@/components/Logo";
 import { api, getSession, setSession } from "@/lib/session";
 
-// ترتيب القائمة وأيقوناتها من دليل الهوية §3.1. الأقسام غير المبنية تظهر معطّلة مع موعدها.
-const NAV: { href: string | null; label: string; Icon: typeof Radar; soon?: string }[] = [
-  { href: "/", label: "الرادار العام", Icon: Radar },
-  { href: "/licenses", label: "الامتثال والتراخيص", Icon: BuildingBadge },
-  { href: "/obligations", label: "الالتزامات النظامية", Icon: ListCheck },
-  { href: "/governance", label: "الحوكمة وهيكل الشركة", Icon: GavelDocument },
-  { href: "/policies", label: "السياسات الداخلية", Icon: DocSeal },
-  { href: "/library", label: "المكتبة المرجعية", Icon: BookOpen },
-  { href: "/legal", label: "استشارة محامٍ", Icon: Scales },
-  { href: "/labor", label: "العمل والموظفين", Icon: UsersContract },
-  { href: "/tax", label: "الزكاة والضريبة", Icon: ReceiptPercent },
-  { href: "/attendance", label: "الحضور بالموقع", Icon: MapPinCheck },
-  { href: "/hr", label: "الإجازات والخصومات", Icon: Suitcase },
-  { href: "/bot", label: "بوت الموظفين", Icon: ChatBot },
-  { href: "/pdpl", label: "حماية البيانات PDPL", Icon: FingerprintShield },
-  { href: "/alerts", label: "التنبيهات والواتساب", Icon: BellMessage },
-  { href: "/events", label: "تقويم المناسبات", Icon: CalendarStar },
-  { href: "/group", label: "المجموعة والمنشآت", Icon: BuildingsGroup },
-  { href: "/reports", label: "تقرير المجلس", Icon: ReportChart },
-  { href: "/billing", label: "الاشتراك والدفعات", Icon: CardReceipt },
-  { href: "/contracts", label: "فاحص العقود", Icon: FileSparkle },
+// القائمة مجمّعة في أقسام منسدلة؛ القسم الذي فيه الصفحة الحالية يُفتح تلقائياً.
+type Item = { href: string; label: string; Icon: typeof Radar };
+type Group = { key: string; label: string; Icon: typeof Radar; items: Item[] };
+const HOME: Item = { href: "/", label: "الرادار العام", Icon: Radar };
+const GROUPS: Group[] = [
+  { key: "compliance", label: "الامتثال", Icon: BuildingBadge, items: [
+    { href: "/licenses", label: "الامتثال والتراخيص", Icon: BuildingBadge },
+    { href: "/obligations", label: "الالتزامات النظامية", Icon: ListCheck },
+    { href: "/tax", label: "الزكاة والضريبة", Icon: ReceiptPercent },
+    { href: "/pdpl", label: "حماية البيانات PDPL", Icon: FingerprintShield },
+  ] },
+  { key: "governance", label: "الحوكمة", Icon: GavelDocument, items: [
+    { href: "/governance", label: "الحوكمة وهيكل الشركة", Icon: GavelDocument },
+    { href: "/policies", label: "السياسات الداخلية", Icon: DocSeal },
+    { href: "/group", label: "المجموعة والمنشآت", Icon: BuildingsGroup },
+    { href: "/reports", label: "تقرير المجلس", Icon: ReportChart },
+  ] },
+  { key: "hr", label: "الموارد البشرية", Icon: UsersContract, items: [
+    { href: "/labor", label: "الموظفون والتأمينات", Icon: UsersContract },
+    { href: "/attendance", label: "الحضور والانصراف", Icon: MapPinCheck },
+    { href: "/hr", label: "الإجازات والمباشرة", Icon: Suitcase },
+    { href: "/hr?tab=deductions", label: "الخصومات والجزاءات", Icon: DocMinus },
+    { href: "/bot", label: "بوت الموظفين", Icon: ChatBot },
+    { href: "/events", label: "تقويم المناسبات", Icon: CalendarStar },
+  ] },
+  { key: "legal", label: "القانوني", Icon: Scales, items: [
+    { href: "/library", label: "المكتبة المرجعية", Icon: BookOpen },
+    { href: "/legal", label: "استشارة محامٍ", Icon: Scales },
+    { href: "/contracts", label: "فاحص العقود", Icon: FileSparkle },
+  ] },
+  { key: "account", label: "الحساب", Icon: CardReceipt, items: [
+    { href: "/alerts", label: "التنبيهات والواتساب", Icon: BellMessage },
+    { href: "/billing", label: "الاشتراك والدفعات", Icon: CardReceipt },
+  ] },
 ];
+const OPEN_KEY = "haseef.nav.open";
+
+function isActive(href: string, path: string, tab: string | null): boolean {
+  if (href === "/") return path === "/";
+  const [base, q] = href.split("?tab=");
+  if (!path.startsWith(base)) return false;
+  if (base === "/hr") return q ? tab === q : tab !== "deductions";
+  return true;
+}
+
+function SideNav({ badges }: { badges: Record<string, number> }) {
+  const path = usePathname();
+  const tab = useSearchParams().get("tab");
+  const [open, setOpen] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(OPEN_KEY) ?? "[]") as string[]); } catch { return new Set(); }
+  });
+  const activeGroup = GROUPS.find((g) => g.items.some((i) => isActive(i.href, path, tab)))?.key;
+  useEffect(() => {
+    if (activeGroup) setOpen((o) => (o.has(activeGroup) ? o : new Set(o).add(activeGroup)));
+  }, [activeGroup]);
+  function toggle(k: string) {
+    setOpen((o) => {
+      const n = new Set(o);
+      if (n.has(k)) n.delete(k); else n.add(k);
+      try { localStorage.setItem(OPEN_KEY, JSON.stringify(Array.from(n))); } catch { /* التخزين غير متاح */ }
+      return n;
+    });
+  }
+  const link = (i: Item, sub = false) => (
+    <Link key={i.href} href={i.href} className={sub ? "nav-sub" : undefined} aria-current={isActive(i.href, path, tab) ? "page" : undefined}>
+      <i.Icon /> <span>{i.label}</span>
+      {!!badges[i.href] && <small className="nav-badge">{badges[i.href]}</small>}
+    </Link>
+  );
+  return (
+    <nav aria-label="الأقسام">
+      {link(HOME)}
+      {GROUPS.map((g) => {
+        const isOpen = open.has(g.key);
+        const total = g.items.reduce((n, i) => n + (badges[i.href] ?? 0), 0);
+        return (
+          <div key={g.key} className="nav-group" data-open={isOpen || undefined} data-active={activeGroup === g.key || undefined}>
+            <button type="button" className="nav-head" aria-expanded={isOpen} aria-controls={`nav-${g.key}`} onClick={() => toggle(g.key)}>
+              <g.Icon /> <span>{g.label}</span>
+              {!isOpen && total > 0 && <small className="nav-badge">{total}</small>}
+              <span className="nav-chev"><Chevron size={14} /></span>
+            </button>
+            <div className="nav-items" id={`nav-${g.key}`}>{g.items.map((i) => link(i, true))}</div>
+          </div>
+        );
+      })}
+    </nav>
+  );
+}
 
 function trialLeft(ends: string): string {
   const d = Math.ceil((new Date(ends).getTime() - Date.now()) / 86_400_000);
@@ -46,6 +113,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [plan, setPlan] = useState<{ tier: string | null; active: boolean } | null>(null);
   const [ob, setOb] = useState<OnboardingState | null>(null);
   const [resent, setResent] = useState(false);
+  const [badges, setBadges] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const s = getSession();
@@ -57,6 +125,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     api.me().then(setMe).catch(() => router.replace("/login"));
     api.dashboard().then((d) => setPlan({ tier: d.plan_tier, active: d.automation_active })).catch(() => {});
     api.onboarding().then(setOb).catch(() => {});
+    // طلبات الإجازة المعلّقة تظهر رقماً في القائمة (بصمت إن لم تكن الإضافة مفعّلة)
+    api.hrOverview().then((h) => setBadges((b) => ({ ...b, "/hr": h.stats.pending }))).catch(() => {});
   }, [router]);
 
   useEffect(() => {
@@ -94,19 +164,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        <nav aria-label="الأقسام">
-          {NAV.map(({ href, label, Icon, soon }) =>
-            href ? (
-              <Link key={label} href={href} aria-current={(href === "/" ? path === "/" : path.startsWith(href)) ? "page" : undefined}>
-                <Icon /> <span>{label}</span>
-              </Link>
-            ) : (
-              <span key={label} className="nav-soon" aria-disabled="true">
-                <Icon /> <span>{label}</span> <small>{soon}</small>
-              </span>
-            ),
-          )}
-        </nav>
+        <Suspense fallback={null}><SideNav badges={badges} /></Suspense>
 
         <div className="org-card">
           <p className="org-name">{current?.org_name}</p>
