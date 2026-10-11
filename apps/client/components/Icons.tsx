@@ -228,3 +228,19 @@ export const Suitcase = (p: P) => (
     <path d="M3.5 12.5h17" stroke={A} />
   </Svg>
 );
+
+/** الخصومات والجزاءات — مستند بإشارة ناقص */
+export const DocMinus = (p: P) => (
+  <Svg {...p}>
+    <path d="M6.5 3.5h7.5l4 4v13h-11.5Z" />
+    <path d="M14 3.5v4h4" />
+    <path d="M9.5 14h5" stroke={A} />
+  </Svg>
+);
+
+/** سهم القوائم المنسدلة */
+export const Chevron = (p: P) => (
+  <Svg {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Svg>
+);

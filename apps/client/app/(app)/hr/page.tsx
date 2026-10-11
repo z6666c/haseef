@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   KIND_LABEL, LEAVE_LABEL, PAY_MODE_LABEL, LEAVE_STATUS, LEAVE_TYPES, NOTICE_STATUS, fmtDays, formatDate, sar,
   NATURE_LABEL, WAGE_BASE_LABEL, type DeductionKind, type Nature, type NoticeInput, type PayMode, type WageBase, type DeductionSuggestion, type HrDeductions, type HrOverview, type LeaveAttachment, type LeaveRow, type LeaveType,
@@ -15,10 +16,26 @@ const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }
 const SRC: Record<string, string> = { LINK: "من رابط الموظف", BOT: "من واتساب", HR: "أدخلتها الموارد البشرية" };
 const CHIP: Record<string, string> = { PENDING: "PENDING", APPROVED: "IN_PLACE", REJECTED: "FAIL", CANCELLED: "EXPIRED", ISSUED: "PENDING", OBJECTED: "LATE", CONFIRMED: "IN_PLACE" };
 
+const TABS: Tab[] = ["requests", "balances", "deductions", "settings"];
+
+// القائمة الجانبية تفتح التبويب مباشرة عبر ?tab=deductions
 export default function HrPage() {
+  return <Suspense fallback={null}><HrInner /></Suspense>;
+}
+
+function HrInner() {
+  const sp = useSearchParams();
   const [ov, setOv] = useState<HrOverview | null>(null);
   const [denied, setDenied] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("requests");
+  const [tab, setTabState] = useState<Tab>("requests");
+  useEffect(() => {
+    const t = sp.get("tab") as Tab | null;
+    setTabState(t && TABS.includes(t) ? t : "requests");
+  }, [sp]);
+  const setTab = (t: Tab) => {
+    setTabState(t);
+    window.history.replaceState(null, "", t === "requests" ? window.location.pathname : `${window.location.pathname}?tab=${t}`);
+  };
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
