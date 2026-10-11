@@ -2,7 +2,7 @@
 
 /* لوحة الإدارة: أداة عمل كثيفة البيانات لفريق داخلي — شريط علوي بدل جانبي لإفساح الجداول. */
 
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr-only { position: absolute; inset-inline-start: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .small { font-size: var(--t-xs); }
 .num { text-align: end; }
 .mono-num { text-align: start; }
@@ -21,7 +21,7 @@
 .ops-user { margin-inline-start: auto; font-size: var(--t-sm); color: rgb(244 247 246 / 0.65); white-space: nowrap; }
 .ops-logout { background: none; border: 0; color: rgb(244 247 246 / 0.65); text-decoration: underline; cursor: pointer; }
 
-.ops-main { padding: 28px clamp(16px, 3vw, 32px) 64px; display: grid; gap: 16px; align-content: start; }
+.ops-main { padding: 28px clamp(16px, 3vw, 32px) 64px; display: grid; gap: 16px; align-content: start; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 .ops-main > h1 + p { margin-top: -8px; }
 
 .head-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -43,7 +43,7 @@
 .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--ink); }
 
-.table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; font-size: var(--t-sm); }
+.table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; position: relative; font-size: var(--t-sm); }
 .table th { text-align: start; font-weight: 600; color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--paper); white-space: nowrap; }
 .table th.num { text-align: end; }
 .table td { padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -167,7 +167,7 @@
 .perm-option[data-off] { opacity: .5; cursor: not-allowed; }
 
 /* =================== المالية =================== */
-.fin-section { display: grid; gap: 16px; margin-top: 20px; }
+.fin-section { display: grid; gap: 16px; margin-top: 20px; grid-template-columns: minmax(0, 1fr); }
 .fin-section h2 { font-size: var(--t-lg); }
 .fin-section h3 { font-size: var(--t-md); margin-bottom: 8px; }
 .inline-select { display: flex; align-items: center; gap: 8px; }

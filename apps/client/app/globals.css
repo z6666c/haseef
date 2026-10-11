@@ -1,6 +1,6 @@
 @import "@haseef/shared/tokens.css";
 
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr-only { position: absolute; inset-inline-start: 0; top: 0; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .boot { min-height: 40vh; }
 
 /* ---------- الهيكل: شريط جانبي كحلي على اليمين (دليل الهوية §3.1) ---------- */

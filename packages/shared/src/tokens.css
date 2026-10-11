@@ -104,7 +104,7 @@ button, input, select { font: inherit; color: inherit; }
 .btn-quiet { background: transparent; color: var(--ink); border-color: var(--line); }
 .btn-quiet:hover { background: var(--surface); }
 
-.field { display: grid; gap: 4px; }
+.field { display: grid; gap: 4px; grid-template-columns: minmax(0, 1fr); }
 .field label { font-size: var(--t-sm); font-weight: 600; }
 .field input, .field select {
   padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface);
@@ -144,7 +144,8 @@ button, input, select { font: inherit; color: inherit; }
 .tag { display: inline-block; font-size: var(--t-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--haseef-navy-subtle, #EEF2F6); color: var(--ink-2); white-space: nowrap; }
 .tag-quiet { background: transparent; border: 1px solid var(--line); color: var(--muted); font-weight: 500; }
 /* شارة المحتوى غير المعتمد: كهرماني واضح دون أن يبدو خطأً */
-.draft-badge { display: inline-flex; align-items: center; gap: 4px; font-size: var(--t-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--amber-wash); color: var(--amber); white-space: nowrap; }
+.draft-badge { display: inline-flex; align-items: center; gap: 4px; font-size: var(--t-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--amber-wash); color: var(--amber); white-space: nowrap; max-width: 100%; }
+@media (max-width: 560px) { .draft-badge { white-space: normal; } }
 .draft-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--amber-fill); }
 
 .status-chip { display: inline-block; font-size: var(--t-xs); font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--paper); color: var(--muted); white-space: nowrap; }
