@@ -28,14 +28,14 @@
 .field.inline input { min-width: 260px; }
 
 /* المؤشرات: أرقام كبيرة بلا بطاقات، يفصلها خط */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 0; border-block: 1px solid var(--line); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); margin: 0; border-block: 1px solid var(--line); }
 .kpis > div { padding: 16px 0; padding-inline-end: 16px; }
 .kpis > div + div { border-inline-start: 1px solid var(--line); padding-inline-start: 20px; }
 .kpis dt { font-size: var(--t-sm); color: var(--muted); }
 .kpis dd { margin: 4px 0 0; font-size: var(--t-2xl); font-weight: 700; }
 .kpis small { font-size: var(--t-sm); font-weight: 500; color: var(--muted); margin-inline-start: 4px; }
 
-.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 40px; margin-top: 12px; }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 40px; margin-top: 12px; }
 .split h2 { margin-bottom: 12px; }
 
 .bars { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
@@ -110,7 +110,7 @@
 .block-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .block-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .block .table { border: 0; }
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 0; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 12px; margin: 0; }
 .facts dt { font-size: var(--t-xs); color: var(--muted); }
 .facts dd { margin: 2px 0 0; font-weight: 600; }
 .compact-table td, .compact-table th { padding: 7px 10px; }
@@ -124,12 +124,12 @@
 .form-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 20px; display: grid; gap: 18px; max-width: 920px; }
 .form-card fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 10px; }
 .form-card legend { font-weight: 700; margin-bottom: 8px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px; }
 .actions { display: flex; gap: 10px; }
 .field textarea { padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); resize: vertical; }
 .field textarea:focus { border-color: var(--ink); outline: none; box-shadow: 0 0 0 3px var(--haseef-emerald-glow); }
 
-.role-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 0; }
+.role-legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 10px; margin: 0; }
 .role-legend > div { padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface); border: 1px solid var(--line); }
 .role-legend dt { font-weight: 700; font-size: var(--t-sm); }
 .role-legend dd { margin: 2px 0 0; font-size: var(--t-xs); color: var(--muted); }
@@ -150,7 +150,7 @@
 .demo-ribbon { background: #B45309; color: #fff; text-align: center; font-size: 13px; padding: 6px 12px; line-height: 1.5; }
 
 /* ---------- الأدوار والصلاحيات ---------- */
-.roles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px; }
+.roles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 12px; margin-top: 12px; }
 .role-card { padding: 14px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
 .role-card header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .role-card h2 { font-size: var(--t-md, 1rem); margin: 0; flex: 1 1 auto; }
@@ -201,7 +201,7 @@
 .inv-head h1 { font-size: var(--t-2xl); }
 .inv-en { margin: 0; color: var(--muted); font-size: var(--t-sm); }
 .inv-qr svg { inline-size: 132px; block-size: 132px; display: block; }
-.inv-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 0; }
+.inv-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 12px; margin: 0; }
 .inv-meta dt, .inv-totals dt { font-size: var(--t-xs); color: var(--muted); }
 .inv-meta dd { margin: 2px 0 0; font-weight: 600; }
 .inv-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }

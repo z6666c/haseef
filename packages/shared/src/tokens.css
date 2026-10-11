@@ -171,3 +171,9 @@ button, input, select { font: inherit; color: inherit; }
 .md th { background: var(--paper); }
 .md-slot { background: var(--amber-wash); color: inherit; padding: 0 3px; border-radius: 3px; }
 .md-editor { width: 100%; font-family: var(--font); font-size: var(--t-sm); line-height: 1.8; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+
+/* حماية عامة للجوال: لا شيء يمدّ الصفحة أفقياً (clip لا يعطّل الشريط اللاصق مثل hidden) */
+html, body { overflow-x: clip; }
+main { overflow-wrap: break-word; }
+input, select, textarea { min-width: 0; max-width: 100%; }
+img, video { max-width: 100%; height: auto; }

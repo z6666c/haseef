@@ -36,10 +36,10 @@ export default function PoliciesPage() {
             {rows.map((p) => (
               <tr key={p.id}>
                 <td><Link href={`/policies/view?id=${p.id}`}><strong>{p.title}</strong></Link> <span className="muted small">إصدار {p.version}</span></td>
-                <td>{POLICY_TYPE_LABEL[p.policy_type] ?? p.policy_type}</td>
-                <td><span className="status-chip" data-s={p.effective_status}>{POLICY_STATUS_LABEL[p.effective_status] ?? p.effective_status}</span></td>
-                <td>{fmt(p.approval_date)}</td>
-                <td>{fmt(p.review_due_date)}</td>
+                <td data-label="النوع">{POLICY_TYPE_LABEL[p.policy_type] ?? p.policy_type}</td>
+                <td data-label="الحالة"><span className="status-chip" data-s={p.effective_status}>{POLICY_STATUS_LABEL[p.effective_status] ?? p.effective_status}</span></td>
+                <td data-label="الاعتماد">{fmt(p.approval_date)}</td>
+                <td data-label="المراجعة القادمة">{fmt(p.review_due_date)}</td>
               </tr>
             ))}
           </tbody>
