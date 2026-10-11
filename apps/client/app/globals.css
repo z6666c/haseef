@@ -32,6 +32,19 @@
 .side nav .nav-soon { color: rgb(248 250 252 / 0.38); cursor: default; }
 .side nav .nav-soon small { margin-inline-start: auto; font-size: var(--t-xs); white-space: nowrap; }
 
+/* زر قائمة الجوال (مخفي على الكمبيوتر) */
+.side-panel { display: contents; }
+.menu-btn {
+  display: none; position: relative; align-items: center; justify-content: center; width: 40px; height: 40px;
+  border: 1px solid rgb(248 250 252 / 0.18); border-radius: var(--r-sm); background: none; color: var(--paper); cursor: pointer;
+}
+.menu-btn:focus-visible { outline: 2px solid var(--emerald); outline-offset: 2px; }
+.menu-dot { position: absolute; top: 7px; inset-inline-end: 7px; width: 8px; height: 8px; border-radius: 50%; background: var(--emerald); }
+
+/* الأقسام التي تمتد عناصرها لا تتجاوز عرض الشاشة */
+.gov-section, .bill-plan, .report { grid-template-columns: minmax(0, 1fr); }
+main select { max-width: 100%; }
+
 /* أقسام القائمة المنسدلة */
 .side nav .nav-head {
   display: flex; align-items: center; gap: 10px; width: 100%; margin-top: 4px; padding: 9px 10px; border: 0; border-radius: var(--r-sm);
@@ -209,14 +222,19 @@
 /* ---------- الجوال ---------- */
 @media (max-width: 860px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
-  .side { position: static; height: auto; gap: 12px; padding: 12px 16px; }
-  .side nav { display: flex; overflow-x: auto; gap: 4px; }
-  .side nav a, .side nav .nav-soon { white-space: nowrap; }
+  /* على الجوال: شريط علوي مضغوط، والقائمة كاملة (بأقسامها المنسدلة) تفتح بزر */
+  .side { position: sticky; top: 0; z-index: 40; height: auto; gap: 0; padding: 10px 16px; overflow: visible; box-shadow: 0 1px 0 rgb(248 250 252 / 0.08); }
+  .side-top { padding-inline: 0; gap: 12px; }
+  .side-top .pulse { margin-inline-start: auto; }
+  .menu-btn { display: inline-flex; }
+  .side-panel { display: none; }
+  .side[data-menu] { position: fixed; inset: 0; z-index: 60; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }
+  .side[data-menu] .side-panel { display: flex; flex-direction: column; gap: 16px; padding-top: 16px; }
+  .side nav a, .side nav .nav-head { padding: 11px 12px; font-size: var(--t-base, 1rem); }
+  .side nav a.nav-sub { padding: 10px 12px; font-size: var(--t-sm); }
   .side nav .nav-soon { display: none; }
-  /* على الجوال: شريط أفقي بكل الصفحات بلا عناوين أقسام */
-  .side nav .nav-group, .side nav .nav-group > .nav-items { display: contents; }
-  .side nav .nav-head { display: none; }
-  .side nav a.nav-sub { padding: 9px 10px; font-size: var(--t-sm); }
+  /* الجداول العريضة تُمرَّر أفقياً بدل أن تمدّ الصفحة */
+  .report-table { display: block; overflow-x: auto; }
   .org-card { margin-top: 0; }
   .score-card { grid-template-columns: 1fr; justify-items: center; text-align: center; padding: 20px; }
   .reasons li { text-align: start; }

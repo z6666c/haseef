@@ -114,6 +114,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [ob, setOb] = useState<OnboardingState | null>(null);
   const [resent, setResent] = useState(false);
   const [badges, setBadges] = useState<Record<string, number>>({});
+  const [menu, setMenu] = useState(false); // قائمة الجوال
+
+  useEffect(() => setMenu(false), [path]);
+  useEffect(() => {
+    if (!menu) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(false);
+    window.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener("keydown", onKey); };
+  }, [menu]);
 
   useEffect(() => {
     const s = getSession();
@@ -151,7 +162,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="shell">
-      <aside className="side">
+      <aside className="side" data-menu={menu || undefined}
+             onClick={(e) => { if ((e.target as HTMLElement).closest("a")) setMenu(false); }}>
         <div className="side-top">
           <Link href="/" className="side-brand" aria-label="حَصيف — الرادار العام">
             <Logo variant="compact" tone="light" />
@@ -162,8 +174,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <span className="sr-only">{plan.active ? "التنبيهات التلقائية تعمل" : "التنبيهات التلقائية متوقفة"}</span>
             </span>
           )}
+          <button type="button" className="menu-btn" aria-expanded={menu} aria-controls="side-panel"
+                  aria-label={menu ? "إغلاق القائمة" : "فتح القائمة"} onClick={() => setMenu((m) => !m)}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" aria-hidden="true">
+              {menu ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}
+            </svg>
+            {!menu && Object.values(badges).some((n) => n > 0) && <span className="menu-dot" aria-hidden="true" />}
+          </button>
         </div>
 
+        <div className="side-panel" id="side-panel">
         <Suspense fallback={null}><SideNav badges={badges} /></Suspense>
 
         <div className="org-card">
@@ -186,6 +206,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <nav className="side-legal" aria-label="الوثائق القانونية">
           {PLATFORM_LEGAL_PAGES.map((p) => <Link key={p.key} href={p.href}>{p.short}</Link>)}
         </nav>
+        </div>
       </aside>
       <main className="content">
         {ob && !ob.email_verified && (
