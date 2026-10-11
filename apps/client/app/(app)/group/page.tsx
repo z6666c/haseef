@@ -81,15 +81,15 @@ export default function GroupPage() {
                     </div>
                     <div className="small muted">دورك: {ORG_ROLE_LABEL[e.role] ?? e.role}</div>
                   </td>
-                  <td><span className="score-pill" data-tone={scoreTone(e.haseef_score)}>{e.haseef_score ?? "—"}</span></td>
-                  <td>
+                  <td data-label="المؤشر"><span className="score-pill" data-tone={scoreTone(e.haseef_score)}>{e.haseef_score ?? "—"}</span></td>
+                  <td data-label="التراخيص">
                     {e.items.expired > 0 && <span className="risk" data-r="CRITICAL">{e.items.expired} منتهٍ</span>}{" "}
                     {e.items.expiring > 0 && <span className="risk" data-r="HIGH">{e.items.expiring} قريب</span>}
                     {!e.items.expired && !e.items.expiring && <span className="muted small">{e.items.total} سارية</span>}
                   </td>
-                  <td>{e.policies_due ? <span className="risk" data-r="HIGH">{e.policies_due} للمراجعة</span> : <span className="muted small">محدّثة</span>}</td>
-                  <td>{e.obligations.total - e.obligations.pending} / {e.obligations.total}</td>
-                  <td>{e.structure_score !== null ? `${Math.round(e.structure_score)}%` : "—"}</td>
+                  <td data-label="السياسات">{e.policies_due ? <span className="risk" data-r="HIGH">{e.policies_due} للمراجعة</span> : <span className="muted small">محدّثة</span>}</td>
+                  <td data-label="الالتزامات">{e.obligations.total - e.obligations.pending} / {e.obligations.total}</td>
+                  <td data-label="الهيكل">{e.structure_score !== null ? `${Math.round(e.structure_score)}%` : "—"}</td>
                   <td><button className="link-btn" type="button" onClick={() => open(e)}>فتح المنشأة ←</button></td>
                 </tr>
               ))}
