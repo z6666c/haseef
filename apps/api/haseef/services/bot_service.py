@@ -14,6 +14,7 @@ from sqlalchemy import Connection, text
 
 from ..domain.bot import Policy, Reply, State, handle, norm
 from . import pricing
+from haseef.domain.arabic import count_of
 
 ALPH = string.ascii_lowercase + string.digits
 
@@ -143,13 +144,13 @@ def hr_reply(c: Connection, org_id, member_id, what: str) -> str:
         e = hr_service.employee(c, org_id, emp)
         b = hr_service.balance(c, org_id, e, hr_service.today().year)
         pend = c.execute(text("SELECT count(*) FROM leave_requests WHERE employee_id = :e AND status = 'PENDING'"), {"e": emp}).scalar_one()
-        return (f"رصيد إجازتك السنوية لعام {b['year']}: {fmt_days(b['balance'])} يوم\n"
+        return (f"رصيد إجازتك السنوية لعام {b['year']}: {count_of(b['balance'], 'يوم')}\n"
                 f"(الاستحقاق {b['entitlement']}، المستخدم {b['used']}{'، تعديلات ' + fmt_days(b['adjustments']) if b['adjustments'] else ''})"
-                + (f"\nلديك {pend} طلب بانتظار القرار." if pend else "") + "\nلرفع إجازة اكتب «إجازة».")
+                + (f"\nبانتظار القرار: {count_of(pend, 'طلب')}." if pend else "") + "\nلرفع إجازة اكتب «إجازة».")
     url = issue_link(c, org_id, emp) + ("&tab=notices" if what == "notices" else "&tab=leave")
     if what == "notices":
         n = c.execute(text("SELECT count(*) FROM deduction_notices WHERE employee_id = :e AND status = 'ISSUED'"), {"e": emp}).scalar_one()
-        return (f"لديك {n} إشعار خصم قائم." if n else "لا توجد إشعارات خصم قائمة.") + f"\nللاطلاع أو الاعتراض (لا تشارك الرابط):\n{url}"
+        return (f"إشعارات الخصم القائمة: {n}." if n else "لا توجد إشعارات خصم قائمة.") + f"\nللاطلاع أو الاعتراض (لا تشارك الرابط):\n{url}"
     return f"رابط الإجازات الخاص بك (لا تشاركه): ارفع إجازة سنوية أو اعتيادية أو اضطرارية أو مرضية، أو سجّل مباشرتك بعد العودة:\n{url}"
 
 

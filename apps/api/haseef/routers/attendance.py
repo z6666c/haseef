@@ -30,6 +30,7 @@ from ..domain.attendance import FLAG_LABEL, REASON_LABEL, evaluate
 from ..domain.webauthn import WebAuthnError, verify_assertion, verify_registration
 from ..services import pricing
 from .compliance import _audit
+from haseef.domain.arabic import count_of
 
 router = APIRouter(tags=["attendance"])
 RIYADH = ZoneInfo("Asia/Riyadh")
@@ -196,7 +197,7 @@ def make_link(employee_id: UUID, t: Tenant = Depends(get_tenant)):
     limit = (a.get("limits") or {}).get("members")
     if limit is not None and not c.execute(text("SELECT 1 FROM attendance_people WHERE employee_id = :e"), {"e": employee_id}).first():
         if c.execute(text("SELECT count(*) FROM attendance_people")).scalar_one() >= limit:
-            raise HTTPException(status.HTTP_409_CONFLICT, f"بلغت الحد ({limit} موظفاً) في اشتراك الحضور")
+            raise HTTPException(status.HTTP_409_CONFLICT, f"بلغت الحد ({count_of(limit, 'موظف')}) في اشتراك الحضور")
     url = issue_link(c, t.org_id, employee_id)
     _audit(c, t, "LINK", "attendance_person", employee_id)
     return {"url": url}

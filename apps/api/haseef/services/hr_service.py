@@ -19,6 +19,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import Connection, text
 
 from ..domain import hr
+from haseef.domain.arabic import count_of
 
 log = logging.getLogger(__name__)
 RIYADH = ZoneInfo("Asia/Riyadh")
@@ -209,7 +210,7 @@ def decide_leave(c: Connection, org_id, leave_id, *, approve: bool, note: str | 
         if is_paid and pol["from_balance"]:
             bal = balance(c, org_id, employee(c, org_id, lr["employee_id"]), lr["start_date"].year)["balance"]
             if lr["days"] > bal:
-                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"الرصيد غير كافٍ: المتبقي {hr.fmt_days(bal)} يوم")
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"الرصيد غير كافٍ: المتبقي {count_of(bal, 'يوم')}")
         paid = is_paid
     c.execute(text("""UPDATE leave_requests SET status = :s, decided_by = :u, decided_at = now(), decision_note = :n, is_paid = :p WHERE id = :i"""),
               {"s": st, "u": user_id, "n": note, "p": paid, "i": leave_id})
@@ -298,7 +299,7 @@ def create_notice(c: Connection, org_id, emp_id, *, kind: str, incident: date, d
         what = ("إنذار كتابي" if nature == "WARNING" else f"جزاء ({hr.KIND_LABEL[kind]}) بمبلغ {amount:.2f} ريال" if nature == "PENALTY"
                 else f"حسم أجر مدة ({hr.KIND_LABEL[kind]}) بمبلغ {amount:.2f} ريال")
         notify(c, org_id, emp_id, f"صدر بحقك {what} عن واقعة {incident:%Y-%m-%d}. "
-                                  f"يمكنك الاطلاع عليه والاعتراض خلال {s['objection_days']} يوماً من رابطك الشخصي أو بكتابة «إشعاراتي» للمساعد.")
+                                  f"يمكنك الاطلاع عليه والاعتراض خلال {count_of(s['objection_days'], 'يوم')} من رابطك الشخصي أو بكتابة «إشعاراتي» للمساعد.")
     return {"id": nid, "occurrence": occurrence}
 
 
@@ -311,7 +312,7 @@ def object_notice(c: Connection, org_id, emp_id, notice_id, objection: str) -> N
         raise HTTPException(status.HTTP_409_CONFLICT, "لا يمكن الاعتراض على هذا الإشعار الآن")
     days = hr_settings(c, org_id)["objection_days"]
     if datetime.now(RIYADH) - n["created_at"] > timedelta(days=days):
-        raise HTTPException(status.HTTP_409_CONFLICT, f"انتهت مهلة الاعتراض ({days} يوماً)")
+        raise HTTPException(status.HTTP_409_CONFLICT, f"انتهت مهلة الاعتراض ({count_of(days, 'يوم')})")
     c.execute(text("UPDATE deduction_notices SET status = 'OBJECTED', objection_text = :t, objected_at = now() WHERE id = :i"),
               {"t": objection, "i": notice_id})
 

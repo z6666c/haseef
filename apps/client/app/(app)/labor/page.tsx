@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   NITAQAT_BAND, TASK_WHERE, countDays, formatDate, parseEmployeesCsv, sar,
-  type Employee, type EmployeeInput, type GosiCalcResult, type GosiMonth, type GosiRate, type LaborOverview, type LaborProfile, type LaborTask,
-} from "@haseef/shared";
+  type Employee, type EmployeeInput, type GosiCalcResult, type GosiMonth, type GosiRate, type LaborOverview, type LaborProfile, type LaborTask, countOf } from "@haseef/shared";
 import { api } from "@/lib/session";
 
 type Tab = "calendar" | "employees" | "gosi" | "qiwa";
@@ -222,7 +221,7 @@ function EmployeesTab({ canManage, act }: { canManage: boolean; act: Act }) {
         </div>}
       </div>
       {!data.show_wages && <p className="small muted">الأجور مخفية: يطّلع عليها مدير المنشأة ومسؤول الامتثال فقط.</p>}
-      {importing && <ImportPanel onDone={async (rows) => { if (await act(() => api.importEmployees(rows), `استُورد ${rows.length} موظفاً`)) setImporting(false); }} />}
+      {importing && <ImportPanel onDone={async (rows) => { if (await act(() => api.importEmployees(rows), `استُورد ${countOf(rows.length, "موظف")}`)) setImporting(false); }} />}
       {edit && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={edit.id ? "تعديل بيانات الموظف" : "موظف جديد"}
              onClick={(ev) => { if (ev.target === ev.currentTarget) setEdit(null); }}>
@@ -433,7 +432,7 @@ function QiwaTab({ ov, act }: { ov: LaborOverview; act: Act }) {
           <div className="panel"><h3>توثيق العقود في قوى</h3><p className="big" data-s={ind.documented_pct === 100 ? "IN_PLACE" : "PENDING"}>{ind.documented_pct}%</p>
             <p className="small muted">{ind.employees - ind.documented > 0 ? `${ind.employees - ind.documented} عقد غير موثق — وثّقها من حساب المنشأة في قوى.` : "كل العقود موثقة."}</p></div>
           <div className="panel"><h3>التسجيل في التأمينات</h3><p className="big" data-s={ind.gosi_unregistered ? "LATE" : "IN_PLACE"}>{ind.gosi_registered}/{ind.employees}</p>
-            <p className="small muted">{ind.gosi_unregistered ? `${ind.gosi_unregistered} موظف غير مسجّل: التسجيل إلزامي من أول يوم عمل.` : "كل الموظفين مسجّلون."}</p></div>
+            <p className="small muted">{ind.gosi_unregistered ? `غير مسجّلين في التأمينات: ${countOf(ind.gosi_unregistered, "موظف")}. التسجيل إلزامي من أول يوم عمل.` : "كل الموظفين مسجّلون."}</p></div>
           <div className="panel"><h3>غرامة عدم رفع ملف الأجور</h3><p className="big">{sar(ind.wps_fine_if_missed)}</p>
             <p className="small muted">لكل شهر لا يُرفع فيه ملف حماية الأجور في مُدد، حسب عدد موظفيك.</p></div>
         </div>

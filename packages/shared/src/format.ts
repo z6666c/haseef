@@ -11,6 +11,33 @@ export function countDays(n: number): string {
   return `${n} يوماً`;
 }
 
+// تمييز العدد لأي اسم: [المفرد، المثنى، جمع القلة (3–10)، المفرد المنصوب (11 فأكثر)]
+const NOUNS = {
+  يوم: ["يوم", "يومين", "أيام", "يوماً"], موظف: ["موظف", "موظفَين", "موظفين", "موظفاً"],
+  دقيقة: ["دقيقة", "دقيقتين", "دقائق", "دقيقة"], ساعة: ["ساعة", "ساعتين", "ساعات", "ساعة"],
+  شهر: ["شهر", "شهرين", "أشهر", "شهراً"], سنة: ["سنة", "سنتين", "سنوات", "سنة"],
+  عضو: ["عضو", "عضوين", "أعضاء", "عضواً"], منشأة: ["منشأة", "منشأتين", "منشآت", "منشأة"],
+  طلب: ["طلب", "طلبين", "طلبات", "طلباً"], إشعار: ["إشعار", "إشعارين", "إشعارات", "إشعاراً"],
+  رسالة: ["رسالة", "رسالتين", "رسائل", "رسالة"], قسط: ["قسط", "قسطين", "أقساط", "قسطاً"],
+  سؤال: ["سؤال", "سؤالين", "أسئلة", "سؤالاً"], حادثة: ["حادثة", "حادثتين", "حوادث", "حادثة"],
+  جهة: ["جهة", "جهتين", "جهات", "جهة"], نقطة: ["نقطة", "نقطتين", "نقاط", "نقطة"],
+  مشترك: ["مشترك", "مشتركَين", "مشتركين", "مشتركاً"], مرة: ["مرة", "مرتين", "مرات", "مرة"],
+} as const;
+export type CountNoun = keyof typeof NOUNS;
+const ONE_FEM = new Set<CountNoun>(["دقيقة", "ساعة", "سنة", "منشأة", "رسالة", "حادثة", "جهة", "نقطة", "مرة"]);
+
+/** «يوم واحد»، «يومين»، «5 أيام»، «15 يوماً»، «100 يوم»، «2.5 يوم» */
+export function countOf(n: number, noun: CountNoun): string {
+  const [one, two, few, many] = NOUNS[noun];
+  if (!Number.isInteger(n) || n === 0) return `${Number.isInteger(n) ? n : n.toFixed(1)} ${one}`;
+  const a = Math.abs(n);
+  if (a === 1) return `${one} ${ONE_FEM.has(noun) ? "واحدة" : "واحد"}`;
+  if (a === 2) return two;
+  const tail = a % 100;
+  if (a >= 100 && tail <= 2) return `${n} ${one}`;
+  return `${n} ${tail >= 3 && tail <= 10 ? few : many}`;
+}
+
 /** "اليوم" / "خلال 3 أيام" / "منذ يومين" */
 export function duePhrase(daysLeft: number): string {
   if (daysLeft === 0) return "اليوم";
@@ -262,8 +289,8 @@ export function minutesLabel(m: number): string {
   if (m === 60) return "ساعة";
   if (m === 90) return "ساعة ونصف";
   if (m === 120) return "ساعتان";
-  if (m % 60 === 0) return `${m / 60} ساعات`;
-  return `${m} دقيقة`;
+  if (m % 60 === 0) return countOf(m / 60, "ساعة");
+  return countOf(m, "دقيقة");
 }
 export const sarFmt = (n: number) => `${Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ريال`;
 

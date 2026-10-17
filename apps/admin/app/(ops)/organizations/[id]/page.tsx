@@ -6,8 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   auditSummary, type AdminOrgGovernance,
   type PaymentPlan, AUDIT_ACTION_LABEL, BILLING_EVENT_LABEL, BILLING_STATUS_LABEL, LEGAL_TYPE_LABEL, ORG_ROLE_LABEL, PLAN_LABEL,
-  SIZE_LABEL, countDays, formatDate, type AdminMember, type AdminOrgDetail, type AuditEntry,
-} from "@haseef/shared";
+  SIZE_LABEL, countDays, formatDate, type AdminMember, type AdminOrgDetail, type AuditEntry, countOf } from "@haseef/shared";
 import { Dialog, ReasonDialog, TempPasswordDialog, fmtDateTime, useCan } from "@/components/ui";
 import { usePlanPrices } from "@/components/usePlanPrices";
 import { api } from "@/lib/session";
@@ -196,7 +195,7 @@ export default function OrgDetail() {
             <div><dt>استيفاء معايير الحوكمة</dt>
               <dd>{gov.latest_check?.structure_score != null ? `${Math.round(gov.latest_check.structure_score)}%` : "—"}
                 {gov.latest_check && <small> · {gov.latest_check.failed} فجوة</small>}</dd></div>
-            <div><dt>أجهزة الهيكل</dt><dd>{gov.bodies.length}<small> · {gov.bodies.reduce((n, b) => n + b.members.length, 0)} عضواً</small></dd></div>
+            <div><dt>أجهزة الهيكل</dt><dd>{gov.bodies.length}<small> · {countOf(gov.bodies.reduce((n, b) => n + b.members.length, 0), "عضو")}</small></dd></div>
             <div><dt>الالتزامات المستوفاة</dt><dd>{gov.obligations.in_place}<small> من {gov.obligations.total}</small></dd></div>
             <div><dt>أنشطة المعالجة</dt><dd>{gov.pdpl.records}</dd></div>
             <div><dt>طلبات أصحاب البيانات المفتوحة</dt><dd>{gov.pdpl.requests_open}

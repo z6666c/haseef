@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { LEAVE_STATUS, NOTICE_STATUS, KIND_LABEL, fmtDays, formatDate, registerDevice, sar, signWithDevice, webauthnSupported,
-  type AttendCheckResult, type AttendPage, type LeaveAttachment, type LeaveType, type PersonHr } from "@haseef/shared";
+  type AttendCheckResult, type AttendPage, type LeaveAttachment, type LeaveType, type PersonHr, countOf } from "@haseef/shared";
 import { AttachPicker } from "@/components/AttachPicker";
 import { Logo } from "@/components/Logo";
 import { api } from "@/lib/session";
@@ -104,7 +104,7 @@ function Attend() {
 
           {res && (res.status === "ACCEPTED"
             ? <p className="notice" role="status">✓ سُجّل {res.kind === "IN" ? "حضورك" : "انصرافك"} الساعة {fmtTime(res.at)}{res.site_name ? ` في ${res.site_name}` : ""}.
-                {(res.late_minutes ?? 0) > 0 && ` تأخرت ${res.late_minutes} دقيقة.`}</p>
+                {(res.late_minutes ?? 0) > 0 && ` تأخرت ${countOf(res.late_minutes ?? 0, "دقيقة")}.`}</p>
             : <p className="error" role="alert">لم يُقبل التسجيل: {res.reason_label ?? res.reason}{res.distance_m != null && res.reason === "OUTSIDE" ? ` (تبعد ${Math.round(res.distance_m)} م عن أقرب موقع)` : ""}.</p>)}
           {err && <p className="error" role="alert">{err}</p>}
 
@@ -157,7 +157,7 @@ function LeavesPanel({ token }: { token: string }) {
   return (
     <section style={{ display: "grid", gap: 12 }}>
       <div className="panel" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <div><div className="small muted">رصيد إجازتك السنوية {d.balance.year}</div><b style={{ fontSize: "var(--t-xl)" }}>{fmtDays(d.balance.balance)} يوم</b></div>
+        <div><div className="small muted">رصيد إجازتك السنوية {d.balance.year}</div><b style={{ fontSize: "var(--t-xl)" }}>{countOf(d.balance.balance, "يوم")}</b></div>
         <div className="small muted" style={{ textAlign: "end" }}>الاستحقاق {d.balance.entitlement}<br />المستخدم {d.balance.used}</div>
       </div>
       {msg && <p className="notice" role="status">{msg}</p>}
@@ -167,20 +167,20 @@ function LeavesPanel({ token }: { token: string }) {
           if (v.leave_type === "SICK" && !att) { setE2("أرفق التقرير الطبي: صوّره بالجوال أو اختر ملف PDF."); return; }
           if (await run(() => api.personLeave(token, { ...v, reason: v.reason || null, medical_ref: v.medical_ref || null,
             attachment: v.leave_type === "SICK" ? att : null, is_paid: pol?.pay_mode === "CHOICE" ? paid : null }),
-            (r) => `أُرسل طلبك (${r.days} يوم) إلى الموارد البشرية.${r.pay_note ? ` ${r.pay_note}.` : ""}`)) { setForm(false); setAtt(null); } }}>
+            (r) => `أُرسل طلبك (${countOf(r.days, "يوم")}) إلى الموارد البشرية.${r.pay_note ? ` ${r.pay_note}.` : ""}`)) { setForm(false); setAtt(null); } }}>
           <div className="field"><label htmlFor="pt">نوع الإجازة</label>
             <select id="pt" value={v.leave_type} onChange={(e) => setV({ ...v, leave_type: e.target.value as LeaveType })}>
               {d.policies.map((x) => <option key={x.leave_type} value={x.leave_type}>{x.label}</option>)}</select></div>
           {pol && <p className="small muted">
             {pol.pay_mode === "CHOICE" ? "تختار: مدفوعة أو بدون أجر" : pol.pay_mode === "UNPAID" ? "بدون أجر" : pol.leave_type === "SICK" ? "بأجر حسب شرائح نظام العمل" : "مدفوعة"}
             {pol.from_balance && pol.pay_mode !== "UNPAID" ? `، ${pol.pay_mode === "CHOICE" ? "المدفوعة " : ""}تُخصم من رصيدك السنوي` : ""}
-            {pol.max_days_per_request ? `، حتى ${pol.max_days_per_request} يوم للطلب` : ""}{pol.yearly_cap ? `، والمتبقي هذا العام ${Math.max(pol.yearly_cap - pol.used, 0)} يوم` : ""}
+            {pol.max_days_per_request ? `، حتى ${countOf(pol.max_days_per_request, "يوم")} للطلب` : ""}{pol.yearly_cap ? `، والمتبقي هذا العام ${countOf(Math.max(pol.yearly_cap - pol.used, 0), "يوم")}` : ""}
             {pol.leave_type === "EMERGENCY" ? "، وتُرفع خلال 3 أيام من بدايتها" : pol.leave_type === "SICK" ? "، وتُرفع خلال 7 أيام من بدايتها مع إرفاق التقرير الطبي" : ""}.
           </p>}
           {pol?.pay_mode === "CHOICE" && (
             <fieldset className="field pay-choice"><legend>الأجر</legend>
               <label className="checks-inline"><input type="radio" name="paid" checked={paid} onChange={() => setPaid(true)} />
-                مدفوعة{pol.from_balance ? ` (تُخصم من رصيدك: ${fmtDays(d.balance.balance)} يوم)` : ""}</label>
+                مدفوعة{pol.from_balance ? ` (تُخصم من رصيدك: ${countOf(d.balance.balance, "يوم")})` : ""}</label>
               <label className="checks-inline"><input type="radio" name="paid" checked={!paid} onChange={() => setPaid(false)} /> بدون أجر (لا تمس رصيدك، ويُحسم أجر أيامها)</label>
             </fieldset>)}
           <div className="grid">
@@ -203,7 +203,7 @@ function LeavesPanel({ token }: { token: string }) {
         const canReturn = l.status === "APPROVED" && !l.return_confirmed_at && l.end_date < today;
         return (
           <div key={l.id} className="panel" style={{ display: "grid", gap: 6 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><b>إجازة {l.label} · {l.days} يوم{l.is_paid === false ? " · بدون أجر" : ""}</b>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><b>إجازة {l.label} · {countOf(l.days, "يوم")}{l.is_paid === false ? " · بدون أجر" : ""}</b>
               <span className="status-chip" data-s={l.status === "APPROVED" ? "IN_PLACE" : l.status === "PENDING" ? "PENDING" : "EXPIRED"}>{LEAVE_STATUS[l.status]}</span></div>
             <div className="small muted">{formatDate(l.start_date)} ← {formatDate(l.end_date)}{l.pay_note ? ` · ${l.pay_note}` : ""}</div>
             {l.has_attachment && <div className="small">📎 التقرير مرفق{l.attachment_name ? `: ${l.attachment_name}` : ""}</div>}
@@ -221,7 +221,7 @@ function LeavesPanel({ token }: { token: string }) {
             {l.return_confirmed_at && l.return_date && <div className="small">✓ باشرت {formatDate(l.return_date)}</div>}
             {canReturn && l.return_submitted_at && <div className="small">أبلغت بالمباشرة {formatDate(l.return_date!)} — بانتظار تأكيد الموارد البشرية</div>}
             {canReturn && !l.return_submitted_at && <button className="btn btn-action" type="button" disabled={busy}
-              onClick={() => run(() => api.personReturn(token, l.id, today), (r) => r.late_days ? `سُجّلت مباشرتك. تأخرت ${r.late_days} يوم عمل بعد نهاية الإجازة.` : "سُجّلت مباشرتك، حمداً لله على السلامة.")}>
+              onClick={() => run(() => api.personReturn(token, l.id, today), (r) => r.late_days ? `سُجّلت مباشرتك. تأخرت ${countOf(r.late_days, "يوم")} عمل بعد نهاية الإجازة.` : "سُجّلت مباشرتك، حمداً لله على السلامة.")}>
               سجّل مباشرتي اليوم</button>}
             {l.status === "PENDING" && <button className="link-btn" type="button" disabled={busy} onClick={() => run(() => api.personCancelLeave(token, l.id), "أُلغي الطلب")}>إلغاء الطلب</button>}
           </div>
@@ -240,7 +240,7 @@ function NoticesPanel({ token }: { token: string }) {
   if (!d) return err ? <p className="error">{err}</p> : <p aria-busy="true">جارٍ التحميل…</p>;
   return (
     <section style={{ display: "grid", gap: 12 }}>
-      <p className="small muted">يُبلغك صاحب العمل كتابةً بأي خصم وسببه، ولك أن تعترض خلال {d.objection_days} يوماً قبل تأكيده.</p>
+      <p className="small muted">يُبلغك صاحب العمل كتابةً بأي خصم وسببه، ولك أن تعترض خلال {countOf(d.objection_days, "يوم")} قبل تأكيده.</p>
       {msg && <p className="notice" role="status">{msg}</p>}
       {e2 && <p className="error" role="alert">{e2}</p>}
       {d.notices.length === 0 && <p className="small muted">لا توجد إشعارات.</p>}

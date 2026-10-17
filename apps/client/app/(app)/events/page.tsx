@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { formatDate, type EventsView } from "@haseef/shared";
+import { formatDate, type EventsView, countOf } from "@haseef/shared";
 import { api } from "@/lib/session";
 
 const KIND: Record<string, string> = { NATIONAL: "وطنية", RELIGIOUS: "دينية", OCCASION: "مناسبة" };
@@ -44,7 +44,7 @@ export default function EventsPage() {
             <label key={c} className="checks-inline"><input type="checkbox" disabled={!v.can_manage} checked={!s.excluded_codes.includes(c)}
               onChange={(e) => setS({ ...s, excluded_codes: e.target.checked ? s.excluded_codes.filter((x) => x !== c) : [...s.excluded_codes, c] })} /> {nameOf(c)}</label>))}</div>
         </fieldset>
-        <p className="small muted">يصل التهنئة {v.reachable_employees} موظفاً حالياً. أضف جوالات الموظفين من «العمل والموظفين».</p>
+        <p className="small muted">تصل التهنئة حالياً إلى {countOf(v.reachable_employees, "موظف")}. أضف جوالات الموظفين من «العمل والموظفين».</p>
         {v.can_manage && <div><button className="btn btn-action" type="button" onClick={save}>حفظ</button></div>}
       </section>
       <table className="deadlines labor-table" style={{ marginTop: 16 }}>
@@ -54,8 +54,8 @@ export default function EventsPage() {
           return (
             <tr key={e.id}>
               <td><b>{e.name}</b><div className="small muted">{KIND[e.kind]}</div></td>
-              <td>{formatDate(e.event_date)}<div className="small muted">{n === 0 ? "اليوم" : n === 1 ? "غداً" : n > 0 ? `بعد ${n} يوماً` : "أمس"}</div></td>
-              <td>{e.is_holiday ? <span className="status-chip" data-s="IN_PLACE">{e.holiday_days} يوم</span> : "—"}</td>
+              <td>{formatDate(e.event_date)}<div className="small muted">{n === 0 ? "اليوم" : n === 1 ? "غداً" : n > 0 ? `بعد ${countOf(n, "يوم")}` : "أمس"}</div></td>
+              <td>{e.is_holiday ? <span className="status-chip" data-s="IN_PLACE">{countOf(e.holiday_days, "يوم")}</span> : "—"}</td>
               <td className="small">{e.greeting}</td>
             </tr>
           );

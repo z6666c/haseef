@@ -1,5 +1,6 @@
 /** جدول الجزاءات وفق لائحة تنظيم العمل النموذجية (منطق نقي). مطابق لـ apps/api/haseef/domain/penalties.py. */
 
+import { countOf } from "./format.ts";
 export type LateBracket = "LATE_15" | "LATE_30" | "LATE_60" | "LATE_OVER";
 export type AbsBracket = "ABS_1" | "ABS_2_6" | "ABS_7_10" | "ABS_11_14" | "ABS_15";
 export type Bracket = LateBracket | AbsBracket;
@@ -36,7 +37,7 @@ export function describePenalty(p: P): string {
   if (p === T80) return "يحق الفصل وفق المادة 80 دون مكافأة بعد إنذار كتابي — قرار إداري خارج حصيف";
   if (p === TAW) return "يحق الفصل مع المكافأة إن لم يتجاوز مجموع الغياب 30 يوماً — قرار إداري خارج حصيف";
   if (p < 1) return `حسم ${Math.round(p * 100)}% من الأجر اليومي`;
-  return p === 1 ? "حسم أجر يوم" : p === 2 ? "حسم أجر يومين" : `حسم أجر ${p} أيام`;
+  return p === 1 ? "حسم أجر يوم" : p === 2 ? "حسم أجر يومين" : `حسم أجر ${countOf(p, "يوم")}`;
 }
 
 export interface PenaltySuggestion { bracket: Bracket; bracket_label: string; occurrence: number; occurrence_label: string; label: string;

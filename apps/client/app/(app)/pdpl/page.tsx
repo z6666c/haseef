@@ -5,8 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   CHANNEL_LABEL, DATA_SUBJECTS_LABEL, DSR_STATUS_LABEL, DSR_TYPE_LABEL, INCIDENT_STATUS_LABEL, LEGAL_BASIS_LABEL,
   SEVERITY_LABEL, STORAGE_LABEL,
-  type DataRequest, type DataRequestInput, type Incident, type IncidentInput, type PdplOverview, type RopaInput, type RopaRecord,
-} from "@haseef/shared";
+  type DataRequest, type DataRequestInput, type Incident, type IncidentInput, type PdplOverview, type RopaInput, type RopaRecord, countOf } from "@haseef/shared";
 import { api } from "@/lib/session";
 
 type Tab = "ropa" | "requests" | "incidents";
@@ -137,7 +136,7 @@ function RopaTab({ act }: { act: Act }) {
             <p>{r.purpose}</p>
             <dl className="ropa-facts">
               <div><dt>الفئات</dt><dd>{r.data_categories.join("، ")}</dd></div>
-              <div><dt>الحفظ</dt><dd>{r.retention_period_months} شهراً · {STORAGE_LABEL[r.storage_location]}</dd></div>
+              <div><dt>الحفظ</dt><dd>{countOf(r.retention_period_months, "شهر")} · {STORAGE_LABEL[r.storage_location]}</dd></div>
               <div><dt>المسؤول</dt><dd>{r.owner_name ?? <span className="late">غير محدد</span>}</dd></div>
               {r.processors.length > 0 && <div><dt>المعالجون</dt><dd>{r.processors.join("، ")}</dd></div>}
               {r.cross_border_transfer && <div><dt>النقل</dt><dd>{r.transfer_destination} — {r.transfer_safeguard}</dd></div>}
@@ -212,7 +211,7 @@ function RequestsTab({ act, days }: { act: Act; days: number }) {
   return (
     <section className="gov-section" style={{ marginTop: 8 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <p className="muted" style={{ margin: 0 }}>كل طلب له مهلة رد {days} يوماً من الاستلام افتراضياً. تحقّق من هوية مقدم الطلب قبل التنفيذ.</p>
+        <p className="muted" style={{ margin: 0 }}>كل طلب له مهلة رد {countOf(days, "يوم")} من الاستلام افتراضياً. تحقّق من هوية مقدم الطلب قبل التنفيذ.</p>
         <button className="btn btn-quiet" type="button" onClick={() => setAdding(!adding)}>+ تسجيل طلب</button>
       </div>
       {adding && (
@@ -241,7 +240,7 @@ function RequestsTab({ act, days }: { act: Act; days: number }) {
                   <span className="tag">{DSR_TYPE_LABEL[r.request_type]}</span>
                   <span className="tag tag-quiet">{CHANNEL_LABEL[r.channel]}</span>
                   <span className="status-chip" data-s={open ? (r.days_left < 0 ? "AT_RISK" : "PENDING") : "IN_PLACE"}>{DSR_STATUS_LABEL[r.status]}</span>
-                  {open && <span className={r.days_left < 0 ? "late small" : "small muted"}>{r.days_left < 0 ? `متأخر ${-r.days_left} يوماً` : `باقي ${r.days_left} يوماً`}</span>}
+                  {open && <span className={r.days_left < 0 ? "late small" : "small muted"}>{r.days_left < 0 ? `متأخر ${countOf(-r.days_left, "يوم")}` : `باقي ${countOf(r.days_left, "يوم")}`}</span>}
                 </div>
                 {r.details && <p>{r.details}</p>}
                 <p className="small muted">استُلم {fmt(r.received_on)} · المهلة {fmt(r.due_on)}{r.completed_on ? ` · أُغلق ${fmt(r.completed_on)}` : ""}</p>
@@ -324,7 +323,7 @@ function IncidentsTab({ act, hours }: { act: Act; hours: number }) {
                 </div>
                 {needs && (
                   <p className={h < 0 ? "countdown late" : "countdown"}>
-                    {h < 0 ? `تجاوزت مهلة إبلاغ الجهة المختصة بـ ${-h} ساعة — أبلغ فوراً` : `باقي ${h} ساعة لإبلاغ الجهة المختصة`}
+                    {h < 0 ? `تجاوزت مهلة إبلاغ الجهة المختصة بـ${countOf(-h, "ساعة")} — أبلغ فوراً` : `باقي ${countOf(h, "ساعة")} لإبلاغ الجهة المختصة`}
                   </p>
                 )}
                 {i.description && <p>{i.description}</p>}

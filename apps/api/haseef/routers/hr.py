@@ -21,6 +21,7 @@ from ..services import hr_service as svc
 from .attendance import MANAGERS, RIYADH, _need, _person
 from .compliance import _audit
 from .governance import file_response
+from haseef.domain.arabic import count_of
 
 router = APIRouter(tags=["hr"])
 LeaveType = Literal["ANNUAL", "REGULAR", "EMERGENCY", "SICK"]
@@ -339,19 +340,19 @@ def _suggest(c, m: date, nxt: date, today: date, emps: dict, notices: list[dict]
         g = {"employee_id": e["id"], "full_name": e["full_name"], "kind": ev["kind"], "kind_label": hr.KIND_LABEL[ev["kind"]],
              "incident_date": ev["d"], "daily_wage": dw, "leave_request_id": None, "notes": []}
         if ev["kind"] == "LATE":
-            g["description"] = f"تأخر {ev['from_start']} دقيقة عن بداية الدوام يوم {ev['d']:%Y-%m-%d}"
+            g["description"] = f"تأخر {count_of(ev['from_start'], 'دقيقة')} عن بداية الدوام يوم {ev['d']:%Y-%m-%d}"
             amt = hr.late_amount(ev["late"], dw, work_min)
-            g["wage"] = {"amount": amt, "label": f"أجر {ev['late']} دقيقة بعد السماحية"} if amt > 0 else None
+            g["wage"] = {"amount": amt, "label": f"أجر {count_of(ev['late'], 'دقيقة')} بعد السماحية"} if amt > 0 else None
             bracket = pen.late_bracket(ev["from_start"])
         else:
             days = ev["days"]
             if ev["kind"] == "ABSENCE":
                 g["description"] = (f"غياب يوم {ev['d']:%Y-%m-%d} دون إجازة أو تسجيل حضور" if days == 1
-                                    else f"غياب {days} أيام عمل متصلة من {ev['d']:%Y-%m-%d} إلى {ev['to']:%Y-%m-%d} دون إجازة أو تسجيل حضور")
+                                    else f"غياب متصل لمدة {count_of(days, 'يوم')} عمل من {ev['d']:%Y-%m-%d} إلى {ev['to']:%Y-%m-%d} دون إجازة أو تسجيل حضور")
             else:
                 l = ev["leave"]
                 g["leave_request_id"] = l["id"]
-                g["description"] = f"تأخر {days} يوم عمل عن المباشرة بعد الإجازة ال{hr.LEAVE_LABEL[l['leave_type']]} (انتهت {l['end_date']:%Y-%m-%d})"
+                g["description"] = f"تأخر عن المباشرة بعد الإجازة ال{hr.LEAVE_LABEL[l['leave_type']]} (انتهت {l['end_date']:%Y-%m-%d}) بمقدار {count_of(days, 'يوم')} عمل"
             g["wage"] = {"amount": round(days * dw, 2), "label": f"أجر {days} {'يوم' if days == 1 else 'أيام'} غياب"}
             bracket = pen.absence_bracket(days)
             if days >= 10:
@@ -414,7 +415,7 @@ def add_notices(body: NoticeBatchIn, t: Tenant = Depends(get_tenant)):
         parts.append("إنذار كتابي" if nat == "WARNING" else f"{hr.NATURE_LABEL[nat]} {i.amount:.2f} ريال")
     s = svc.hr_settings(t.conn, t.org_id)
     svc.notify(t.conn, t.org_id, first.employee_id, f"صدر بحقك عن واقعة {first.incident_date:%Y-%m-%d} ({hr.KIND_LABEL[first.kind]}): "
-               f"{' + '.join(parts)}. يمكنك الاطلاع والاعتراض خلال {s['objection_days']} يوماً من رابطك الشخصي أو بكتابة «إشعاراتي» للمساعد.")
+               f"{' + '.join(parts)}. يمكنك الاطلاع والاعتراض خلال {count_of(s['objection_days'], 'يوم')} من رابطك الشخصي أو بكتابة «إشعاراتي» للمساعد.")
     return {"ids": ids}
 
 

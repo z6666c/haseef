@@ -17,6 +17,7 @@ from ..deps import Tenant, get_tenant
 from ..messaging import build_senders
 from ..services import bot_service, pricing
 from .compliance import _audit
+from haseef.domain.arabic import count_of
 
 router = APIRouter(prefix="/bot", tags=["bot"])
 MANAGERS = ("ORG_ADMIN", "COMPLIANCE_OFFICER")
@@ -117,7 +118,7 @@ def add_member(body: MemberIn, t: Tenant = Depends(get_tenant)):
     limit = (a.get("limits") or {}).get("members")
     n = c.execute(text("SELECT count(*) FROM bot_members WHERE status <> 'REMOVED'")).scalar_one()
     if limit is not None and n >= limit:
-        raise HTTPException(status.HTTP_409_CONFLICT, f"بلغت الحد ({limit} موظفاً) في اشتراكك الحالي")
+        raise HTTPException(status.HTTP_409_CONFLICT, f"بلغت الحد ({count_of(limit, 'موظف')}) في اشتراكك الحالي")
     with platform_tx() as pc:                # الرقم فريد عبر كل المنشآت (البوت يعرف المنشأة من الرقم)
         if pc.execute(text("SELECT 1 FROM bot_members WHERE phone = :p AND status <> 'REMOVED'"), {"p": body.phone}).first():
             raise HTTPException(status.HTTP_409_CONFLICT, "هذا الرقم مسجّل في مساعد منشأة أخرى أو مضاف مسبقاً")

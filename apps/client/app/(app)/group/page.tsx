@@ -3,8 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ENTITY_RELATION_LABEL, LEGAL_TYPE_LABEL, ORG_ROLE_LABEL, SIZE_LABEL, scoreTone,
-  type GroupEntity, type GroupEntityInput, type GroupOverview,
-} from "@haseef/shared";
+  type GroupEntity, type GroupEntityInput, type GroupOverview, countOf } from "@haseef/shared";
 import { api, getSession, setSession } from "@/lib/session";
 
 const EMPTY: GroupEntityInput = { name: "", cr_number: "", entity_legal_type: "LLC", entity_relation: "SUBSIDIARY", industry_type: null, commercial_size: "SMALL" };
@@ -53,7 +52,7 @@ export default function GroupPage() {
       {!g.available ? (
         <div className="hint-box">
           <p><strong>المنشآت المتعددة متاحة في باقة كبار العملاء.</strong></p>
-          <p>تشمل: لوحة موحدة للمجموعة، إضافة حتى {g.max_entities} منشأة تابعة أو فرع تحت اشتراك واحد، وتقرير مجلس الإدارة السنوي.
+          <p>تشمل: لوحة موحدة للمجموعة، إضافة حتى {countOf(g.max_entities, "منشأة")} بين تابعة وفرع تحت اشتراك واحد، وتقرير مجلس الإدارة السنوي.
             تواصل مع فريق حصيف للترقية.</p>
         </div>
       ) : (
@@ -95,7 +94,7 @@ export default function GroupPage() {
               ))}
             </tbody>
           </table>
-          {!!g.hidden_entities && <p className="small muted">{g.hidden_entities} منشأة في المجموعة لست عضواً فيها ولا تظهر هنا.</p>}
+          {!!g.hidden_entities && <p className="small muted">في المجموعة {countOf(g.hidden_entities, "منشأة")} لست عضواً فيها، فلا تظهر هنا.</p>}
 
           {g.can_manage && (form ? (
             <form className="panel" onSubmit={add} style={{ marginTop: 20 }}>

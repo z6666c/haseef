@@ -1,5 +1,6 @@
 /** الإجازات والخصومات (منطق نقي). مطابق لـ apps/api/haseef/domain/hr.py. */
 
+import { countOf } from "./format.ts";
 export type LeaveType = "ANNUAL" | "REGULAR" | "EMERGENCY" | "SICK";
 export type DeductionKind = "LATE" | "ABSENCE" | "LATE_RETURN" | "VIOLATION" | "OTHER";
 export const LEAVE_TYPES: LeaveType[] = ["ANNUAL", "REGULAR", "EMERGENCY", "SICK"];
@@ -72,12 +73,12 @@ export function validateLeave(o: { leaveType: LeaveType; start: string; end: str
     if (o.start < earliest) {
       return o.leaveType === "EMERGENCY" ? "الإجازة الاضطرارية تُرفع خلال 3 أيام من بدايتها كحد أقصى"
         : o.leaveType === "SICK" ? `الإجازة المرضية تُرفع خلال ${SICK_BACKDATE_DAYS} أيام من بدايتها كحد أقصى`
-        : p.min_notice_days ? `يجب رفع الطلب قبل ${p.min_notice_days} يوم على الأقل` : "لا يمكن رفع إجازة بتاريخ مضى";
+        : p.min_notice_days ? `يجب رفع الطلب قبل ${countOf(p.min_notice_days, "يوم")} على الأقل` : "لا يمكن رفع إجازة بتاريخ مضى";
     }
   }
-  if (p.max_days_per_request && o.days > p.max_days_per_request) return `الحد الأقصى للطلب الواحد ${p.max_days_per_request} يوم`;
-  if (p.yearly_cap && o.usedThisYearType + o.days > p.yearly_cap) return `تجاوزت الحد السنوي (${p.yearly_cap} يوم) لهذا النوع؛ المتبقي ${Math.max(p.yearly_cap - o.usedThisYearType, 0)}`;
-  if ((o.isPaid ?? true) && p.from_balance && o.days > o.balance) return `الرصيد غير كافٍ: المتبقي ${fmtDays(o.balance)} يوم`;
+  if (p.max_days_per_request && o.days > p.max_days_per_request) return `الحد الأقصى للطلب الواحد ${countOf(p.max_days_per_request, "يوم")}`;
+  if (p.yearly_cap && o.usedThisYearType + o.days > p.yearly_cap) return `تجاوزت الحد السنوي (${countOf(p.yearly_cap, "يوم")}) لهذا النوع؛ المتبقي ${countOf(Math.max(p.yearly_cap - o.usedThisYearType, 0), "يوم")}`;
+  if ((o.isPaid ?? true) && p.from_balance && o.days > o.balance) return `الرصيد غير كافٍ: المتبقي ${countOf(o.balance, "يوم")}`;
   return null;
 }
 
@@ -95,7 +96,7 @@ export function sickSplit(usedBefore: number, days: number): [number, number][] 
 }
 export function sickNote(usedBefore: number, days: number): string {
   const parts: Record<number, string> = { 1: "بأجر كامل", 0.75: "بثلاثة أرباع الأجر", 0: "دون أجر" };
-  return sickSplit(usedBefore, days).map(([d, r]) => `${d} يوم ${parts[r]}`).join("، ");
+  return sickSplit(usedBefore, days).map(([d, r]) => `${countOf(d, "يوم")} ${parts[r]}`).join("، ");
 }
 
 /** أجر اليوم = الأجر الشهري ÷ 30 (الافتراضي الأجر الفعلي بكل بدلاته الثابتة). */

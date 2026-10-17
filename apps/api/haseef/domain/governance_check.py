@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from datetime import date
+from haseef.domain.arabic import count_of
 
 SEVERITY_WEIGHT = {"critical": 3, "high": 2, "medium": 1}
 
@@ -139,7 +140,7 @@ def _evaluate_rule(rule: dict, ctx: OrgContext) -> tuple[str, str]:
             return "FAIL", f"أعضاء اللجنة {len(c.members)} والحد الأدنى {rule['min']}."
         if rule.get("no_executives") and any(m.is_executive for m in c.members):
             return "FAIL", "في اللجنة عضو تنفيذي."
-        return "PASS", f"اللجنة مشكلة من {len(c.members)} أعضاء."
+        return "PASS", f"اللجنة مشكّلة من {count_of(len(c.members), 'عضو')}."
 
     if kind == "terms_valid":
         expired = [m.full_name for b in ctx.bodies for m in b.members if m.term_ends_on and m.term_ends_on < ctx.today]
@@ -159,7 +160,7 @@ def _evaluate_rule(rule: dict, ctx: OrgContext) -> tuple[str, str]:
         if not v:
             return "FAIL", "لم يُسجَّل التاريخ في ملف الحوكمة."
         m = _months_between(v, ctx.today)
-        return ("PASS", f"آخر مرة قبل {m} شهراً.") if m <= rule["months"] else ("FAIL", f"آخر مرة قبل {m} شهراً.")
+        return ("PASS" if m <= rule["months"] else "FAIL", f"آخر مرة قبل {count_of(m, 'شهر')}.")
 
     if kind == "policy_active":
         return ("PASS", "سياسة معتمدة وسارية.") if rule["policy_type"] in ctx.active_policy_types \

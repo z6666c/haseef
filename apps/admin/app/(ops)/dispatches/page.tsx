@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatDate, type AdminDispatches } from "@haseef/shared";
+import { formatDate, type AdminDispatches, countOf } from "@haseef/shared";
 import { api } from "@/lib/session";
 
 const STATUS: Record<string, string> = {
@@ -51,7 +51,7 @@ export default function Dispatches() {
                 <td>{r.org_name}<div className="muted small">{r.target_type === "POLICY" ? "سياسة" : "ترخيص"}</div></td>
                 <td>{r.channel === "WHATSAPP" ? "واتساب" : "بريد"}</td>
                 <td><bdi dir="ltr">{r.recipient_address}</bdi></td>
-                <td>{r.kind === "MANUAL" ? "تذكير يدوي" : r.threshold_days === 0 ? "يوم الانتهاء" : `قبل ${r.threshold_days} يوم`}</td>
+                <td>{r.kind === "MANUAL" ? "تذكير يدوي" : r.threshold_days === 0 ? "يوم الانتهاء" : `قبل ${countOf(r.threshold_days, "يوم")}`}</td>
                 <td>{formatDate(r.due_date)}</td>
                 <td>
                   <span className="pill" data-tone={TONE[r.status] ?? "none"}>{STATUS[r.status] ?? r.status}</span>

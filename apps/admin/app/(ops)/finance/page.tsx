@@ -6,8 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   EXPENSE_CATEGORY, EXPENSE_FREQUENCY, INVOICE_KIND, PLAN_CYCLE, INVOICE_SOURCE, INVOICE_STATUS, PLAN_LABEL, periodRange, round2, sar, type GosiRate,
   type AdminOrg, type Expense, type ExpenseInput, type FinanceSummary, type HaseefProfile, type InvoiceRow, type PaymentPlan,
-  type FinanceStatement, type PaymentPlanDetail, type VatReturn,
-} from "@haseef/shared";
+  type FinanceStatement, type PaymentPlanDetail, type VatReturn, countOf } from "@haseef/shared";
 import { Dialog, ReasonDialog, fmtDateTime, useCan } from "@/components/ui";
 import { usePlanPrices } from "@/components/usePlanPrices";
 import { api } from "@/lib/session";
@@ -589,7 +588,7 @@ function Plans({ focus }: { focus: string | null }) {
               <td>{PLAN_LABEL[p.plan_tier] ?? p.plan_tier}<div className="muted small">{p.starts_on} ← {p.ends_on}</div></td>
               <td className="num">{sar(p.total_net)}</td>
               <td><span className="plan-progress" title={`${p.paid_count} من ${p.installments}`}><span style={{ inlineSize: `${(100 * p.paid_net) / p.total_net}%` }} /></span>
-                <div className="muted small">{p.paid_count} من {p.installments} أقساط</div></td>
+                <div className="muted small">{p.paid_count} من {countOf(p.installments, "قسط")}</div></td>
               <td className="num">{sar(p.paid_net)}</td>
               <td className="num"><b>{sar(p.remaining_net)}</b></td>
               <td>{p.next_due ?? "—"}{p.overdue_count > 0 && <span className="pill" data-tone="bad">متأخر</span>}</td>
@@ -653,7 +652,7 @@ function PlanDetail({ id, editor, onChange }: { id: string; editor: boolean; onC
                   <button className="link-btn" type="button" onClick={() => { setRef(""); setPay({ id: i.id, seq: i.seq }); }}>تسجيل الدفع</button>
                   <button className="link-btn" type="button" onClick={() => act(async () => {
                     const r = await api.admin.remindInstallment(d.id, i.id);
-                    return r.sent ? `أُرسل تذكير القسط ${i.seq} (${r.sent} رسالة) لمدير ${d.org_name}` : "لا يوجد مدير فعّال ببريد أو جوال لإرسال التذكير";
+                    return r.sent ? `أُرسل تذكير القسط ${i.seq} (${countOf(r.sent, "رسالة")}) لمدير ${d.org_name}` : "لا يوجد مدير فعّال ببريد أو جوال لإرسال التذكير";
                   })}>أرسل تذكيراً</button></>}</div></td>
               </tr>
             );

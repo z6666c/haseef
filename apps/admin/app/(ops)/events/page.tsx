@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { formatDate, type AnnualEvent, type AnnualEventInput } from "@haseef/shared";
+import { formatDate, type AnnualEvent, type AnnualEventInput, countOf } from "@haseef/shared";
 import { api } from "@/lib/session";
 
 const KIND: Record<string, string> = { NATIONAL: "وطنية", RELIGIOUS: "دينية", OCCASION: "مناسبة" };
@@ -26,7 +26,7 @@ export default function EventsAdminPage() {
     <>
       <h1>المناسبات السنوية</h1>
       <p className="muted">تقويم المناسبات الذي يراه كل العملاء، والعطل الرسمية التي تُستثنى من الغياب والإجازات. صباح يوم المناسبة (09:05) تُرسل تهنئة واتساب لمشتركي حصيف
-        إن فُعّل ذلك للمناسبة، ولموظفي المنشآت التي فعّلت التهاني ({d.orgs_enabled} منشأة). التواريخ الهجرية وفق أم القرى؛ عدّلها عند إعلان الرؤية.</p>
+        إن فُعّل ذلك للمناسبة، ولموظفي المنشآت التي فعّلت التهاني ({countOf(d.orgs_enabled, "منشأة")}). التواريخ الهجرية وفق أم القرى؛ عدّلها عند إعلان الرؤية.</p>
       {notice && <p className="notice" role="status">{notice}</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {!edit && <button className="btn" type="button" onClick={() => setEdit({ ...EMPTY })}>إضافة مناسبة</button>}
@@ -54,9 +54,9 @@ export default function EventsAdminPage() {
           <tr key={e.id} style={e.is_active ? undefined : { opacity: 0.55 }}>
             <td><b>{e.name}</b><div className="small muted">{KIND[e.kind]} · {e.code}</div></td>
             <td>{formatDate(e.event_date)}</td>
-            <td>{e.is_holiday ? `${e.holiday_days} يوم` : "—"}</td>
+            <td>{e.is_holiday ? countOf(e.holiday_days, "يوم") : "—"}</td>
             <td className="small">{e.greeting}<div className="muted">{e.notify_subscribers ? "تُرسل للمشتركين" : "لا تُرسل للمشتركين"}</div></td>
-            <td className="small">{e.sent_subscribers ?? 0} مشترك · {e.sent_employees ?? 0} موظف</td>
+            <td className="small">المشتركون {e.sent_subscribers ?? 0} · الموظفون {e.sent_employees ?? 0}</td>
             <td><button className="link-btn" type="button" onClick={() => setEdit({ id: e.id, code: e.code, name: e.name, event_date: e.event_date, kind: e.kind, is_holiday: e.is_holiday,
               holiday_days: e.holiday_days, greeting: e.greeting, notify_subscribers: e.notify_subscribers, is_active: e.is_active })}>تعديل</button></td>
           </tr>))}</tbody>
