@@ -17,7 +17,7 @@ $C run --rm --no-deps -T --entrypoint tar api czf - -C /app storage > "$files" 2
 echo "نسخة: $db ($(du -h "$db" | cut -f1))"
 
 if [ -n "${BACKUP_S3_BUCKET:-}" ]; then
-  docker run --rm -v "$PWD/backups:/b:ro" -e AWS_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_KEY" \
+  docker run --rm -v "$PWD/backups:/b:ro" -e AWS_ACCESS_KEY_ID="$BACKUP_S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$BACKUP_S3_SECRET_KEY" -e AWS_REQUEST_CHECKSUM_CALCULATION=when_required -e AWS_RESPONSE_CHECKSUM_VALIDATION=when_required \
     amazon/aws-cli --endpoint-url "$BACKUP_S3_ENDPOINT" s3 cp "/b/$(basename "$db")" "s3://$BACKUP_S3_BUCKET/db/" --only-show-errors
   echo "رُفعت إلى التخزين الخارجي"
 fi

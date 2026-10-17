@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-sans-arabic": "^5.0.0",
+    "@fontsource/plus-jakarta-sans": "^5.0.0",
     "@haseef/shared": "*",
     "next": "^15.0.0",
     "react": "^19.0.0",
