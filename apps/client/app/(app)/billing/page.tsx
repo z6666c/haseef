@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { INVOICE_KIND, PLAN_LABEL, formatDate, round2, sar, type BillingOverview } from "@haseef/shared";
+import { INVOICE_KIND, PLAN_LABEL, formatDate, round2, sar, type BillingOverview, countOf } from "@haseef/shared";
 import { PayPanel } from "@/components/PayPanel";
 import { api } from "@/lib/session";
 
@@ -41,8 +41,8 @@ export default function BillingPage() {
           <h2>السداد بالأقساط</h2>
           <div className="bill-kpis">
             <div><span>قيمة العقد</span><b>{sar(round2(p.total_net * vat))}</b><small>{sar(p.total_net)} قبل الضريبة</small></div>
-            <div data-tone="good"><span>المدفوع</span><b>{sar(round2(p.paid_net * vat))}</b><small>{p.paid_count} من {p.installments} أقساط</small></div>
-            <div><span>المتبقي</span><b>{sar(round2(p.remaining_net * vat))}</b><small>{p.installments - p.paid_count} أقساط</small></div>
+            <div data-tone="good"><span>المدفوع</span><b>{sar(round2(p.paid_net * vat))}</b><small>{p.paid_count} من {countOf(p.installments, "قسط")}</small></div>
+            <div><span>المتبقي</span><b>{sar(round2(p.remaining_net * vat))}</b><small>{countOf(p.installments - p.paid_count, "قسط")}</small></div>
             {next && <div data-tone={next.due_date < today ? "bad" : "warn"}><span>{next.due_date < today ? "قسط متأخر" : "القسط القادم"}</span>
               <b>{sar(round2(next.amount_net * vat))}</b><small>{next.due_date < today ? "كان مستحقاً" : "يستحق"} {formatDate(next.due_date)}</small></div>}
           </div>

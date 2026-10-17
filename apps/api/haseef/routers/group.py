@@ -21,6 +21,7 @@ from ..deps import Tenant, get_tenant
 from ..services import governance_service as gs
 from ..services.entitlements import has_feature, org_plan
 from .compliance import _audit
+from haseef.domain.arabic import count_of
 
 router = APIRouter(prefix="/group", tags=["group"])
 
@@ -115,7 +116,7 @@ def add_entity(body: EntityIn, t: Tenant = Depends(get_tenant)):
     if not has_feature(t.conn, t.org_id, "MULTI_ENTITY"):
         raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "المنشآت المتعددة متاحة في باقة كبار العملاء")
     if len(ids) >= MAX_ENTITIES:
-        raise HTTPException(status.HTTP_409_CONFLICT, f"الحد الأعلى {MAX_ENTITIES} منشأة في المجموعة. تواصل مع فريق حصيف للزيادة.")
+        raise HTTPException(status.HTTP_409_CONFLICT, f"الحد الأعلى {count_of(MAX_ENTITIES, 'منشأة')} في المجموعة. تواصل مع فريق حصيف للزيادة.")
     sub = t.conn.execute(text("""SELECT plan_tier, billing_cycle, ends_at, billing_status FROM subscriptions
         WHERE org_id = :o AND billing_status IN ('TRIAL','ACTIVE','PAST_DUE') LIMIT 1"""), {"o": t.org_id}).mappings().one()
     with platform_tx() as p:

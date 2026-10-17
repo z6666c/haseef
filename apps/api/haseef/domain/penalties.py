@@ -9,6 +9,7 @@
 """
 
 from __future__ import annotations
+from haseef.domain.arabic import count_of
 
 W = "WARNING"
 T80 = "TERMINATE_ART80"
@@ -80,7 +81,7 @@ def describe(p: str | float) -> str:
     p = float(p)
     if p < 1:
         return f"حسم {round(p * 100)}% من الأجر اليومي"
-    return "حسم أجر يوم" if p == 1 else "حسم أجر يومين" if p == 2 else f"حسم أجر {int(p) if p.is_integer() else p} أيام"
+    return "حسم أجر يوم" if p == 1 else "حسم أجر يومين" if p == 2 else f"حسم أجر {count_of(p, 'يوم')}"
 
 
 def suggest(bracket: str, occurrence: int, dwage: float, *, disrupted: bool = False) -> dict:

@@ -3,6 +3,7 @@
  * تُستخدم في نسخة العرض فقط (لا خادم)، ويختبر تطابقها مع نتيجة بايثون المصدّرة في demo-content.json.
  */
 
+import { countOf } from "./format.ts";
 export interface CkMember { full_name: string; position: string; is_independent: boolean; is_executive: boolean; term_ends_on: string | null }
 export interface CkBody { body_type: string; name: string; members: CkMember[] }
 export interface CkStandard {
@@ -34,7 +35,7 @@ function evaluate(rule: Record<string, unknown>, c: CkContext): [CkResult["statu
       if (!found.length) return ["FAIL", "لم يُضف هذا الجهاز إلى الهيكل بعد."];
       const need = (rule.min_members as number) ?? 0;
       if (need && !found.some((b) => b.members.length >= need))
-        return ["FAIL", `الجهاز موجود لكن لم يُسجَّل فيه ${need === 1 ? "عضو" : `${need} أعضاء`}.`];
+        return ["FAIL", `الجهاز موجود لكن لم يُسجَّل فيه ${need === 1 ? "عضو" : countOf(need, "عضو")}.`];
       return ["PASS", "موجود في الهيكل."];
     }
     case "body_or_position":
@@ -72,7 +73,7 @@ function evaluate(rule: Record<string, unknown>, c: CkContext): [CkResult["statu
       if (!cm) return ["FAIL", "اللجنة غير موجودة في الهيكل."];
       if (cm.members.length < (rule.min as number)) return ["FAIL", `أعضاء اللجنة ${cm.members.length} والحد الأدنى ${rule.min}.`];
       if (rule.no_executives && cm.members.some((m) => m.is_executive)) return ["FAIL", "في اللجنة عضو تنفيذي."];
-      return ["PASS", `اللجنة مشكلة من ${cm.members.length} أعضاء.`];
+      return ["PASS", `اللجنة مشكّلة من ${countOf(cm.members.length, "عضو")}.`];
     }
     case "terms_valid": {
       const expired = c.bodies.flatMap((b) => b.members).filter((m) => m.term_ends_on && m.term_ends_on < c.today).map((m) => m.full_name);
@@ -86,7 +87,7 @@ function evaluate(rule: Record<string, unknown>, c: CkContext): [CkResult["statu
       const v = c.profile[rule.field as string] as string | null;
       if (!v) return ["FAIL", "لم يُسجَّل التاريخ في ملف الحوكمة."];
       const m = months(v.slice(0, 10), c.today);
-      return [m <= (rule.months as number) ? "PASS" : "FAIL", `آخر مرة قبل ${m} شهراً.`];
+      return [m <= (rule.months as number) ? "PASS" : "FAIL", `آخر مرة قبل ${countOf(m, "شهر")}.`];
     }
     case "policy_active":
       return c.active_policy_types.has(rule.policy_type as string) ? ["PASS", "سياسة معتمدة وسارية."] : ["FAIL", "لا توجد سياسة معتمدة من هذا النوع."];

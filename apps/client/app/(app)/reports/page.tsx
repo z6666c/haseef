@@ -4,8 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ApiError, BODY_TYPE_LABEL, LEGAL_TYPE_LABEL, OBLIGATION_STATUS_LABEL, PILLAR_LABEL, PLAN_LABEL, POSITION_LABEL,
   PRIORITY_LABEL, RESOLUTION_STATUS_LABEL, RESOLUTION_TYPE_LABEL, RISK4_LABEL, SIZE_LABEL, scoreTone,
-  type BoardReport, type BoardReportResponse,
-} from "@haseef/shared";
+  type BoardReport, type BoardReportResponse, countOf } from "@haseef/shared";
 import { OrgChart } from "@/components/OrgChart";
 import { api } from "@/lib/session";
 
@@ -196,7 +195,7 @@ function Report({ r, notes, savedAt }: { r: BoardReport; notes: string | null; s
 
       <section className="report-sec">
         <h2><span>{sec()}</span> هيكل الحوكمة</h2>
-        <p className="small muted">{r.structure.length} جهة حوكمة و{membersTotal} عضواً.</p>
+        <p className="small muted">{countOf(r.structure.length, "جهة")} حوكمة، تضم {countOf(membersTotal, "عضو")}.</p>
         {r.structure.length > 0 && <OrgChart bodies={r.structure} title="الرسم الهيكلي" />}
         {r.structure.length === 0 ? <p className="empty">لم يُوثّق هيكل الحوكمة بعد.</p> : (
           <div className="report-bodies">
@@ -360,7 +359,7 @@ function Report({ r, notes, savedAt }: { r: BoardReport; notes: string | null; s
           <div data-tone={r.pdpl.dpia.high_residual ? "bad" : undefined}><dt>عالية الخطر المتبقي</dt><dd>{r.pdpl.dpia.high_residual}</dd></div>
         </dl>
         {(r.pdpl.requests.open > 0 || r.pdpl.incidents.open > 0) && (
-          <p className="small">مفتوح حالياً: {r.pdpl.requests.open} طلب و{r.pdpl.incidents.open} حادثة.</p>
+          <p className="small">مفتوح حالياً: طلبات {r.pdpl.requests.open}، وحوادث {r.pdpl.incidents.open}.</p>
         )}
       </section>
 

@@ -24,6 +24,7 @@ from ..security import hash_password
 from ..services import billing_service, governance_service as gs
 from ..services import invoicing
 from ..services.score_service import recompute
+from haseef.domain.arabic import count_of
 
 router = APIRouter(prefix="/admin", tags=["admin-actions"])
 
@@ -132,7 +133,7 @@ def create_org(body: OrgCreateIn, a: Admin = Depends(require_perm("orgs.manage")
             INSERT INTO subscriptions (org_id, plan_tier, billing_cycle, starts_at, ends_at, billing_status)
             VALUES (:o, :t, 'MONTHLY', :s, :e, 'TRIAL') RETURNING id"""),
             {"o": org_id, "t": body.plan_tier, "s": now, "e": now + timedelta(days=body.trial_days)}).scalar_one()
-        _billing_event(a, org_id, sub_id, "TRIAL_STARTED", tier=body.plan_tier, note=f"{body.trial_days} يوم")
+        _billing_event(a, org_id, sub_id, "TRIAL_STARTED", tier=body.plan_tier, note=count_of(body.trial_days, 'يوم'))
 
     uid, temp_pw = _find_or_create_user(c, body.admin_email, body.admin_full_name, body.admin_phone)
     c.execute(text("INSERT INTO memberships (org_id, user_id, role) VALUES (:o, :u, 'ORG_ADMIN')"), {"o": org_id, "u": uid})
@@ -270,7 +271,7 @@ def extend_trial(org_id: UUID, body: ExtendTrialIn, a: Admin = Depends(require_p
         raise HTTPException(status.HTTP_409_CONFLICT, "المنشأة ليست في فترة تجريبية")
     new_end = a.conn.execute(text("""UPDATE subscriptions SET ends_at = GREATEST(ends_at, now()) + make_interval(days => :d)
                                      WHERE id = :s RETURNING ends_at"""), {"d": body.days, "s": sub["id"]}).scalar_one()
-    _billing_event(a, org_id, sub["id"], "TRIAL_EXTENDED", note=f"{body.days} يوم")
+    _billing_event(a, org_id, sub["id"], "TRIAL_EXTENDED", note=count_of(body.days, 'يوم'))
     a.audit("ADMIN_EXTEND_TRIAL", "subscription", sub["id"], org_id, {"days": body.days, "ends_at": new_end})
     return {"ends_at": new_end}
 

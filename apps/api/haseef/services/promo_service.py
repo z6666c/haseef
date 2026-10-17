@@ -13,6 +13,7 @@ from sqlalchemy import Connection, text
 
 from ..messaging.base import MessageSender, SendError
 from .governance_service import riyadh_today
+from haseef.domain.arabic import count_of
 
 log = logging.getLogger(__name__)
 TEMPLATE = "haseef_promo_ending"
@@ -40,7 +41,7 @@ def send_reminders(conn_tx: Callable[[], ContextManager[Connection]], senders: d
     for r in rows:
         end = (r["paid_until"] + timedelta(hours=3)).date()
         days = (end - today).days
-        when = "اليوم" if days <= 0 else "غداً" if days == 1 else f"بعد {days} أيام"
+        when = "اليوم" if days <= 0 else "غداً" if days == 1 else f"بعد {count_of(days, 'يوم')}"
         with conn_tx() as conn:
             recs = _recipients(conn, r["org_id"])
         for rec in recs:

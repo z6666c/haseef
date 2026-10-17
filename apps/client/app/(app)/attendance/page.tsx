@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { WEEKDAYS, formatDate, sar, type AttendanceOverview, type AttendanceReport, type SiteInput } from "@haseef/shared";
+import { WEEKDAYS, formatDate, sar, type AttendanceOverview, type AttendanceReport, type SiteInput, countOf } from "@haseef/shared";
 import { api } from "@/lib/session";
 
 type Tab = "today" | "sites" | "report" | "settings";
@@ -55,7 +55,7 @@ export default function AttendancePage() {
           {ov.access.via === "PLAN" ? " مشمول في باقتك." : ov.access.paid_until ? ` اشتراكك ساري حتى ${formatDate(ov.access.paid_until.slice(0, 10))}.` : ""}</p>
       </header>
       {ov.access.via === "ADDON" && ov.access.paid_until && daysLeft(ov.access.paid_until) <= 5 && (
-        <p className="hint-box">اشتراك الموارد البشرية ينتهي {daysLeft(ov.access.paid_until) <= 0 ? "اليوم" : daysLeft(ov.access.paid_until) === 1 ? "غداً" : `بعد ${daysLeft(ov.access.paid_until)} أيام`}
+        <p className="hint-box">اشتراك الموارد البشرية ينتهي {daysLeft(ov.access.paid_until) <= 0 ? "اليوم" : daysLeft(ov.access.paid_until) === 1 ? "غداً" : `بعد ${countOf(daysLeft(ov.access.paid_until), "يوم")}`}
           ({formatDate(ov.access.paid_until.slice(0, 10))}). بعده يتوقف تسجيل الحضور وطلبات الإجازة وتبقى البيانات محفوظة.{" "}
           {ov.can_manage && <Link href="/billing">اشترك أو جدّد الآن</Link>}</p>
       )}
@@ -109,7 +109,7 @@ function TodayTab({ ov, act }: { ov: AttendanceOverview; act: Act }) {
             <td><b>{p.full_name}</b>{p.job_title && <div className="small muted">{p.job_title}</div>}</td>
             <td>{p.in_at ? <>
               <span className="status-chip" data-s={(p.late_minutes ?? 0) > 0 ? "PENDING" : "IN_PLACE"}>حضور {fmtTime(p.in_at)}</span>
-              {(p.late_minutes ?? 0) > 0 && <div className="small muted">تأخر {p.late_minutes} دقيقة</div>}
+              {(p.late_minutes ?? 0) > 0 && <div className="small muted">تأخر {countOf(p.late_minutes ?? 0, "دقيقة")}</div>}
               {p.out_at && <div className="small muted">انصراف {fmtTime(p.out_at)}</div>}</> : <span className="muted small">لم يسجّل</span>}</td>
             <td>{p.device_since ? <><span className="status-chip" data-s="IN_PLACE">مربوط</span><div className="small muted">{p.device_label ?? "جوال"} · منذ {formatDate(p.device_since.slice(0, 10))}</div></>
               : <span className="muted small">{p.has_link ? "أُرسل الرابط ولم يُربط" : "—"}</span>}</td>
@@ -237,7 +237,7 @@ function ReportTab() {
             <tbody>{rep.rows.map((r) => (
               <tr key={r.id}><td>{r.full_name}</td><td>{r.days_present}</td>
                 <td>{r.absent_days ? <span className="status-chip" data-s="PENDING">{r.absent_days}</span> : 0}</td>
-                <td>{r.late_days ? `${r.late_days} يوم · ${r.late_minutes} د` : "—"}</td>
+                <td>{r.late_days ? `${countOf(r.late_days, "يوم")} · ${r.late_minutes} د` : "—"}</td>
                 <td>{r.rejected} / {r.flagged}</td></tr>))}
               {rep.rows.length === 0 && <tr><td colSpan={5} className="muted">لا بيانات.</td></tr>}</tbody>
           </table>

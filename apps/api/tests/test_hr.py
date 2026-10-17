@@ -45,7 +45,7 @@ class SickTests(unittest.TestCase):
         self.assertEqual(hr.sick_split(0, 10), [(10, 1.0)])
         self.assertEqual(hr.sick_split(25, 10), [(5, 1.0), (5, 0.75)])
         self.assertEqual(hr.sick_split(85, 10), [(5, 0.75), (5, 0.0)])
-        self.assertEqual(hr.sick_note(25, 10), "5 يوم بأجر كامل، 5 يوم بثلاثة أرباع الأجر")
+        self.assertEqual(hr.sick_note(25, 10), "5 أيام بأجر كامل، 5 أيام بثلاثة أرباع الأجر")
 
     def test_backdate(self):
         p = hr.DEFAULT_POLICIES["SICK"]

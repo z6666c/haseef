@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from haseef.domain.arabic import count_of
 
 LEAVE_TYPES = ("ANNUAL", "REGULAR", "EMERGENCY", "SICK")
 LEAVE_LABEL = {"ANNUAL": "سنوية", "REGULAR": "اعتيادية", "EMERGENCY": "اضطرارية", "SICK": "مرضية"}
@@ -97,15 +98,15 @@ def validate_leave(*, leave_type: str, start: date, end: date, days: int, today:
         if start < earliest:
             return ("الإجازة الاضطرارية تُرفع خلال 3 أيام من بدايتها كحد أقصى" if leave_type == "EMERGENCY"
                     else f"الإجازة المرضية تُرفع خلال {SICK_BACKDATE_DAYS} أيام من بدايتها كحد أقصى" if leave_type == "SICK"
-                    else f"يجب رفع الطلب قبل {policy.get('min_notice_days') or 0} يوم على الأقل" if policy.get("min_notice_days") else "لا يمكن رفع إجازة بتاريخ مضى")
+                    else f"يجب رفع الطلب قبل {count_of(policy.get('min_notice_days') or 0, 'يوم')} على الأقل" if policy.get("min_notice_days") else "لا يمكن رفع إجازة بتاريخ مضى")
     mx = policy.get("max_days_per_request")
     if mx and days > mx:
-        return f"الحد الأقصى للطلب الواحد {mx} يوم"
+        return f"الحد الأقصى للطلب الواحد {count_of(mx, 'يوم')}"
     cap = policy.get("yearly_cap")
     if cap and used_this_year_type + days > cap:
-        return f"تجاوزت الحد السنوي ({cap} يوم) لهذا النوع؛ المتبقي {max(cap - used_this_year_type, 0)}"
+        return f"تجاوزت الحد السنوي ({count_of(cap, 'يوم')}) لهذا النوع؛ المتبقي {count_of(max(cap - used_this_year_type, 0), 'يوم')}"
     if is_paid and policy.get("from_balance") and days > balance:
-        return f"الرصيد غير كافٍ: المتبقي {fmt_days(balance)} يوم"
+        return f"الرصيد غير كافٍ: المتبقي {count_of(balance, 'يوم')}"
     return None
 
 
@@ -126,7 +127,7 @@ def sick_split(used_before: int, days: int) -> list[tuple[int, float]]:
 
 def sick_note(used_before: int, days: int) -> str:
     parts = {1.0: "بأجر كامل", 0.75: "بثلاثة أرباع الأجر", 0.0: "دون أجر"}
-    return "، ".join(f"{d} يوم {parts[r]}" for d, r in sick_split(used_before, days))
+    return "، ".join(f"{count_of(d, 'يوم')} {parts[r]}" for d, r in sick_split(used_before, days))
 
 
 def fmt_days(x: float) -> str:

@@ -8,6 +8,7 @@
  * الحدود: القواعد تلتقط الصياغات الشائعة فقط، وأرقام المواد تُراجع قانونياً قبل الإطلاق.
  */
 
+import { countOf } from "./format.ts";
 export type ContractKind = "LABOR_CONTRACT" | "PRIVACY_POLICY";
 export type FindingSeverity = "VIOLATION" | "WARNING";
 export type ContractVerdict = "COMPLIANT" | "CONTAINS_VIOLATIONS" | "HIGH_RISK";
@@ -161,11 +162,11 @@ function laborChecks(ss: string[], text: string, F: ContractFinding[], P: string
   if (prob) {
     const total = parseDurations(prob).filter((d) => d.unit !== "hour").reduce((a, d) => a + d.days, 0);
     if (total > 180) F.push({ id: "probation-max", severity: "VIOLATION", title: "فترة التجربة تتجاوز الحد النظامي", excerpt: clip(prob), law: `${LABOR} — المادة 53`,
-      explanation: `مجموع فترة التجربة في العقد نحو ${Math.round(total)} يوماً، والنظام يحدّها بـ 90 يوماً يجوز تمديدها باتفاق مكتوب على ألا تتجاوز 180 يوماً.`,
-      suggestion: "يخضع العامل لفترة تجربة مدتها تسعون يوماً، ويجوز باتفاق مكتوب بين الطرفين تمديدها على ألا يزيد مجموعها على مائة وثمانين يوماً، ولا تدخل فيها إجازتا عيدي الفطر والأضحى والإجازة المرضية." });
-    else if (total > 90 && !/تمديد|يمدد|تمدد|باتفاق/.test(prob)) F.push({ id: "probation-ext", severity: "WARNING", title: "فترة تجربة أطول من 90 يوماً دون نص على التمديد", excerpt: clip(prob), law: `${LABOR} — المادة 53`,
-      explanation: "الأصل 90 يوماً، والزيادة حتى 180 يوماً تكون تمديداً باتفاق مكتوب. اذكر صراحة أن المدة الزائدة تمديد متفق عليه.",
-      suggestion: "مدة التجربة تسعون يوماً، وقد اتفق الطرفان كتابةً على تمديدها ثلاثين يوماً إضافية." });
+      explanation: `مجموع فترة التجربة في العقد نحو ${countOf(Math.round(total), "يوم")}، والنظام بعد تعديلاته يحدّها بمئة وثمانين يوماً بحد أقصى.`,
+      suggestion: "يخضع العامل لفترة تجربة مدتها تسعون يوماً، ولا يجوز أن يتجاوز مجموعها مئة وثمانين يوماً، ولا تدخل فيها إجازتا عيدي الفطر والأضحى والإجازة المرضية." });
+    else if (/(?:لصاحب العمل|للطرف الأول|للشركة|للمنشأة)\s*(?:فقط|وحده|وحدها)/.test(prob)) F.push({ id: "probation-onesided", severity: "VIOLATION", title: "حق الإنهاء خلال التجربة لطرف واحد", excerpt: clip(prob), law: `${LABOR} — المادة 53`,
+      explanation: "بعد تعديلات نظام العمل يحق لكل من الطرفين إنهاء العقد خلال فترة التجربة، ولا يجوز قصر هذا الحق على أحدهما.",
+      suggestion: "ولكل من الطرفين إنهاء العقد خلال فترة التجربة دون تعويض أو مكافأة." });
     else P.push("فترة التجربة ضمن الحد النظامي");
   } else P.push("لا ينص العقد على فترة تجربة");
 
@@ -181,7 +182,7 @@ function laborChecks(ss: string[], text: string, F: ContractFinding[], P: string
       const { max, weekly } = over;
       hoursBad = true;
       F.push({ id: "hours", severity: "VIOLATION", title: "ساعات العمل تتجاوز الحد النظامي", excerpt: clip(s), law: `${LABOR} — المادة 98`,
-        explanation: `ساعات العمل المذكورة ${plural(max, "ساعات", "ساعة")} ${weekly ? "أسبوعياً" : "يومياً"}، والحد ثماني ساعات يومياً أو ثمان وأربعون ساعة أسبوعياً، وتخفض في رمضان للمسلمين.`,
+        explanation: `ساعات العمل المذكورة ${countOf(max, "ساعة")} ${weekly ? "أسبوعياً" : "يومياً"}، والحد ثماني ساعات يومياً أو ثمان وأربعون ساعة أسبوعياً، وتخفض في رمضان للمسلمين.`,
         suggestion: "ساعات العمل ثماني ساعات يومياً بحد أقصى ثمان وأربعين ساعة أسبوعياً، وما زاد عليها يُعد عملاً إضافياً بأجر إضافي." });
       break;
     }
@@ -214,7 +215,7 @@ function laborChecks(ss: string[], text: string, F: ContractFinding[], P: string
   if (nc) {
     const years = Math.max(0, ...parseDurations(nc).filter((d) => d.unit !== "hour").map((d) => d.days / 365));
     if (years > 2) F.push({ id: "noncompete-time", severity: "VIOLATION", title: "مدة عدم المنافسة تتجاوز سنتين", excerpt: clip(nc), law: `${LABOR} — المادة 83`,
-      explanation: `المدة المذكورة ${Number.isInteger(years) ? plural(years, "سنوات", "سنة") : `نحو ${Math.round(years * 10) / 10} سنة`}، والنظام يشترط ألا تزيد على سنتين من تاريخ انتهاء العلاقة، وأن تكون محددة زماناً ومكاناً ونوع عمل.`,
+      explanation: `المدة المذكورة ${Number.isInteger(years) ? countOf(years, "سنة") : `نحو ${Math.round(years * 10) / 10} سنة`}، والنظام يشترط ألا تزيد على سنتين من تاريخ انتهاء العلاقة، وأن تكون محددة زماناً ومكاناً ونوع عمل.`,
       suggestion: "يلتزم العامل بعد انتهاء العقد ولمدة سنة واحدة بعدم العمل لدى منافس مباشر في مجال [نوع النشاط] داخل مدينة [المدينة]، ولا يتجاوز ذلك ما يلزم لحماية مصالح صاحب العمل المشروعة." });
     else if (!years) F.push({ id: "noncompete-nodur", severity: "WARNING", title: "شرط عدم منافسة دون مدة محددة", excerpt: clip(nc), law: `${LABOR} — المادة 83`,
       explanation: "شرط عدم المنافسة يجب أن يكون مكتوباً ومحدداً بالزمان (سنتان حداً أقصى) والمكان ونوع العمل، وإلا كان عرضة للبطلان.",

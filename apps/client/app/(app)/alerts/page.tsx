@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   ALERT_CHANNEL_LABEL, DISPATCH_STATUS_LABEL, ORG_ROLE_LABEL, countDays, formatDate,
-  type AlertRuleView, type AlertTargetType, type AlertsOverview,
-} from "@haseef/shared";
+  type AlertRuleView, type AlertTargetType, type AlertsOverview, countOf } from "@haseef/shared";
 import { AlertPreview } from "@/components/AlertPreview";
 import { api } from "@/lib/session";
 
@@ -95,7 +94,7 @@ export default function AlertsPage() {
                    aria-label="استهلاك حصة واتساب" data-tone={pct >= 90 ? "bad" : pct >= 70 ? "warn" : "good"}>
                 <span style={{ width: `${pct}%` }} />
               </div>
-              <p className="small muted">المتبقي {wa.remaining ?? 0} رسالة. عند نفاد الحصة تستمر التنبيهات بالبريد الإلكتروني.</p>
+              <p className="small muted">المتبقي {countOf(wa.remaining ?? 0, "رسالة")}. عند نفاد الحصة تستمر التنبيهات بالبريد الإلكتروني.</p>
             </>
           )}
         </div>

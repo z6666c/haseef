@@ -17,6 +17,7 @@ from uuid import UUID
 from sqlalchemy import Connection, text
 
 from ..domain.finance import invoice_number, line, r2, zatca_tlv
+from haseef.domain.arabic import count_of
 
 PLAN_NAME = {"ESSENTIAL": "باقة الأساس", "PROFESSIONAL_GRC": "باقة الحوكمة والنمو", "ENTERPRISE": "باقة كبار العملاء"}
 TOPIC_NAME = {"CORPORATE": "الشركات والحوكمة", "CONTRACTS": "العقود التجارية", "LABOR": "العمل والموارد البشرية",
@@ -72,7 +73,7 @@ def invoice_subscription_payment(conn: Connection, *, billing_event_id: int, use
     ev = conn.execute(text("""SELECT org_id, plan_tier, amount_sar, period_months, reference FROM billing_events WHERE id = :e"""),
                       {"e": billing_event_id}).mappings().one()
     months = ev["period_months"]
-    desc = f"اشتراك {PLAN_NAME.get(ev['plan_tier'], ev['plan_tier'])} — {'سنة' if months == 12 else f'{months} شهر' if months > 2 else 'شهر'}"
+    desc = f"اشتراك {PLAN_NAME.get(ev['plan_tier'], ev['plan_tier'])} — {'سنة' if months == 12 else count_of(months, 'شهر') if months > 1 else 'شهر'}"
     return _insert(conn, kind="INVOICE", source="SUBSCRIPTION", org_id=ev["org_id"], buyer=_buyer(conn, ev["org_id"]),
                    lines=[line(description or desc, 1, ev["amount_sar"])], user_id=user_id, billing_event_id=billing_event_id,
                    plan_cycle=plan_cycle or ("MONTHLY" if months == 1 else "YEARLY"),
@@ -88,7 +89,7 @@ def invoice_consultation(conn: Connection, *, consultation_id: UUID, user_id, re
                      {"c": consultation_id}).mappings().one()
     price = c["price"]
     hours = c["duration_minutes"] / 60
-    desc = f"استشارة قانونية — {TOPIC_NAME.get(c['topic'], c['topic'])} ({hours:g} ساعة{'، عاجلة' if c['urgent'] else ''})"
+    desc = f"استشارة قانونية — {TOPIC_NAME.get(c['topic'], c['topic'])} ({count_of(hours, 'ساعة')}{'، عاجلة' if c['urgent'] else ''})"
     ln = line(desc, 1, price["subtotal"])
     return _insert(conn, kind="INVOICE", source="CONSULTATION", org_id=c["org_id"], buyer=_buyer(conn, c["org_id"]),
                    lines=[ln], user_id=user_id, consultation_id=consultation_id, payment_reference=reference)

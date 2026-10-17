@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { INTEREST_LABEL, LEGAL_TYPE_LABEL, type PublicPricing, type TrialInput } from "@haseef/shared";
+import { INTEREST_LABEL, LEGAL_TYPE_LABEL, type PublicPricing, type TrialInput, countOf } from "@haseef/shared";
 import { LegalFooter } from "@/components/LegalDoc";
 import { Logo } from "@/components/Logo";
 import { api } from "@/lib/session";
@@ -38,7 +38,7 @@ const FAQ = [
   { q: "أين تُحفظ بيانات منشأتي؟", a: "داخل المملكة العربية السعودية، معزولة لكل منشأة على مستوى قاعدة البيانات، مع سجل تدقيق لا يُعدَّل." },
   { q: "هل النماذج بديل عن المحامي؟", a: "النماذج نقطة بداية مهنية تختصر الوقت والتكلفة، وتُكيَّف مع نشاطك. للقرارات الحساسة ننصح بمراجعة محامٍ، ويمكنك ذلك من داخل المنصة." },
   { q: "هل يمكنني الإلغاء في أي وقت؟", a: "نعم. الاشتراك شهري أو سنوي بخصم شهرين، ويمكن الإلغاء قبل التجديد دون رسوم إضافية." },
-  { q: "هل يناسب حصيف مكاتب المحاسبة والاستشارات؟", a: "نعم. يدير المستشار عدة منشآت بحساب واحد، ونوفر برنامج شراكة للمكاتب." },
+  { q: "هل يناسب حصيف مكاتب المحاسبة والاستشارات؟", a: "نعم. يدير المستشار عدة منشآت بحساب واحد، ونرحّب بالشراكة مع المكاتب." },
 ];
 
 const EMPTY: TrialInput = { full_name: "", company_name: "", email: "", phone_number: null, legal_type: null, employees_range: null,
@@ -61,7 +61,7 @@ export default function WelcomePage() {
     const bot = extras.find((a) => a.code === "WA_BOT"), bundle = extras.find((a) => a.code === "STAFF_BUNDLE");
     const out: string[] = [];
     if (hr.length) out.push(hr.some((a) => a.included_tiers.includes(tier)) ? "الموارد البشرية: مشمولة"
-      : `الموارد البشرية: من ${Math.min(...hr.map((a) => a.monthly_price))} ريال/شهر (حتى ${Math.max(...hr.map((a) => a.limits.members ?? 0))} موظفاً)`);
+      : `الموارد البشرية: من ${Math.min(...hr.map((a) => a.monthly_price))} ريال/شهر (حتى ${countOf(Math.max(...hr.map((a) => a.limits.members ?? 0)), "موظف")})`);
     if (bot) out.push(bot.included_tiers.includes(tier) ? "بوت الموظفين: مشمول" : `بوت الموظفين: ${bot.monthly_price} ريال/شهر`);
     if (bundle && !bundle.included_tiers.includes(tier)) out.push(`أو حزمة الموظفين (الاثنين): ${bundle.monthly_price} ريال/شهر`);
     return out;
@@ -135,7 +135,7 @@ export default function WelcomePage() {
       </section>
 
       <section className="lp-stats" aria-label="أرقام">
-        <div><b>1.7 مليون</b><span>سجل تجاري قائم في المملكة، كلها لها مواعيد والتزامات</span></div>
+        <div><b>1.9 مليون</b><span>سجل تجاري قائم في المملكة، لكلٍّ منها مواعيد والتزامات</span></div>
         <div><b>33</b><span>التزاماً نظامياً نتابعها حسب نوع منشأتك</span></div>
         <div><b>72 ساعة</b><span>مهلة الإبلاغ عن تسرب البيانات — والعدّاد جاهز</span></div>
         <div><b>73</b><span>نموذجاً كاملاً جاهزاً للتبني</span></div>
@@ -189,7 +189,7 @@ export default function WelcomePage() {
             سجل تدقيق لا يُعدَّل ولا يُحذف، وصلاحيات مفصولة داخل فريقنا.</p>
         </div>
         <ul>
-          <li>عزل كامل بين المنشآت</li><li>سجل تدقيق دائم</li><li>صلاحيات حسب الدور لفريقك</li><li>متوافق مع نظام حماية البيانات الشخصية</li>
+          <li>عزل كامل بين المنشآت</li><li>سجل تدقيق دائم</li><li>صلاحيات حسب الدور لفريقك</li><li>مصمَّم وفق نظام حماية البيانات الشخصية</li>
         </ul>
       </section>
 

@@ -2500,7 +2500,7 @@
     {
      "code": "STR_FS_FILED",
      "status": "PASS",
-     "message": "آخر مرة قبل 4 شهراً.",
+     "message": "آخر مرة قبل 4 أشهر.",
      "level": "MANDATORY",
      "severity": "high",
      "title": "إيداع القوائم المالية السنوية",
@@ -2539,7 +2539,7 @@
     {
      "code": "LLC_ANNUAL_PARTNERS",
      "status": "PASS",
-     "message": "آخر مرة قبل 4 شهراً.",
+     "message": "آخر مرة قبل 4 أشهر.",
      "level": "RECOMMENDED",
      "severity": "medium",
      "title": "اجتماع سنوي للشركاء أو المساهمين للمصادقة على القوائم المالية",

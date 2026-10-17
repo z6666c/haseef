@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PLAN_LABEL, formatDate, round2, sar, type CheckoutOptions } from "@haseef/shared";
+import { PLAN_LABEL, formatDate, round2, sar, type CheckoutOptions, countOf } from "@haseef/shared";
 import { api } from "@/lib/session";
 
 const accessOf = (o: CheckoutOptions, code: string) => o.addon_access?.[code] ?? (code === "WA_BOT" ? o.bot : code === "ATTENDANCE" ? o.attendance : undefined);
@@ -55,7 +55,7 @@ export function PayPanel() {
       {o.promo?.active && o.promo.eligible && (
         <div className="panel promo-card">
           <div><b>🎁 {o.promo.name}</b>
-            <p className="small muted" style={{ margin: "4px 0 0" }}>يُفعَّل لك «{o.promo.tier_name}» مجاناً لمدة {o.promo.free_months === 1 ? "شهر" : `${o.promo.free_months} أشهر`} حسب عدد موظفيك ({o.employees}).
+            <p className="small muted" style={{ margin: "4px 0 0" }}>يُفعَّل لك «{o.promo.tier_name}» مجاناً لمدة {o.promo.free_months === 1 ? "شهر" : countOf(o.promo.free_months, "شهر")} حسب عدد موظفيك ({o.employees}).
               بعدها تختار الاشتراك أو تتوقف بلا التزام. المتبقي {o.promo.remaining} من {o.promo.max ?? 50}.</p></div>
           <button className="btn btn-action" type="button" disabled={!o.can_pay || !!busy} onClick={() => claim(o.promo!.code)}>{busy === "promo" ? "جارٍ التفعيل…" : "فعّل الشهر المجاني"}</button>
         </div>
@@ -104,7 +104,7 @@ export function PayPanel() {
                 <>
                   <p className="price">{sar(round2(ad.monthly_price * vat))} <small>شهرياً شامل الضريبة</small></p>
                   <p className="small muted">{acc.via === "ADDON" && acc.paid_until ? `مفعّل حتى ${formatDate(acc.paid_until.slice(0, 10))}.` : ADDON_BLURB[ad.code]}
-                    {" "}{ad.limits.questions ? `حتى ${ad.limits.members ?? "∞"} موظفاً و${ad.limits.questions} سؤال شهرياً.` : ad.limits.members ? `حتى ${ad.limits.members} موظفاً.` : ""}
+                    {" "}{ad.limits.questions ? `حتى ${ad.limits.members ? countOf(ad.limits.members, "موظف") : "عدد غير محدود من الموظفين"} و${countOf(ad.limits.questions, "سؤال")} شهرياً.` : ad.limits.members ? `حتى ${countOf(ad.limits.members, "موظف")}.` : ""}
                     {!fits && ad.code.startsWith("ATTENDANCE") && ` عندك ${emp} موظفاً، فالشريحة الأكبر أنسب.`}</p>
                   <button className="btn" type="button" disabled={!o.can_pay || !!busy}
                     onClick={() => go(k, { purpose: "ADDON", addon_code: ad.code })}>{busy === k ? "جارٍ التحويل…" : acc.via ? "مدّد شهراً" : "اشترك"}</button>

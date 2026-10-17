@@ -2,6 +2,7 @@
 // يُفعّلها التطبيق بتمرير demoFetch إلى createApi عند NEXT_PUBLIC_DEMO=1 وقت البناء. لا شيء هنا يصل لقاعدة بيانات؛ التغييرات تبقى في الصفحة
 // وتختفي بإعادة التحميل.
 
+import { countOf } from "./format.ts";
 import type { ComplianceItem, Dashboard, Me, ScoreReason } from "./types.ts";
 import CONTENT from "./demo-content.json" with { type: "json" };
 import { runCheck, type CkStandard } from "./governanceCheck.ts";
@@ -88,12 +89,12 @@ function dashboard(): Dashboard {
     if (i.status === "EXPIRED") {
       const p = i.risk_level === "CRITICAL" ? 20 : 12;
       operational -= p;
-      reasons.push({ pillar: "OPERATIONAL", severity: "critical", text: `انتهت صلاحية ${i.title}`, points: p, points_label: `${p} نقطة` });
+      reasons.push({ pillar: "OPERATIONAL", severity: "critical", text: `انتهت صلاحية ${i.title}`, points: p, points_label: countOf(p, "نقطة") });
     } else if (i.status === "EXPIRING_SOON") {
       const p = i.days_remaining <= 7 ? 5 : 2;
       operational -= p;
-      const when = i.days_remaining === 0 ? "اليوم" : `خلال ${i.days_remaining} أيام`;
-      reasons.push({ pillar: "OPERATIONAL", severity: "medium", text: `تنتهي صلاحية ${i.title} ${when}`, points: p, points_label: p <= 10 && p >= 3 ? `${p} نقاط` : `${p} نقطة` });
+      const when = i.days_remaining === 0 ? "اليوم" : `خلال ${countOf(i.days_remaining, "يوم")}`;
+      reasons.push({ pillar: "OPERATIONAL", severity: "medium", text: `تنتهي صلاحية ${i.title} ${when}`, points: p, points_label: countOf(p, "نقطة") });
     }
   }
   operational = Math.max(0, operational);
@@ -600,7 +601,7 @@ function consultationInvoice(c: { id: string; topic: string; duration_minutes: n
   if (invoicesDemo.some((i) => i.consultation_id === c.id && i.kind === "INVOICE")) return null;
   const topic = LEGAL_RATES.find((r) => r.topic === c.topic)?.title ?? c.topic;
   return issueInvoice({ source: "CONSULTATION", org: orgs.find((o) => o.id === ORG_A) ?? null, ref, consultation_id: c.id, at,
-    lines: [invoiceLine(`استشارة قانونية — ${topic} (${c.duration_minutes / 60} ساعة${c.urgent ? "، عاجلة" : ""})`, 1, c.price.subtotal)] });
+    lines: [invoiceLine(`استشارة قانونية — ${topic} (${countOf(c.duration_minutes / 60, "ساعة")}${c.urgent ? "، عاجلة" : ""})`, 1, c.price.subtotal)] });
 }
 function voidInvoice(inv: DemoInvoice, reason: string) {
   if (inv.kind !== "INVOICE") throw new DemoError(404, "الفاتورة غير موجودة");
@@ -1454,7 +1455,7 @@ function growthRoute(method: string, p: string, body: Record<string, unknown>): 
     if (String(body.full_name ?? "").trim().length < 2) throw new DemoError(422, "اكتب اسم الموظف");
     if (botMembers.some((x) => x.phone === phone && x.status !== "REMOVED")) throw new DemoError(409, "هذا الرقم مضاف مسبقاً");
     const lim = (botAccess().limits as { members?: number | null }).members;
-    if (lim != null && botMembers.filter((x) => x.status !== "REMOVED").length >= lim) throw new DemoError(409, `بلغت الحد (${lim} موظفاً) في اشتراكك الحالي`);
+    if (lim != null && botMembers.filter((x) => x.status !== "REMOVED").length >= lim) throw new DemoError(409, `بلغت الحد (${countOf(lim, "موظف")}) في اشتراكك الحالي`);
     const x: DemoBotMember = { id: uid(), full_name: String(body.full_name), phone, status: "INVITED", joined_via: "INVITE", consent_at: null, created_at: new Date().toISOString(), employee_id: (body.employee_id as string) ?? null };
     botMembers.push(x); return { id: x.id };
   }
@@ -1642,7 +1643,7 @@ function attendanceRoute(method: string, p: string, q: URLSearchParams, body: Re
     const e = employeesDemo.find((x) => x.id === m![1] && x.is_active); if (!e) throw new DemoError(404, "الموظف غير موجود");
     if (m[2] === "device") { attDevices.delete(e.id); return undefined; }
     const lim = (addonAccess("ATTENDANCE").limits as { members?: number | null }).members;
-    if (lim != null && !attLinks.has(e.id) && attLinks.size >= lim) throw new DemoError(409, `بلغت الحد (${lim} موظفاً) في اشتراك الحضور`);
+    if (lim != null && !attLinks.has(e.id) && attLinks.size >= lim) throw new DemoError(409, `بلغت الحد (${countOf(lim, "موظف")}) في اشتراك الحضور`);
     attLinks.add(e.id); return { url: attLinkUrl(e.id) };
   }
   if (p === "/attendance/report") {
@@ -1831,7 +1832,7 @@ function createNoticeDemo(b: Record<string, unknown>) {
     const e = hrEmp(late.employee_id); const day = riyadhIso(new Date(new Date(late.at).getTime() + 3 * 3600e3)).slice(0, 10);
     const fromStart = (late.late_minutes ?? 0) + attSettings.grace_minutes;
     noticesDemo.push({ id: uid(), employee_id: e.id, kind: "LATE", nature: "WARNING", bracket: lateBracket(fromStart), occurrence: 1, disrupted: false,
-      incident_date: day, description: `تأخر ${fromStart} دقيقة عن بداية الدوام يوم ${day}`,
+      incident_date: day, description: `تأخر ${countOf(fromStart, "دقيقة")} عن بداية الدوام يوم ${day}`,
       amount: 0, payroll_month: monthOf(day), status: "OBJECTED",
       seen_at: ts(-2), objection_text: "تأخرت بسبب حادث مروري على الطريق، ومعي إثبات من نجم.", objected_at: ts(-1), decision_note: null, decided_at: null,
       created_at: ts(-3), leave_request_id: null });
@@ -1906,15 +1907,15 @@ function deductionsDemo(month: string) {
     const dw = dwOf(ev.e), notes: string[] = [];
     let description: string, wage: DeductionSuggestion["wage"], bracket: Bracket | null;
     if (ev.kind === "LATE") {
-      description = `تأخر ${ev.fromStart} دقيقة عن بداية الدوام يوم ${ev.d}`;
+      description = `تأخر ${countOf(ev.fromStart ?? 0, "دقيقة")} عن بداية الدوام يوم ${ev.d}`;
       const amt = lateAmount(ev.late!, dw, workMinutes());
-      wage = amt > 0 ? { amount: amt, label: `أجر ${ev.late} دقيقة بعد السماحية` } : null;
+      wage = amt > 0 ? { amount: amt, label: `أجر ${countOf(ev.late ?? 0, "دقيقة")} بعد السماحية` } : null;
       bracket = lateBracket(ev.fromStart!);
     } else {
       const days = ev.days!;
       description = ev.kind === "ABSENCE"
-        ? (days === 1 ? `غياب يوم ${ev.d} دون إجازة أو تسجيل حضور` : `غياب ${days} أيام عمل متصلة من ${ev.d} إلى ${ev.to} دون إجازة أو تسجيل حضور`)
-        : `تأخر ${days} يوم عمل عن المباشرة بعد الإجازة ال${LEAVE_LABEL[ev.leave!.leave_type]} (انتهت ${ev.leave!.end_date})`;
+        ? (days === 1 ? `غياب يوم ${ev.d} دون إجازة أو تسجيل حضور` : `غياب متصل لمدة ${countOf(days, "يوم")} عمل من ${ev.d} إلى ${ev.to} دون إجازة أو تسجيل حضور`)
+        : `تأخر عن المباشرة بعد الإجازة ال${LEAVE_LABEL[ev.leave!.leave_type]} (انتهت ${ev.leave!.end_date}) بمقدار ${countOf(days, "يوم")} عمل`;
       wage = { amount: round2(days * dw), label: `أجر ${days} ${days === 1 ? "يوم" : "أيام"} غياب` };
       bracket = absenceBracket(days);
       if (days >= 10) notes.push("بلغ الغياب المتصل 10 أيام: يلزم إنذار كتابي قبل أي فصل وفق المادة 80 عند تجاوز 15 يوماً.");
@@ -1987,7 +1988,7 @@ function hrPublicRoute(method: string, p: string, body: Record<string, unknown>)
   const n = noticesDemo.find((x) => x.id === m[5] && x.employee_id === e.id); if (!n) throw new DemoError(404, "الإشعار غير موجود");
   if (n.status !== "ISSUED") throw new DemoError(409, "لا يمكن الاعتراض على هذا الإشعار الآن");
   if (String(body.objection ?? "").trim().length < 5) throw new DemoError(422, "اكتب سبب الاعتراض");
-  if (Date.now() - new Date(n.created_at).getTime() > hrSettingsDemo.objection_days * 864e5) throw new DemoError(409, `انتهت مهلة الاعتراض (${hrSettingsDemo.objection_days} يوماً)`);
+  if (Date.now() - new Date(n.created_at).getTime() > hrSettingsDemo.objection_days * 864e5) throw new DemoError(409, `انتهت مهلة الاعتراض (${countOf(hrSettingsDemo.objection_days, "يوم")})`);
   Object.assign(n, { status: "OBJECTED", objection_text: String(body.objection), objected_at: new Date().toISOString() });
   return { ok: true };
 }
@@ -2061,7 +2062,7 @@ function hrRoute(method: string, p: string, q: URLSearchParams, body: Record<str
         const pol = hrPoliciesDemo[l.leave_type];
         if (pol.pay_mode !== "CHOICE") throw new DemoError(422, "سياسة هذا النوع لا تسمح بتغيير الأجر");
         if (body.is_paid && pol.from_balance) { const b = balanceOf(l.employee_id, Number(l.start_date.slice(0, 4))).balance;
-          if (l.days > b) throw new DemoError(422, `الرصيد غير كافٍ: المتبقي ${fmtDays(b)} يوم`); }
+          if (l.days > b) throw new DemoError(422, `الرصيد غير كافٍ: المتبقي ${countOf(b, "يوم")}`); }
         l.is_paid = body.is_paid;
       }
       Object.assign(l, { status: body.approve ? "APPROVED" : "REJECTED", decided_at: new Date().toISOString(), decision_note: (body.note as string) || null });
@@ -2103,14 +2104,14 @@ function hrBotReply(member: DemoBotMember | null, what: string): string {
   if (what === "balance") {
     const b = balanceOf(eid, Number(hrToday().slice(0, 4)));
     const pend = leavesDemo.filter((l) => l.employee_id === eid && l.status === "PENDING").length;
-    return `رصيد إجازتك السنوية لعام ${b.year}: ${fmtDays(b.balance)} يوم\n(الاستحقاق ${b.entitlement}، المستخدم ${b.used}${b.adjustments ? `، تعديلات ${fmtDays(b.adjustments)}` : ""})`
-      + (pend ? `\nلديك ${pend} طلب بانتظار القرار.` : "") + "\nلرفع إجازة اكتب «إجازة».";
+    return `رصيد إجازتك السنوية لعام ${b.year}: ${countOf(b.balance, "يوم")}\n(الاستحقاق ${b.entitlement}، المستخدم ${b.used}${b.adjustments ? `، تعديلات ${fmtDays(b.adjustments)}` : ""})`
+      + (pend ? `\nبانتظار القرار: ${countOf(pend, "طلب")}.` : "") + "\nلرفع إجازة اكتب «إجازة».";
   }
   attLinks.add(eid);
   const url = `${attLinkUrl(eid)}&tab=${what === "notices" ? "notices" : "leave"}`;
   if (what === "notices") {
     const n = noticesDemo.filter((x) => x.employee_id === eid && x.status === "ISSUED").length;
-    return (n ? `لديك ${n} إشعار خصم قائم.` : "لا توجد إشعارات خصم قائمة.") + `\nللاطلاع أو الاعتراض (لا تشارك الرابط):\n${url}`;
+    return (n ? `إشعارات الخصم القائمة: ${n}.` : "لا توجد إشعارات خصم قائمة.") + `\nللاطلاع أو الاعتراض (لا تشارك الرابط):\n${url}`;
   }
   return `رابط الإجازات الخاص بك (لا تشاركه): ارفع إجازة سنوية أو اعتيادية أو اضطرارية أو مرضية، أو سجّل مباشرتك بعد العودة:\n${url}`;
 }
@@ -2244,7 +2245,7 @@ function route(method: string, path: string, body: Record<string, unknown>, toke
       if (m[2] === "extend-trial") {
         if (s.billing_status !== "TRIAL") throw new DemoError(409, "المنشأة ليست في فترة تجريبية");
         s.ends_at = new Date(new Date(s.ends_at).getTime() + Number(body.days) * DAY).toISOString();
-        o.billing.unshift({ event_type: "TRIAL_EXTENDED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: `${body.days} يوماً`, created_at: now, actor: actor.name });
+        o.billing.unshift({ event_type: "TRIAL_EXTENDED", plan_tier: s.plan_tier, amount_sar: null, period_months: null, reference: null, note: countOf(Number(body.days), "يوم"), created_at: now, actor: actor.name });
         log("ADMIN_EXTEND_TRIAL", o, { days: body.days }); return { ends_at: s.ends_at };
       }
       if (m[2] === "payment") {

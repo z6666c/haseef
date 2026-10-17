@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import {
   KIND_LABEL, LEAVE_LABEL, PAY_MODE_LABEL, LEAVE_STATUS, LEAVE_TYPES, NOTICE_STATUS, fmtDays, formatDate, sar,
   NATURE_LABEL, WAGE_BASE_LABEL, type DeductionKind, type Nature, type NoticeInput, type PayMode, type WageBase, type DeductionSuggestion, type HrDeductions, type HrOverview, type LeaveAttachment, type LeaveRow, type LeaveType,
+  countOf,
 } from "@haseef/shared";
 import { AttachPicker } from "@/components/AttachPicker";
 import { api } from "@/lib/session";
@@ -75,7 +76,7 @@ function HrInner() {
       </header>
       {ov.access.via === "ADDON" && ov.access.paid_until && (() => {
         const d = Math.ceil((new Date(ov.access.paid_until).getTime() - Date.now()) / 86_400_000);
-        return d <= 5 ? <p className="hint-box">اشتراك الموارد البشرية ينتهي {d <= 0 ? "اليوم" : d === 1 ? "غداً" : `بعد ${d} أيام`} ({formatDate(ov.access.paid_until.slice(0, 10))}).
+        return d <= 5 ? <p className="hint-box">اشتراك الموارد البشرية ينتهي {d <= 0 ? "اليوم" : d === 1 ? "غداً" : `بعد ${countOf(d, "يوم")}`} ({formatDate(ov.access.paid_until.slice(0, 10))}).
           بعده تتوقف طلبات الإجازة وإشعارات الخصم وتبقى البيانات محفوظة. {ov.can_manage && <Link href="/billing">اشترك أو جدّد الآن</Link>}</p> : null;
       })()}
       <dl className="obl-stats labor-stats">
@@ -121,7 +122,7 @@ function LeaveCells({ l, canView }: { l: LeaveRow; canView: boolean }) {
   return (
     <>
       <td><b>{l.full_name}</b><div className="small muted">{SRC[l.source]}</div></td>
-      <td>{l.label}{l.is_paid === false && <span className="tag tag-quiet">بدون أجر</span>}<div className="small muted">{l.days} يوم{l.pay_note ? ` · ${l.pay_note}` : ""}</div>{l.medical_ref && <div className="small muted">رقم التقرير: {l.medical_ref}</div>}
+      <td>{l.label}{l.is_paid === false && <span className="tag tag-quiet">بدون أجر</span>}<div className="small muted">{countOf(l.days, "يوم")}{l.pay_note ? ` · ${l.pay_note}` : ""}</div>{l.medical_ref && <div className="small muted">رقم التقرير: {l.medical_ref}</div>}
         {l.has_attachment ? (canView ? <ViewAttachment l={l} /> : <div className="small muted">📎 تقرير مرفق</div>)
           : l.leave_type === "SICK" && <div className="small" style={{ color: "var(--amber, #b45309)" }}>بلا تقرير مرفق</div>}</td>
       <td className="small">{formatDate(l.start_date)} ← {formatDate(l.end_date)}{l.reason && <div className="muted">{l.reason}</div>}</td>
@@ -189,12 +190,12 @@ function RequestsTab({ ov, act }: { ov: HrOverview; act: Act }) {
             if (await act(() => api.hrDecideLeave(decide.l.id, { approve: decide.approve, note: note || null,
               is_paid: decide.approve && canChoose(decide.l) ? dPaid : null }), decide.approve ? `اعتُمدت إجازة ${decide.l.full_name}` : `رُفض طلب ${decide.l.full_name}`)) setDecide(null); }}>
             <h2>{decide.approve ? "اعتماد" : "رفض"} إجازة {decide.l.full_name}</h2>
-            <p className="small">{decide.l.label} · {decide.l.days} يوم · {formatDate(decide.l.start_date)} ← {formatDate(decide.l.end_date)}
+            <p className="small">{decide.l.label} · {countOf(decide.l.days, "يوم")} · {formatDate(decide.l.start_date)} ← {formatDate(decide.l.end_date)}
               {" · "}طلبها {decide.l.is_paid ? "مدفوعة" : "بدون أجر"}</p>
             {decide.approve && canChoose(decide.l) && (
               <fieldset className="field"><legend>اعتمادها</legend>
                 <label className="checks-inline"><input type="radio" name="dp" checked={dPaid} onChange={() => setDPaid(true)} /> مدفوعة
-                  {ov.policies.find((p) => p.leave_type === decide.l.leave_type)?.from_balance ? ` (رصيده ${fmtDays(ov.people.find((x) => x.id === decide.l.employee_id)?.balance ?? 0)} يوم)` : ""}</label>
+                  {ov.policies.find((p) => p.leave_type === decide.l.leave_type)?.from_balance ? ` (رصيده ${countOf(ov.people.find((x) => x.id === decide.l.employee_id)?.balance ?? 0, "يوم")})` : ""}</label>
                 <label className="checks-inline"><input type="radio" name="dp" checked={!dPaid} onChange={() => setDPaid(false)} /> بدون أجر</label>
               </fieldset>)}
             <div className="field"><label htmlFor="dn">ملاحظة للموظف {decide.approve ? "(اختياري)" : ""}</label>
@@ -218,7 +219,7 @@ function ReturnRow({ l, ov, act }: { l: LeaveRow; ov: HrOverview; act: Act }) {
       <td className="small">انتهت {formatDate(l.end_date)}</td>
       <td>
         {l.return_submitted_at ? <div className="small">أبلغ بالمباشرة: <b>{formatDate(l.return_date!)}</b></div> : <div className="small muted">لم يسجّل مباشرته بعد</div>}
-        {l.late_return_days > 0 && <div className="small" style={{ color: "var(--danger, #b91c1c)" }}>تأخر {l.late_return_days} يوم عمل</div>}
+        {l.late_return_days > 0 && <div className="small" style={{ color: "var(--danger, #b91c1c)" }}>تأخر {countOf(l.late_return_days, "يوم")} عمل</div>}
         {ov.can_manage && <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4, flexWrap: "wrap" }}>
           <input type="date" aria-label="تاريخ المباشرة" value={d} min={l.start_date} onChange={(e) => setD(e.target.value)} style={{ maxWidth: 160 }} />
           <button className="btn btn-action btn-xs" type="button" onClick={() => act(() => api.hrConfirmReturn(l.id, d), `أُكدت مباشرة ${l.full_name}`)}>تأكيد المباشرة</button>
@@ -304,7 +305,7 @@ function DeductionsTab({ ov, act }: { ov: HrOverview; act: Act }) {
     if (!d) return;
     const lines = [["الموظف", "النوع", "تاريخ الواقعة", "الوصف", "المبلغ", "الحالة"], ...d.notices.filter((n) => n.status !== "CANCELLED")
       .map((n) => [n.full_name, n.kind_label, n.incident_date, n.description, n.amount.toFixed(2), NOTICE_STATUS[n.status]]),
-      ...d.unpaid_leaves.map((u) => [u.full_name, `إجازة ${u.label} بدون أجر`, u.from_date, `${u.days} يوم (${u.from_date} إلى ${u.to_date})`, u.amount.toFixed(2), "معتمدة"])]
+      ...d.unpaid_leaves.map((u) => [u.full_name, `إجازة ${u.label} بدون أجر`, u.from_date, `${countOf(u.days, "يوم")} (${u.from_date} إلى ${u.to_date})`, u.amount.toFixed(2), "معتمدة"])]
       .map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(","));
     const url = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a"); a.href = url; a.download = `deductions-${month}.csv`; a.click(); URL.revokeObjectURL(url);
