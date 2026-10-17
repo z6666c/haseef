@@ -14,8 +14,8 @@
 		Referrer-Policy "strict-origin-when-cross-origin"
 		# الموقع والبصمة مسموحان للصفحة نفسها فقط (تسجيل الحضور بالموقع)
 		Permissions-Policy "camera=(), microphone=(), geolocation=(self), publickey-credentials-get=(self), publickey-credentials-create=(self)"
-		# الخطوط من Google مؤقتاً (انظر docs/DEPLOY.md: استضافتها محلياً قبل الإطلاق)
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; frame-src https://www.openstreetmap.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		# كل الملفات من الخادم نفسه؛ لا خطوط أو سكربتات من خارج المملكة
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-src https://www.openstreetmap.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 		-Server
 	}
 	encode zstd gzip
