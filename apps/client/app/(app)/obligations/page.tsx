@@ -90,6 +90,14 @@ export default function ObligationsPage() {
                     {o.legal_reference && <> · المرجع: {o.source_url
                       ? <a href={o.source_url} target="_blank" rel="noopener noreferrer">{o.legal_reference}</a> : o.legal_reference}</>}
                   </p>
+                  {!!(o.requirements?.length || o.steps?.length) && (
+                    <details className="obl-req">
+                      <summary>المتطلبات وخطوات التنفيذ</summary>
+                      {!!o.requirements?.length && <><b className="small">المتطلبات</b><ul>{o.requirements.map((x) => <li key={x}>{x}</li>)}</ul></>}
+                      {!!o.steps?.length && <><b className="small">الخطوات</b><ol>{o.steps.map((x) => <li key={x}>{x}</li>)}</ol></>}
+                      <p className="small muted">إرشادي عام؛ المرجع الملزم والرسوم في منصة الجهة المختصة.</p>
+                    </details>
+                  )}
                   {o.tracked?.type === "ITEM" && (
                     <p className="small tracked">يتابعه حصيف: {o.tracked.title}{o.tracked.status === "EXPIRED" ? " — منتهٍ، جدّده" : ""}</p>
                   )}

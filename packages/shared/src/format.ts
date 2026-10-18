@@ -220,7 +220,7 @@ export const GOV_DOMAIN_LABEL: Record<string, string> = {
 export const OBLIGATION_DOMAIN_LABEL: Record<string, string> = {
   COMMERCIAL: "تجاري", MUNICIPAL: "بلدي", LABOR: "العمل والموارد البشرية", TAX: "الزكاة والضريبة",
   SAFETY: "السلامة", PDPL: "حماية البيانات الشخصية", GOVERNANCE: "الحوكمة", AML: "مكافحة غسل الأموال",
-  INSURANCE: "التأمين",
+  INSURANCE: "التأمين", SECTOR: "تراخيص الأنشطة",
 };
 export const OBLIGATION_KIND_LABEL: Record<string, string> = {
   LICENSE: "ترخيص", REGISTRATION: "تسجيل", FILING: "إيداع / إقرار", POLICY: "سياسة", PRACTICE: "إجراء",
@@ -244,7 +244,7 @@ export const POLICY_TYPE_LABEL: Record<string, string> = {
   BREACH_RESPONSE: "الاستجابة للتسرب", RELATED_PARTIES: "الأطراف ذات العلاقة", BOARD_CHARTER: "لائحة المجلس",
   AUDIT_COMMITTEE_CHARTER: "لائحة لجنة المراجعة", DISCLOSURE: "الإفصاح", DOA: "مصفوفة الصلاحيات",
   RISK_MANAGEMENT: "إدارة المخاطر", AML: "مكافحة غسل الأموال", WORK_REGULATION: "لائحة تنظيم العمل",
-  HEALTH_SAFETY: "السلامة والصحة المهنية", OTHER: "أخرى",
+  HEALTH_SAFETY: "السلامة والصحة المهنية", ANTI_HARASSMENT: "مكافحة التحرش", OTHER: "أخرى",
 };
 export const POLICY_STATUS_LABEL: Record<string, string> = {
   DRAFT: "مسودة", ACTIVE: "معتمدة", OBSOLETE: "ملغاة", NEEDS_REVIEW: "تقترب المراجعة", OVERDUE_REVIEW: "فات موعد المراجعة",

@@ -184,7 +184,73 @@ OBLIGATIONS: list[dict] = [
          description="للأعمال والمهن غير المالية المحددة (مثل العقار والمعادن الثمينة والمحاسبة والمحاماة): تقييم المخاطر، العناية الواجبة، الإبلاغ عن الاشتباه.",
          authority="وزارة التجارة / الجهة الرقابية للنشاط", reference="نظام مكافحة غسل الأموال ولائحته التنفيذية", url=MC_URL,
          applies={"industries": ["عقار", "ذهب", "مجوهرات", "معادن", "محاسب", "محاما", "قانون"]}, sort=600),
+
+    # ---------------- العمل (إضافة 1.2)
+    dict(code="ANTI_HARASSMENT_POLICY", kind="POLICY", domain="LABOR", frequency="CONTINUOUS", risk="HIGH",
+         category=None, policy_type="ANTI_HARASSMENT", title="سياسة مكافحة التحرش في بيئة العمل",
+         description="اتخاذ تدابير وقائية من التحرش، وتضمين لائحة تنظيم العمل حظره وجزاءاته وإجراءات الشكوى، وتوفير قناة بلاغ سرية.",
+         authority="وزارة الموارد البشرية والتنمية الاجتماعية", reference="نظام مكافحة جريمة التحرش ونظام العمل",
+         url=HRSD_URL, applies={"min_employees": 1}, sort=265),
+
+    # ---------------- تراخيص الأنشطة (تنطبق حسب نشاط المنشأة المسجل)
+    dict(code="SFDA_FOOD_LICENSE", kind="LICENSE", domain="SECTOR", frequency="RENEWAL", risk="CRITICAL",
+         category=None, title="ترخيص المنشأة الغذائية (مصنع، مستودع، استيراد)",
+         description="ترخيص مسبق من هيئة الغذاء والدواء لمصانع الأغذية ومستودعاتها ومراكز توزيعها ومستورديها، وتجديده قبل الانتهاء.",
+         authority="الهيئة العامة للغذاء والدواء", reference="نظام الغذاء ولائحته التنفيذية", url="https://www.sfda.gov.sa",
+         applies={"industries": ["أغذية", "غذائي", "غذاء", "مياه", "ثلج", "استيراد"]}, sort=600),
+    dict(code="FOOD_HANDLERS_HEALTH", kind="LICENSE", domain="SECTOR", frequency="RENEWAL", risk="HIGH",
+         category=None, title="الشهادات الصحية للعاملين في الأنشطة الغذائية",
+         description="شهادة صحية سارية لكل عامل يتعامل مع الغذاء في المطاعم والمقاهي والمخابز والتموين، والالتزام بالاشتراطات الصحية البلدية.",
+         authority="وزارة البلديات والإسكان — منصة بلدي", reference="الاشتراطات الصحية للأنشطة الغذائية", url="https://balady.gov.sa",
+         applies={"industries": ["مطعم", "مطاعم", "مقهى", "مقاهي", "كافيه", "مخبز", "مخابز", "حلويات", "تموين", "أغذية", "غذائي"]}, sort=610),
+    dict(code="HEALTH_FACILITY_LICENSE", kind="LICENSE", domain="SECTOR", frequency="RENEWAL", risk="CRITICAL",
+         category=None, title="ترخيص المنشأة الصحية والتراخيص المهنية للممارسين",
+         description="ترخيص وزارة الصحة للمنشأة الصحية الخاصة، وتصنيف وتسجيل كل ممارس صحي لدى الهيئة السعودية للتخصصات الصحية.",
+         authority="وزارة الصحة — الهيئة السعودية للتخصصات الصحية", reference="نظام المؤسسات الصحية الخاصة ونظام مزاولة المهن الصحية",
+         url="https://www.moh.gov.sa", applies={"industries": ["صحي", "طبي", "عيادة", "عيادات", "مستشفى", "أسنان", "صيدلية", "مختبر"]}, sort=620),
+    dict(code="INVESTMENT_REGISTRATION", kind="LICENSE", domain="SECTOR", frequency="RENEWAL", risk="CRITICAL",
+         category=None, title="تسجيل الاستثمار الأجنبي",
+         description="ترخيص أو تسجيل الاستثمار لدى وزارة الاستثمار للمنشأة المملوكة لمستثمر أجنبي، والإبقاء عليه سارياً.",
+         authority="وزارة الاستثمار", reference="نظام الاستثمار", url="https://misa.gov.sa",
+         applies={"legal_types": ["BRANCH_OF_FOREIGN"]}, sort=630),
+    dict(code="TOURISM_LICENSE", kind="LICENSE", domain="SECTOR", frequency="RENEWAL", risk="HIGH",
+         category=None, title="ترخيص النشاط السياحي",
+         description="ترخيص وزارة السياحة لمرافق الإيواء ووكالات السفر ومنظمي الرحلات، وتجديده.",
+         authority="وزارة السياحة", reference="نظام السياحة", url="https://mt.gov.sa",
+         applies={"industries": ["سياح", "فندق", "فنادق", "إيواء", "شقق مخدومة", "سفر", "رحلات"]}, sort=640),
+    dict(code="TRANSPORT_LICENSE", kind="LICENSE", domain="SECTOR", frequency="RENEWAL", risk="HIGH",
+         category=None, title="ترخيص نشاط النقل",
+         description="ترخيص الهيئة العامة للنقل لنشاط نقل البضائع أو الركاب أو التوصيل أو تأجير السيارات، وبطاقات التشغيل.",
+         authority="الهيئة العامة للنقل", reference="أنظمة ولوائح النقل البري", url="https://tga.gov.sa",
+         applies={"industries": ["نقل", "شحن", "توصيل", "ليموزين", "تأجير سيارات", "لوجست"]}, sort=650),
+    dict(code="EDUCATION_LICENSE", kind="LICENSE", domain="SECTOR", frequency="RENEWAL", risk="HIGH",
+         category=None, title="ترخيص النشاط التعليمي أو التدريبي",
+         description="ترخيص وزارة التعليم للمدارس ورياض الأطفال الأهلية، أو المؤسسة العامة للتدريب التقني والمهني لمراكز التدريب.",
+         authority="وزارة التعليم — المؤسسة العامة للتدريب التقني والمهني", reference="لوائح التعليم الأهلي والتدريب الأهلي",
+         url="https://moe.gov.sa", applies={"industries": ["تعليم", "مدرسة", "مدارس", "روضة", "حضانة", "تدريب"]}, sort=660),
+    dict(code="MEDIA_LICENSE", kind="LICENSE", domain="SECTOR", frequency="RENEWAL", risk="MEDIUM",
+         category=None, title="ترخيص النشاط الإعلامي والإعلاني",
+         description="ترخيص النشاط الإعلامي أو الإعلاني من الجهة المختصة بالإعلام، والتحقق من ترخيص «موثوق» للمعلنين الأفراد.",
+         authority="الجهة المختصة بتنظيم الإعلام", reference="نظام الإعلام المرئي والمسموع ولوائح الإعلان",
+         url="https://www.gcam.gov.sa", applies={"industries": ["إعلام", "إعلان", "دعاية", "تسويق", "إنتاج مرئي", "نشر"]}, sort=670),
+    dict(code="ECOMMERCE_DOCUMENTATION", kind="REGISTRATION", domain="SECTOR", frequency="ONCE", risk="MEDIUM",
+         category=None, title="توثيق المتجر الإلكتروني",
+         description="توثيق المتجر في منصة الأعمال التابعة لوزارة التجارة، وعرض البيانات والسياسات الإلزامية وفق نظام التجارة الإلكترونية.",
+         authority="وزارة التجارة", reference="نظام التجارة الإلكترونية", url=MC_URL,
+         applies={"industries": ["تجارة إلكترونية", "متجر إلكتروني", "متجر", "بيع إلكتروني"]}, sort=680),
+    dict(code="CONTRACTOR_CLASSIFICATION", kind="LICENSE", domain="SECTOR", frequency="RENEWAL", risk="MEDIUM",
+         category=None, title="تصنيف المقاولين",
+         description="تصنيف ساري لازم للتعاقد على المشاريع الحكومية، يُجدَّد ويُحدَّث بقدرات المنشأة.",
+         authority="وزارة البلديات والإسكان — تصنيف المقاولين", reference="نظام تصنيف المقاولين", url="https://www.momah.gov.sa",
+         applies={"industries": ["مقاولات", "مقاول", "إنشاءات", "بناء"]}, sort=690),
 ]
+
+
+from .requirements import REQUIREMENTS  # noqa: E402
+
+for _o in OBLIGATIONS:
+    _o.setdefault("requirements", REQUIREMENTS.get(_o["code"], {}).get("requirements", []))
+    _o.setdefault("steps", REQUIREMENTS.get(_o["code"], {}).get("steps", []))
 
 
 def applies_to(rule: dict, org: dict) -> tuple[bool, bool]:

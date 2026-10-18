@@ -19,6 +19,7 @@ from ..content.examples import EXAMPLES
 from ..content.standards import STRUCTURE_TEMPLATES
 from ..domain.governance_check import Body, Member, OrgContext, run_check
 from .score_service import recompute
+from ..content.requirements import REQUIREMENTS
 
 PROFILE_FIELDS = ("employees_count", "fiscal_year_end_month", "processes_personal_data", "vat_registered", "has_bylaws",
                   "bylaws_updated_on", "auditor_name", "auditor_appointed_on", "beneficial_owners_filed_on",
@@ -200,6 +201,8 @@ def list_obligations(conn: Connection, org_id: UUID | str) -> list[dict]:
     for r in rows:
         d = dict(r)
         d["needs_confirmation"] = applies_to(d.pop("applies") or {}, ctx)[1]
+        req = REQUIREMENTS.get(d["code"], {})
+        d["requirements"], d["steps"] = req.get("requirements", []), req.get("steps", [])
         d["tracked"] = None
         eff = d["status"]
         if d["status"] == "PENDING":

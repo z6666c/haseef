@@ -77,7 +77,8 @@ for o in OBLIGATIONS:
                         "source_url": o["url"], "frequency": o["frequency"], "risk_level": o["risk"],
                         "compliance_category": o.get("category"), "policy_type": o.get("policy_type"),
                         "review_status": "DRAFT", "status": "PENDING", "source": "AUTO", "note": None,
-                        "needs_confirmation": unsure, "tracked": tracked, "effective_status": eff})
+                        "needs_confirmation": unsure, "tracked": tracked, "effective_status": eff,
+                        "requirements": o["requirements"], "steps": o["steps"]})
 
 admin_standards = [{"code": s["code"], "domain": s["domain"], "title": s["title"], "description": s["description"],
                     "legal_reference": s["reference"], "source_url": s["url"], "level": s["level"], "severity": s["severity"],
