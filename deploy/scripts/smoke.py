@@ -26,6 +26,17 @@ ctx = ssl._create_unverified_context() if args.insecure else None
 token: str | None = None
 
 
+
+def _annotate(exc_type, exc, tb):
+    """أي فشل (assert أو استثناء) يظهر كتنبيه في صفحة الفحص، لأن سجلات المهمة الكاملة قد لا تُقرأ."""
+    import traceback
+    text_ = "".join(traceback.format_exception(exc_type, exc, tb))[-1500:]
+    print("::error::smoke failed%0A" + text_.replace("%", "%25").replace("\n", "%0A"))
+    sys.__excepthook__(exc_type, exc, tb)
+
+
+sys.excepthook = _annotate
+
 def call(method: str, path: str, body: dict | None = None, expect: int = 200, org_id: str | None = None, raw: bool = False):
     req = urllib.request.Request(args.base + path, method=method, data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {}),
