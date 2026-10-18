@@ -26,6 +26,17 @@ ctx = ssl._create_unverified_context() if args.insecure else None
 token: str | None = None
 
 
+
+def _annotate(exc_type, exc, tb):
+    """أي فشل (assert أو استثناء) يظهر كتنبيه في صفحة الفحص، لأن سجلات المهمة الكاملة قد لا تُقرأ."""
+    import traceback
+    text_ = "".join(traceback.format_exception(exc_type, exc, tb))[-1500:]
+    print("::error::smoke failed%0A" + text_.replace("%", "%25").replace("\n", "%0A"))
+    sys.__excepthook__(exc_type, exc, tb)
+
+
+sys.excepthook = _annotate
+
 def call(method: str, path: str, body: dict | None = None, expect: int = 200, org_id: str | None = None, raw: bool = False):
     req = urllib.request.Request(args.base + path, method=method, data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Content-Type": "application/json", **({"Authorization": f"Bearer {token}"} if token else {}),
@@ -217,6 +228,17 @@ step("الحضور بالموقع: موقع ورابط شخصي، ويُرفض �
 # الإجازات والمباشرة والخصومات (ضمن الإضافة نفسها)
 import datetime as _dt
 d0 = _dt.date.today()
+while d0.weekday() in (4, 5):   # الجمعة والسبت عطلة افتراضياً: الإجازة المرضية تُرفع عن يوم عمل (رجوعاً لا يتجاوز 7 أيام)
+    d0 -= _dt.timedelta(days=1)
+
+
+def wd(n: int) -> _dt.date:
+    """أول يوم عمل (الأحد–الخميس) بعد n يوماً من اليوم، حتى لا تفشل الفحوص حين يقع التاريخ في عطلة."""
+    d = _dt.date.today() + _dt.timedelta(days=n)
+    while d.weekday() in (4, 5):
+        d += _dt.timedelta(days=1)
+    return d
+
 ho = call("GET", "/v1/hr/overview", org_id=so)
 assert {p["leave_type"] for p in ho["policies"]} == {"ANNUAL", "REGULAR", "EMERGENCY", "SICK"}, ho["policies"]
 assert next(p for p in ho["people"] if p["id"] == emp)["entitlement"] == 21
@@ -243,8 +265,8 @@ token = None
 ph = call("GET", f"/v1/public/attendance/{atok}/hr")
 assert ph["balance"]["used"] == 5 and len(ph["notices"]) == 1 and len(ph["leaves"]) == 2, ph
 call("POST", f"/v1/public/attendance/{atok}/notices/{nt['id']}/object", {"objection": "كنت في مهمة رسمية خارج المقر"})
-rg = call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "REGULAR", "start_date": str(d0 + _dt.timedelta(days=40)),
-                                                          "end_date": str(d0 + _dt.timedelta(days=41)), "is_paid": False}, expect=201)
+rg = call("POST", f"/v1/public/attendance/{atok}/leaves", {"leave_type": "REGULAR", "start_date": str(wd(40)),
+                                                          "end_date": str(wd(40) + _dt.timedelta(days=1)), "is_paid": False}, expect=201)
 assert rg["is_paid"] is False, rg
 assert call("GET", f"/v1/public/attendance/{atok}/hr")["balance"]["used"] == 5, "unpaid leave must not touch the balance"
 token = su["access_token"]

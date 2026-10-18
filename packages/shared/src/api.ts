@@ -578,6 +578,8 @@ export interface Obligation {
   review_status: ReviewStatus; status: ObligationStatus; source: "AUTO" | "MANUAL"; note: string | null;
   needs_confirmation: boolean; tracked: null | { type: "ITEM" | "POLICY"; title?: string; status?: string; expiry_date?: string };
   effective_status: ObligationStatus | "AT_RISK";
+  /** المتطلبات والخطوات الإرشادية (مسودة قيد المراجعة) */
+  requirements?: string[]; steps?: string[];
 }
 
 // ---------- المكتبة والسياسات

@@ -101,7 +101,7 @@ def patch_standard(code: str, body: StandardPatch, a: Admin = Depends(require_pe
 
 # ------------------------------------------------------------------ الالتزامات
 Kind = Literal["LICENSE", "REGISTRATION", "FILING", "POLICY", "PRACTICE"]
-Domain = Literal["COMMERCIAL", "MUNICIPAL", "LABOR", "TAX", "SAFETY", "PDPL", "GOVERNANCE", "AML", "INSURANCE"]
+Domain = Literal["COMMERCIAL", "MUNICIPAL", "LABOR", "TAX", "SAFETY", "PDPL", "GOVERNANCE", "AML", "INSURANCE", "SECTOR"]
 
 
 class Applies(BaseModel):
